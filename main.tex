@@ -1,0 +1,279 @@
+%% This is file `elsarticle-template-1-num.tex',
+%%
+%% Copyright 2009 Elsevier Ltd
+%%
+%% This file is part of the 'Elsarticle Bundle'.
+%% ---------------------------------------------
+%%
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.2 of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%%
+%% Template article for Elsevier's document class `elsarticle'
+%% with numbered style bibliographic references
+%%
+%% $Id: elsarticle-template-1-num.tex 149 2009-10-08 05:01:15Z rishi $
+%% $URL: http://lenova.river-valley.com/svn/elsbst/trunk/elsarticle-template-1-num.tex $
+%%
+\documentclass[preprint,12pt]{elsarticle}
+
+%% Use the option review to obtain double line spacing
+%% \documentclass[preprint,review,12pt]{elsarticle}
+
+%% Use the options 1p,twocolumn; 3p; 3p,twocolumn; 5p; or 5p,twocolumn
+%% for a journal layout:
+%% \documentclass[final,1p,times]{elsarticle}
+%% \documentclass[final,1p,times,twocolumn]{elsarticle}
+%% \documentclass[final,3p,times]{elsarticle}
+%% \documentclass[final,3p,times,twocolumn]{elsarticle}
+%% \documentclass[final,5p,times]{elsarticle}
+%% \documentclass[final,5p,times,twocolumn]{elsarticle}
+
+%% The graphicx package provides the includegraphics command.
+\usepackage{graphicx}
+%% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{breqn}
+%% The amsthm package provides extended theorem environments
+%% \usepackage{amsthm}
+%setting margins package
+\usepackage[margin=0.75in]{geometry}
+%% The lineno packages adds line numbers. Start line numbering with
+%% \begin{linenumbers}, end it with \end{linenumbers}. Or switch it on
+%% for the whole article with \linenumbers after \end{frontmatter}.
+\usepackage{lineno}
+\usepackage{enumitem}
+
+\usepackage{ amssymb }
+
+\usepackage{amsmath}
+\usepackage{braket}
+
+
+\usepackage{tabstackengine}
+\stackMath
+
+
+\TABstackMath
+\fixTABwidth{T}
+\newcommand\xddots{\stackunder[2.5pt]{\stackanchor[2.8pt]{\kern-14pt.}{.}}{\kern14pt.}}
+
+
+%% natbib.sty is loaded by default. However, natbib options can be
+%% provided with \biboptions{...} command. Following options are
+%% valid:
+
+%%   round  -  round parentheses are used (default)
+%%   square -  square brackets are used   [option]
+%%   curly  -  curly braces are used      {option}
+%%   angle  -  angle brackets are used    <option>
+%%   semicolon  -  multiple citations separated by semi-colon
+%%   colon  - same as semicolon, an earlier confusion
+%%   comma  -  separated by comma
+%%   numbers-  selects numerical citations
+%%   super  -  numerical citations as superscripts
+%%   sort   -  sorts multiple citations according to order in ref. list
+%%   sort&compress   -  like sort, but also compresses numerical citations
+%%   compress - compresses without sorting
+%%
+%% \biboptions{comma,round}
+
+% \biboptions{}
+
+\journal{Austin Minnich}
+
+\begin{document}
+
+\begin{frontmatter}
+
+%% Title, authors and addresses
+
+\title{Solving the linearized BKE with scattering matrix}
+
+%% use the tnoteref command within \title for footnotes;
+%% use the tnotetext command for the associated footnote;
+%% use the fnref command within \author or \address for footnotes;
+%% use the fntext command for the associated footnote;
+%% use the corref command within \author for corresponding author footnotes;
+%% use the cortext command for the associated footnote;
+%% use the ead command for the email address,
+%% and the form \ead[url] for the home page:
+%%
+%% \title{Title\tnoteref{label1}}
+%% \tnotetext[label1]{}
+%% \author{Name\corref{cor1}\fnref{label2}}
+%% \ead{email address}
+%% \ead[url]{home page}
+%% \fntext[label2]{}
+%% \cortext[cor1]{}
+%% \address{Address\fnref{label3}}
+%% \fntext[label3]{}
+
+
+%% use optional labels to link authors explicitly to addresses:
+%% \author[label1,label2]{<author name>}
+%% \address[label1]{<address>}
+%% \address[label2]{<address>}
+
+\author{Alex Choi}
+
+\address{California Institute of Technology}
+
+\begin{abstract}
+%% Text of abstract
+A formalism for the calculation of noise in semiconductors is presented.
+\end{abstract}
+
+\begin{keyword}
+DFPT \sep hot-electron noise \sep semiconductor-amplifiers
+%% keywords here, in the form: keyword \sep keyword
+
+%% MSC codes here, in the form: \MSC code \sep code
+%% or \MSC[2008] code \sep code (2000 is the default)
+
+\end{keyword}
+
+\end{frontmatter}
+
+%% main text
+
+\section{The Linearized-BKE with Fourier Expansion of Derivative}
+\label{S:1}
+
+\begin{equation}\label{linearized_BKE}
+    \frac{\partial f_{n,\mathbf{k}}}{\partial t} + \frac{\partial \mathbf{r}}{\partial t} \cdot \nabla_{\mathbf{r}} f_{n,\mathbf{k}} + \frac{\mathbf{F}}{\hbar} \cdot \nabla_{\mathbf{k}} f_{n,\mathbf{k}} = -\bigg(\frac{\partial f_{n,\mathbf{k}}}{\partial t}\bigg)_{c}
+\end{equation}
+
+\noindent Where $\mathbf{r}$ is the real-space position vector, $\mathbf{k}$ is the wave-vector, $n$ is the electron band index, $\mathbf{F}$ is the applied body force, $\hbar$ is the reduced Planck's constant, and $f_{n,\mathbf{k}}$ is the one-particle distribution function. The right hand term is the fully non-linear electron collision operator, which in general can be mediated by scattering with phonons, impurities, and other electrons.
+
+\vspace{1ex}
+
+\noindent As a toy-problem, let's consider solving this equation for an electron system with a 1D static electric field in a conducting channel.
+
+\begin{equation}
+    \frac{e E}{\hbar} \frac{\partial f_{n,\mathbf{k}}}{\partial k_x} = -\bigg(\frac{\partial f_{n,\mathbf{k}}}{\partial t}\bigg)_{c}
+\end{equation}
+
+\noindent Where $e$ is the fundamental charge and $E_x$ is the applied electric field. Here we have assumed that the spatial extent of the system in real-space is large and as such, the real space gradients are negligible. It is convenient to consider the linear Boltzmann equation, in which the non-equilibrium distribution is assumed to have some small deviation from equilibrium $f_{n,\mathbf{k}} \approx f_{n,\mathbf{k}}^0 + \delta f_{n,\mathbf{k}}$. Under this approximation, the collision term becomes a linear operator acting upon the deviational term.
+
+\begin{equation}
+    A_{n,\mathbf{k};n',\mathbf{k'}} = -\frac{2 \pi}{\hbar} \frac{1}{N} \sum_{\nu,\mathbf{q}} |g_{n,n',\nu}|^2 \cdot \bigg[\delta(\epsilon_{n,\mathbf{k}}-\epsilon_{n,\mathbf{k'}}-\hbar \omega_{\nu,\mathbf{q}}) F_{em} + \delta(\epsilon_{n,\mathbf{k}}-\epsilon_{n,\mathbf{k'}} +\hbar \omega_{\nu,\mathbf{q}}) F_{abs} \bigg]
+\end{equation}
+
+\noindent In the linear regime the absorption and emission weights are given respectively by:
+\begin{equation}
+    F_{abs} = \delta f_{n,\mathbf{k}}(N_{\nu,\mathbf{q}}+f_{n,\mathbf{k}}^0) - \delta f_{n',\mathbf{k'}} (N_{\nu,\mathbf{q}}+1 - f_{n,\mathbf{k}}^0)
+\end{equation}
+
+\begin{equation}
+    F_{em} = \delta f_{n,\mathbf{k}}(N_{\nu,\mathbf{q}}+1 - f_{n',\mathbf{k'}}^0) - \delta f_{n',\mathbf{k'}} (N_{\nu,\mathbf{q}}+ f_{n,\mathbf{k}}^0)
+\end{equation}
+
+\noindent It is convenient to rewrite the Boltzmann equation in terms of the deviational occupations and the collision operator.
+
+\begin{equation}\label{linear}
+    \frac{e E}{\hbar} \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} + e E v_g \frac{\partial f_{n,\mathbf{k}}^0}{\partial \epsilon}= - \sum_{n',\mathbf{k'}} A_{n,\mathbf{k};n',\mathbf{k'}} \cdot \delta_{n',\mathbf{k'}}
+\end{equation}
+
+\noindent Before solving this system, we can explicitly enforce periodicity of the solution. Because we have assumed an infinitely large real-space domain, it is not meaningful to speak of the periodicity of the solution in terms of real space. Rather, the periodicity of the solution is enforced in terms of momentum-space as follows.
+
+\begin{equation}\label{periodicity}
+\delta f_{n,\mathbf{k}}(\mathbf{k} + \mathbf{G}) = \delta f_{n,\mathbf{k}}(\mathbf{k})
+\end{equation}
+
+\noindent Where $\mathbf{G}$ is the reciprocal lattice vector. In order to enforce Eqn.\ref{periodicity}, we may expand the solution $f_{\lambda}$ in a Fourier series which will satisfy the periodicity condition by default. 
+
+\begin{equation}\label{fourier_expansion}
+   \delta f_{n,\mathbf{k}} = \sum_{\bar{l}} e^{i \mathbf{k}\cdot \mathbf{R_{\bar{l}}}} \cdot \delta f_{\bar{l}}
+\end{equation}
+
+\noindent Where $\bar{l} = (l_x,l_y,l_z)$ is a multi-index and $\mathbf{R_l} = \sum_{\bar{l}} \mathbf{R_0} \cdot \bar{l}$ represents sums of the real-space basis vector $\mathbf{R_0} = r_x \hat{x} + r_y \hat{\mathbf{y}} + r_z \hat{\mathbf{z}}$, and $\delta f_{\bar{l}}$ are the coefficients of the expansion. Substituting this expansion into Eqn.\ref{linear} we obtain the expression, valid when the series expansion is uniformly convergent:
+
+\begin{equation} \label{inserted}
+    \frac{e E_x}{\hbar} \sum_{l} (i l_x r_x) e^{i \mathbf{k}\cdot \mathbf{R_l}} f_l = 
+    - \sum_{\bar{l},n',\mathbf{k'}} e^{i \mathbf{k}\cdot \mathbf{R_l}} A_{n,\mathbf{k};n',\mathbf{k'}} \cdot \delta_{n',\mathbf{k'}}
+    + \sum_n e^{i \mathbf{k}\cdot \mathbf{R_l}} q_l
+\end{equation}
+
+\noindent We can now take advantage of the useful orthogonality condition:
+
+\begin{equation}
+    \sum_{\lambda} e^{i \mathbf{k}\cdot (\mathbf{R_l}-\mathbf{R_m})} = \delta_{\mathbf{R_l},\mathbf{R_m}}
+\end{equation}
+
+\noindent Multiplying Eqn.\ref{inserted} by $e^{-i \mathbf{k}\cdot \mathbf{R_m}}$ and summing over the BZ, we obtain the following expression:
+
+\begin{equation}
+    (i \frac{e E_x}{\hbar} n_x r_x) \delta f_m = C \delta f_m + q_m 
+\end{equation}
+
+\begin{equation}
+    C = \sum_{n',\mathbf{k'}} \sum_{n,\mathbf{k}} \sum_{\bar{l}} e^{i \mathbf{k}\cdot \mathbf{R_l}} e^{-i \mathbf{k}\cdot \mathbf{R_m}} A_{n,\mathbf{k};n',\mathbf{k'}}
+\end{equation}
+
+\noindent This is the linear equation that one may solve to obtain the deviational occupation. Unfortunately, the summations involved in obtaining the matrix $C$ are such that it will be in general, a dense matrix compared to the spare $A_{n,\mathbf{k};n',\mathbf{k'}}$. As such, this may not be the most computationally efficient method of solving the Linear BKE.
+
+\section{The Linearized-BKE with Matrix Exponentiation}
+\label{S:2}
+
+\noindent We may wish to consider a slightly different approach. Let's consider the steady Boltzmann Equation and the Boltzmann equation for the response function.
+
+\begin{equation}\label{steady}
+    \frac{eE}{\hbar} \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = - A \delta f_{n,\mathbf{k}} + \frac{eEv_x}{k_B T} f_{n,\mathbf{k}}^0
+\end{equation}
+
+\begin{equation}\label{response}
+    \frac{\partial R_{n,\mathbf{k};n',\mathbf{k'}}}{\partial t}+\frac{eE}{\hbar} \frac{\partial \delta R_{n,\mathbf{k};n',\mathbf{k'}}}{\partial k_x} = - A \delta R_{n,\mathbf{k};n',\mathbf{k'}} + \frac{eEv_x}{k_B T} f_{n,\mathbf{k}}^0
+\end{equation}
+
+\noindent By subtracting Eqn.\ref{steady} from Eqn.\ref{response} we can define a new variable $\eta_{n,\mathbf{k};n',\mathbf{k'}} = \delta R_{n,\mathbf{k};n',\mathbf{k'}} - \delta f_{n,\mathbf{k}}$. This variable satisfies the following equation.
+
+\begin{equation} \label{eta}
+    \frac{\partial \eta_{n,\mathbf{k};n',\mathbf{k'}}}{\partial t}+\frac{eE}{\hbar} \frac{\partial \eta_{n,\mathbf{k};n',\mathbf{k'}}}{\partial k_x} = - A \eta_{n,\mathbf{k};n',\mathbf{k'}}
+\end{equation}
+
+\noindent The initial condition is $\eta_{n,\mathbf{k};n',\mathbf{k'}}(t=0) = \delta_{\mathbf{k},\mathbf{k'}}$. We can multiply by Eqn. \ref{eta} by $f_{n,\mathbf{k}} v_{x,\mathbf{k}}$ and integrate over the initial states $n',\mathbf{k'}$. This yields an equation for a new variable $g_{n,\mathbf{k}}$, the effective distribution function.
+
+\begin{equation}
+    \frac{\partial g_{n,\mathbf{k}}}{\partial t}+\frac{eE}{\hbar} \frac{\partial g_{n,\mathbf{k}}}{\partial k_x} = -A g_{n,\mathbf{k}}
+\end{equation}
+
+\noindent The appropriate initial condition is $g_{n,\mathbf{k}}(t=0) = (v_x - v_d) f_{n,\mathbf{k}}$. Sums over this effective distribution function yield the non-equilibrium diffusion coefficient. 
+
+\noindent It is instructive to consider how one would solve the first problem, Eqn.\ref{steady}, the steady Boltzmann equation for the deviational steady distribution $\delta f_{n,\mathbf{k}}$. We can postulate the existence of a solution of the form $\delta f_{n,\mathbf{k}} = e^{-k_x \tilde{A}} z_{n,\mathbf{k}}$. $z_{n,\mathbf{k}}$ is some unknown function and the preceding function is the matrix exponential of $\tilde{A} = \frac{h}{eE} A$. In light of this new notation, the steady Boltzmann equation can be written:
+
+\begin{equation}
+    \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = -\tilde{A} \delta f_{n,\mathbf{k}} + \frac{\hbar v_x}{k_B T} f_{n,\mathbf{k}}^0
+\end{equation}
+
+Differentiating the proposed solution results in the following expression.
+
+\begin{multline}
+    \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = (e^{-k_x \tilde{A}})' z_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}}' = -\tilde{A} e^{-k_x \tilde{A}} z_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}}' = -\tilde{A} \delta f_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} 
+\end{multline}
+
+\noindent Of course this relationship implies the following constraint on $z_{n,\mathbf{k}}$.
+
+\begin{equation}
+    e^{-k_x \tilde{A}} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} = \frac{\hbar v_x}{k_B T} f_{n,\mathbf{k}}^0
+\end{equation}
+
+\noindent Which can be rearranged to show:
+
+\begin{equation}
+    z_{n,\mathbf{k}} = \int_{-\infty}^{k_x} d\mu \, e^{\mu \tilde{A}} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + B
+\end{equation}
+
+\noindent Therefore the solution to the steady linear Boltzmann equation can be expressed:
+
+\begin{equation}
+    \delta f_{n,\mathbf{k}} = e^{-k_x \tilde{A}} z_{n,\mathbf{k}} = e^{-k_x \tilde{A}} \,  \int_{-\infty}^{k_x} d\mu \, e^{\mu \tilde{A}} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + e^{-k_x \tilde{A}} B
+\end{equation}
+
+\noindent B is determined by the condition $\delta f_{n,\mathbf{k}}(k_x = -\infty) = 0$. Thus it is seen that the solution to the steady BKE can be obtained by taking the appropriate summations over the matrix exponential of the linear collision matrix. We need to look into efficient numerical methods for performing these summations. Basically its going to be efficient diagonalization to calculate the matrix exponential for sparse matrix, then efficient parallelized matrix product sums.
+
+\end{document}
