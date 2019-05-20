@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# ## Importing data (Alex updated: 4/30/19)
+# # Processing the electron-phonon collision matrix
 
-# In[1]:
+# This is meant to be a frills-free calculation of the electron-phonon collision matrix utiizing the data from Jin Jian Zhou for GaAs.
+
+# ## Package imports
+
+# In[2]:
 
 
 import numpy as np
@@ -27,16 +31,34 @@ from tqdm import tqdm, trange
 from scipy import special, optimize
 from scipy import integrate
 
-import plotly.offline as py
+import plotly.plotly as py
 import plotly.graph_objs as go
 import plotly
 #plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
 plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
-# Load the e-ph matrix elements data. The two numbers reported at the end should be the same. If they are not, there are duplicate e-ph elements. It's VERY IMPORTANT to note that the g elements here are actually |g|^2 which is why they are real numbers.
+# ## Data processing
+
+# In[3]:
+
+
+Take the raw text files and convert them into useful dataframes.
+
 
 # In[2]:
+
+
+# Physical parameter definition
+a = 5.556                        # Lattice constant for GaAs [A]
+kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+T = 300                          # Lattice temeprature [K]
+e = 1.602*10**(-19)              # Fundamental electronic charge [C]
+mu = 5.780                       # Chemical potential [eV]
+b = 8/1000                       # Gaussian broadening [eV]
+
+
+# In[4]:
 
 
 data = pd.read_csv('gaas.eph_matrix', sep='\t',header= None,skiprows=(0,1))
@@ -48,29 +70,15 @@ for i1 in trange(len(data_array)):
     
 g_df = pd.DataFrame(data=new_array,columns = ['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
 g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']] = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-len(g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element']]),len(g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element']].drop_duplicates())
 
 
-# Now load the k-point indices, q-point indices, k-point energies, phonon energies into dataframes.
-
-# In[3]:
+g_df = g_df.drop(["m_band","n_band"],axis=1)
 
 
-kpts = pd.read_csv('gaas.kpts', sep='\t',header= None)
-kpts.columns = ['0']
-kpts_array = kpts['0'].values
-new_kpt_array = np.zeros((len(kpts_array),4))
-for i1 in trange(len(kpts_array)):
-    new_kpt_array[i1,:] = kpts_array[i1].split()
-    
-kpts_df = pd.DataFrame(data=new_kpt_array,columns = ['k_inds','b1','b2','b3'])
-kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
-kpts_df.head()
+# In[5]:
 
 
-# In[4]:
-
-
+# Import electron energy library
 enk = pd.read_csv('gaas.enk', sep='\t',header= None)
 enk.columns = ['0']
 enk_array = enk['0'].values
@@ -80,10 +88,34 @@ for i1 in trange(len(enk_array)):
     
 enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])
 enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
-enk_df.head()
+enk_df = enk_df.drop(['band_inds'],axis=1)
+
+# Import phonon energy library
+enq = pd.read_csv('gaas.enq', sep='\t',header= None)
+enq.columns = ['0']
+enq_array = enq['0'].values
+new_enq_array = np.zeros((len(enq_array),3))
+for i1 in trange(len(enq_array)):
+    new_enq_array[i1,:] = enq_array[i1].split()
+    
+enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
+enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
 
 
-# In[95]:
+# Import phonon q-point index
+qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
+qpts.columns = ['0']
+qpts_array = qpts['0'].values
+new_qpt_array = np.zeros((len(qpts_array),4))
+
+for i1 in trange(len(qpts_array)):
+    new_qpt_array[i1,:] = qpts_array[i1].split()
+    
+qpts_df = pd.DataFrame(data=new_qpt_array,columns = ['q_inds','b1','b2','b3'])
+qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric,downcast = 'integer')
+
+
+# In[6]:
 
 
 enq = pd.read_csv('gaas.enq', sep='\t',header= None)
@@ -99,7 +131,7 @@ print(enq_df.shape)
 enq_df.head()
 
 
-# In[96]:
+# In[7]:
 
 
 qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
@@ -124,7 +156,7 @@ k-energy = enk_df[['k_inds','band_inds','energy [Ryd]']]
 q-energy = enq_df[['q_inds','im_mode','energy [Ryd]']]
 # ## Data Processing (Alex Updated: 4/30)
 
-# In[7]:
+# In[27]:
 
 
 def cartesian_q_points(qpts_df):
@@ -218,7 +250,7 @@ def cartesian_q_points(qpts_df):
     return cartesian_df,cartesian_df_edit
 
 
-# In[8]:
+# In[13]:
 
 
 a = 5.556 #[A]
@@ -227,7 +259,7 @@ T = 300
 e = 1.602*10**(-19)
 
 
-# In[9]:
+# In[14]:
 
 
 kvel = pd.read_csv('gaas.vel', sep='\t',header= None,skiprows=[0,1,2])
@@ -242,6 +274,7 @@ kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'intege
 
 kvel_edit = kvel_df.copy(deep=True)
 
+# Shift the points back into the first BZ
 kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
 kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
 
@@ -271,13 +304,13 @@ cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a
 cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
 
 
-# In[10]:
+# In[28]:
 
 
 cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
 
 
-# In[66]:
+# In[16]:
 
 
 trace1 = go.Scatter3d(
@@ -328,20 +361,10 @@ trace1 = go.Scatter3d(
 
 trace2 = go.Scatter
 
-data = [trace1]
-layout = go.Layout(
-                    scene = dict(
-                    xaxis = dict(
-                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
-                    yaxis = dict(
-                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
-                    zaxis = dict(
-                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
-fig = go.Figure(data=data, layout=layout)
-py.iplot(fig, filename='simple-3d-scatter')
+cart_kpts_df  = cart_kpts_df.drop(['bands'],axis=1)
 
 
-# In[13]:
+# In[92]:
 
 
 trace1 = go.Scatter3d(
@@ -450,38 +473,12 @@ def fermi_distribution(g_df,mu,T):
     
     g_df : pandas dataframe containing:
 
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-        
+        ...
         k_fermi_dist : vector_like, shape (n,1)
         Fermi distribution of pre collision state
         
         k+q_fermi_dist : vector_like, shape (n,1)
         Fermi distribution of post collision state
-        
-        k_energy : vector_like, shape (n,1)
-        Energy of the pre collision state
-        
-        k+q_energy : vector_like, shape (n,1)
-        Energy of the post collision state
          
     """
     # Physical constants    
@@ -495,9 +492,6 @@ def fermi_distribution(g_df,mu,T):
     return g_df
 
 
-# In[17]:
-
-
 def bose_distribution(g_df,T):
     """
     This function takes a list of q-point indices and returns the Bose-Einstein distributions associated with each q-point on that list.    
@@ -506,36 +500,7 @@ def bose_distribution(g_df,T):
     
     g_df : pandas dataframe containing:
     
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-        
-        k_energy : vector_like, shape (n,1)
-        Energy of the pre collision state
-        
-        k+q_energy : vector_like, shape (n,1)
-        Energy of the post collision state
-        
-        
-    mu : scalar
-    Chemical potential of electronic states [eV]
+        ...
     
     T : scalar
     Lattice temperature in Kelvin
@@ -545,26 +510,7 @@ def bose_distribution(g_df,T):
     
     g_df : pandas dataframe containing:
 
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
+        ...
         
         BE : vector_like, shape (n,1)
         Bose-einstein distribution
@@ -578,240 +524,25 @@ def bose_distribution(g_df,T):
     return g_df
 
 
-# In[18]:
-
-
-def fermionic_processing(g_df,cart_kpts_df,enk_df,mu,T):
-    """
-    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
-    Parameters:
-    -----------
-    
-    g_df : pandas dataframe containing:
-    
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-               
-    cart_kpts_df : pandas dataframe containing:
-    
-        k_inds : vector_like, shape (n,1)
-        Index of k point
-        
-        kx : vector_like, shape (n,1)
-        x-coordinate in Cartesian momentum space [1/m]    
-        
-        ky : vector_like, shape (n,1)
-        y-coordinate in Cartesian momentum space [1/m]  
-        
-        kz : vector_like, shape (n,1)
-        z-coordinate in Cartesian momentum space [1/m]
-        
-    enk_df : pandas dataframe containing
-
-        k_inds : vector_like, shape (n,1)
-        Index of k point
-        
-        band_inds : vector_like, shape (n,1)
-        Band index
-        
-        energy [Ryd] : vector_like, shape (n,1)
-        Energy associated with k point in Rydberg units
-        
-        
-    mu : scalar
-    Chemical potential of electronic states [eV]
-    
-    T : scalar
-    Lattice temperature in Kelvin
-    
-    Returns:
-    --------
-    
-    g_df : pandas dataframe containing:
-
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-        
-        k_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of pre collision state
-        
-        k+q_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of post collision state
-        
-        k_energy : vector_like, shape (n,1)
-        Energy of the pre collision state
-        
-        k+q_energy : vector_like, shape (n,1)
-        Energy of the post collision state
-         
-    """
-    
-    # Physical constants
-    e = 1.602*10**(-19) # fundamental electronic charge [C]
-    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    
-    index_vector = cart_kpts_df['k_inds'].values    
-    g_df['k_en [eV]'] = np.zeros(len(g_df))
-    g_df['k+q_en [eV]'] = np.zeros(len(g_df))
-    g_df['collision_state'] = np.zeros(len(g_df))
-    
-    for i1 in trange(len(cart_kpts_df)):
-        index = index_vector[i1]
-        
-        g_slice_k = g_df['k_inds'] == index        
-        g_slice_kq = g_df['k+q_inds'] == index
-        
-        k_slice = cart_kpts_df['k_inds'] == index
-        enk_slice = enk_df['k_inds'] == index
-        
-        g_df.loc[g_slice_k,'k_en [eV]'] = enk_df.loc[enk_slice,'energy [Ryd]'].values*13.6056980659 
-        g_df.loc[g_slice_kq,'k+q_en [eV]'] = enk_df.loc[enk_slice,'energy [Ryd]'].values*13.6056980659
-        
-    abs_inds = g_df['k_en [eV]'] < g_df['k+q_en [eV]'] #absorbed indices
-    ems_inds = g_df['k_en [eV]'] > g_df['k+q_en [eV]'] #emission indices
-    
-    g_df.loc[abs_inds,'collision_state'] = 1
-    g_df.loc[ems_inds,'collision_state'] = -1
-    
-    g_df = fermi_distribution(g_df,mu, T)
-    
-    return g_df
-
-
-# In[20]:
-
-
 def bosonic_processing(g_df,enq_df,T):
     """
-    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
-    Parameters:
+    This function takes the g dataframe and assigns a phonon energy from the relevant phonon library to each collision and the appropriate Bose-Einstein distribution.
     -----------
     
     g_df : pandas dataframe containing:
     
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-        
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-               
-    cart_qpts_df : pandas dataframe containing:
-    
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        kx : vector_like, shape (n,1)
-        x-coordinate in Cartesian momentum space [1/m]    
-        
-        ky : vector_like, shape (n,1)
-        y-coordinate in Cartesian momentum space [1/m]  
-        
-        kz : vector_like, shape (n,1)
-        z-coordinate in Cartesian momentum space [1/m]
-        
-    enq_df : pandas dataframe containing
-
-        k_inds : vector_like, shape (n,1)
-        Index of k point
-        
-        im_mode : vector_like, shape (n,1)
-        Phonon polarization index
-        
-        energy [Ryd] : vector_like, shape (n,1)
-        Energy associated with k point in Rydberg units
-        
-            
-    T : scalar
-    Lattice temperature in Kelvin
     
     Returns:
     --------
     
     g_df : pandas dataframe containing:
-
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
+    
+    ...
+        BE : vector_like, shape (n,1)
+        Bose-Einstein distribution of the phonon mediating a collision
         
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-        
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-        
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-        
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-        
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-        
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-        
-        k_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of pre collision state
-        
-        k+q_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of post collision state
-        
-        k_energy : vector_like, shape (n,1)
-        Energy of the pre collision state
-        
-        k+q_energy : vector_like, shape (n,1)
-        Energy of the post collision state
+        q_en [eV] : vector_like, shape (n,1)
+        The energy of the phonon mode mediating a collision
          
     """
     
@@ -837,112 +568,271 @@ def bosonic_processing(g_df,enq_df,T):
     
     g_df = bose_distribution(g_df,T)
     
-    return g_df,modified_enq_df
+    return g_df
+
+
+def fermionic_processing(g_df,cart_kpts_df,mu,T,b):
+    """
+    This function takes the g dataframe and assigns an electron energy from the relevant electron library to the pre and post collision states and the appropriate Fermi-Diract distributions.
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+    ...
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+    
+    ...
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+         
+    """
+
+    # Pre-collision
+    modified_g_df_k = g_df.copy(deep=True)
+    modified_g_df_k.set_index(['k_inds'], inplace=True)
+    modified_g_df_k = modified_g_df_k.sort_index()
+
+    modified_k_df = cart_kpts_df.copy(deep=True)
+    modified_k_df.set_index(['k_inds'], inplace=True)
+    modified_k_df = modified_k_df.sort_index()
+    modified_k_df = modified_k_df.loc[modified_g_df_k.index.unique()]
+    
+    modified_k_df = modified_k_df.reset_index()
+    modified_k_df = modified_k_df.sort_values(['k_inds'],ascending=True)
+    modified_k_df = modified_k_df[['k_inds','energy','kx [1/A]','ky [1/A]','kz [1/A]']]
+    
+    modified_k_df['k_id'] = modified_k_df.groupby(['k_inds']).ngroup()
+    g_df['k_id'] = g_df.sort_values(['k_inds'],ascending=True).groupby(['k_inds']).ngroup()   
+    g_df['k_en [eV]'] = modified_k_df['energy'].values[g_df['k_id'].values]
+    
+    g_df['kx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k_id'].values]
+    g_df['ky [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k_id'].values]
+    g_df['kz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k_id'].values]
+
+    
+    # Post-collision
+    modified_g_df_kq = g_df.copy(deep=True)
+    modified_g_df_kq.set_index(['k_inds'], inplace=True)
+    modified_g_df_kq = modified_g_df_kq.sort_index()
+    
+    modified_k_df = cart_kpts_df.copy(deep=True)
+    modified_k_df.set_index(['k_inds'], inplace=True)
+    modified_k_df = modified_k_df.sort_index()
+    modified_k_df = modified_k_df.loc[modified_g_df_kq.index.unique()]
+    
+    modified_k_df = modified_k_df.reset_index()
+    modified_k_df = modified_k_df.sort_values(['k_inds'],ascending=True)
+    modified_k_df = modified_k_df[['k_inds','energy','kx [1/A]','ky [1/A]','kz [1/A]']]
+    
+    modified_k_df['k+q_id'] = modified_k_df.groupby(['k_inds']).ngroup()
+    g_df['k+q_id'] = g_df.sort_values(['k+q_inds'],ascending=True).groupby(['k+q_inds']).ngroup()   
+    g_df['k+q_en [eV]'] = modified_k_df['energy'].values[g_df['k+q_id'].values]
+    
+    g_df['kqx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k+q_id'].values]
+    g_df['kqy [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k+q_id'].values]
+    g_df['kqz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k+q_id'].values]
+
+    
+    abs_inds = g_df['k_en [eV]'] < g_df['k+q_en [eV]'] #absorbed indices
+    ems_inds = g_df['k_en [eV]'] > g_df['k+q_en [eV]'] #emission indices
+
+    
+    g_df.loc[abs_inds,'collision_state'] = 1
+    g_df.loc[ems_inds,'collision_state'] = -1
+    
+    g_df = fermi_distribution(g_df,mu, T)
+    
+    g_df = g_df.drop(['k_id','k+q_id'],axis=1)
+    
+    g_df = gaussian_weight(g_df,b)
+    
+    return g_df
+
+def gaussian_weight(g_df,n):
+    """
+    This function assigns the value of the delta function approximated by a Gaussian with broadening n.
+    
+    Parameters:
+    -----------
+    
+    g_df : pandas dataframe containing:
+
+        ...
+            
+    n : scalar
+    Broadening of Gaussian in eV
+    
+    Returns:
+    --------
+    """
+    abs_inds = g_df['collision_state'] == 1 #absorbed indices
+    ems_inds = g_df['collision_state'] == -1 #emission indices
+    
+    energy_delta_ems = g_df.loc[ems_inds,'k_en [eV]'].values - g_df.loc[ems_inds,'k+q_en [eV]'].values - g_df.loc[ems_inds,'q_en [eV]'].values
+    energy_delta_abs = g_df.loc[abs_inds,'k_en [eV]'].values - g_df.loc[abs_inds,'k+q_en [eV]'].values + g_df.loc[abs_inds,'q_en [eV]'].values
+    
+    g_df.loc[abs_inds,'gaussian'] = 1/np.sqrt(np.pi)*1/n*np.exp(-(energy_delta_abs/n)**2)
+    g_df.loc[ems_inds,'gaussian'] = 1/np.sqrt(np.pi)*1/n*np.exp(-(energy_delta_ems/n)**2)
+    
+    return g_df
 
+def populate_reciprocals(g_df):
+    """
+    The g^2 elements are invariant under substitution of k and k'. Jin-Jian provided the minimal set, that is for a given k-pair linked through a particular collision 
+    and characterized by a say an emission, the reciprocal absorbtion is not included. Here we repopulate these states.
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+    ...
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+    
+    ...
+         
+    """
 
-# In[35]:
+    modified_g_df = g_df.copy(deep=True)
 
+    flipped_inds = g_df['k_inds']>g_df['k+q_inds']
+    modified_g_df.loc[flipped_inds,'k_inds'] = g_df.loc[flipped_inds,'k+q_inds']
+    modified_g_df.loc[flipped_inds,'k+q_inds'] = g_df.loc[flipped_inds,'k_inds']
 
-g_df.loc[g_df['q_id'] == 1000].head()
+    modified_g_df.loc[flipped_inds,'k_FD'] = g_df.loc[flipped_inds,'k+q_FD']
+    modified_g_df.loc[flipped_inds,'k+q_FD'] = g_df.loc[flipped_inds,'k_FD']
 
+    modified_g_df.loc[flipped_inds,'k_en [eV]'] = g_df.loc[flipped_inds,'k+q_en [eV]']
+    modified_g_df.loc[flipped_inds,'k+q_en [eV]'] = g_df.loc[flipped_inds,'k_en [eV]']
 
-# In[68]:
+    modified_g_df.loc[flipped_inds,'collision_state'] = g_df.loc[flipped_inds,'collision_state']*-1
+    
+    modified_g_df.loc[flipped_inds,'kqx [1/A]'] = g_df.loc[flipped_inds,'kx [1/A]']
+    modified_g_df.loc[flipped_inds,'kqy [1/A]'] = g_df.loc[flipped_inds,'ky [1/A]']
+    modified_g_df.loc[flipped_inds,'kqz [1/A]'] = g_df.loc[flipped_inds,'kz [1/A]']
+    modified_g_df.loc[flipped_inds,'kx [1/A]'] = g_df.loc[flipped_inds,'kqx [1/A]']
+    modified_g_df.loc[flipped_inds,'ky [1/A]'] = g_df.loc[flipped_inds,'kqy [1/A]']
+    modified_g_df.loc[flipped_inds,'kz [1/A]'] = g_df.loc[flipped_inds,'kqz [1/A]']
+    
+    modified_g_df['k_pair_id'] = modified_g_df.groupby(['k_inds','k+q_inds']).ngroup()
 
 
-g_df.loc[g_df['k_inds'] == 79]
+    reverse_df = modified_g_df.copy(deep=True)
 
+    reverse_df['k_inds'] = modified_g_df['k+q_inds']
+    reverse_df['k+q_inds'] = modified_g_df['k_inds']
 
-# In[60]:
+    reverse_df['k_FD'] = modified_g_df['k+q_FD']
+    reverse_df['k+q_FD'] = modified_g_df['k_FD']
 
+    reverse_df['k_en [eV]'] = modified_g_df['k+q_en [eV]']
+    reverse_df['k+q_en [eV]'] = modified_g_df['k_en [eV]']
 
-np.abs(-enk_df.loc[enk_df['k_inds'] == 10]['energy [Ryd]'].values+enk_df.loc[enk_df['k_inds'] == 79]['energy [Ryd]'].values)*13.6056980659
+    reverse_df['collision_state'] = modified_g_df['collision_state']*-1
+    
+    reverse_df['kqx [1/A]'] = modified_g_df['kx [1/A]']
+    reverse_df['kqy [1/A]'] = modified_g_df['ky [1/A]']
+    reverse_df['kqz [1/A]'] = modified_g_df['kz [1/A]']
+    reverse_df['kx [1/A]'] = modified_g_df['kqx [1/A]']
+    reverse_df['ky [1/A]'] = modified_g_df['kqy [1/A]']
+    reverse_df['kz [1/A]'] = modified_g_df['kqz [1/A]']
 
+    full_g_df = modified_g_df.append(reverse_df)
 
-# In[61]:
+    
+    return full_g_df
 
 
-np.abs(-enk_df.loc[enk_df['k_inds'] == 34]['energy [Ryd]'].values+enk_df.loc[enk_df['k_inds'] == 87]['energy [Ryd]'].values)*13.6056980659
+# In[7]:
 
 
-# In[55]:
+g_df = bosonic_processing(g_df,enq_df,T)
+g_df = fermionic_processing(g_df,cart_kpts_df,mu,T,b)
 
 
-enq_df.loc[enq_df['q_inds'] == 177]
+# In[8]:
 
 
-# In[19]:
+np.sum(g_df['collision_state'] == 1),np.sum(g_df['collision_state'] == -1),
 
 
-g_df = fermionic_processing(g_df,cart_kpts_df,enk_df,5.780,300)
+# In[10]:
 
 
-# In[21]:
+full_g_df = populate_reciprocals(g_df)
 
 
-g_df,modified_enq_df = bosonic_processing(g_df,enq_df,T)
+# In[11]:
 
 
-# In[34]:
+del g_df
 
 
-modified_enq_df.loc[modified_enq_df['q_id'] == 1000].head()
+# In[13]:
 
 
-# In[62]:
+np.sum(full_g_df['collision_state'] == 1),np.sum(full_g_df['collision_state'] == -1),
 
 
-cart_kpts_df.loc[cart_kpts_df['k_inds']==231]
+# In[14]:
 
 
-# In[63]:
+full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
+       'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
+       'k_FD', 'k+q_FD','collision_state', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
+       'kqy [1/A]', 'kqz [1/A]', 'k_pair_id','gaussian']]
 
 
-cart_kpts_df.loc[cart_kpts_df['k_inds']==1201]
+# In[64]:
 
 
-# In[32]:
+collisionless_df = full_g_df.loc[full_g_df['collision_state'].isnull()]
+low_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']]
+high_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']]
 
 
-g_df.loc[g_df['collision_state'] == 0]
+# In[78]:
 
 
-# In[66]:
+low_collisionless_df['collision_state'] = 1
+high_collisionless_df['collision_state'] = -1
 
+collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']] = low_collisionless_df
+collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']] = high_collisionless_df
 
-np.min(g_df['g_element'].values)
+full_g_df.loc[full_g_df['collision_state'].isnull()] = collisionless_df
 
 
-# In[22]:
+# In[80]:
 
 
-g_df.head()
+del collisionless_df
+del low_collisionless_df
+del high_collisionless_df
 
 
-# In[ ]:
+# In[93]:
 
 
+full_g_df= gaussian_weight(full_g_df,b)
 
 
+# In[109]:
 
-# In[42]:
 
+full_g_df.head()
 
-g_df['k_en [eV]'] - g_df['k+q_en [eV]']
 
-
-# In[40]:
-
-
-np.max(g_df['k_en [eV]'])-np.min(g_df['k_en [eV]'])
-
-
-# In[41]:
-
-
-(np.max(enk_df['energy [Ryd]'])-np.min(enk_df['energy [Ryd]']))*13.6056980659
-
-
-# In[24]:
+# In[110]:
 
 
 def scattering_rate(g_df):
@@ -1001,33 +891,81 @@ def scattering_rate(g_df):
     # Physical constants
     e = 1.602*10**(-19) # fundamental electronic charge [C]
     kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    
-    
+    h = 1.0545718*10**(-34)
+        
     g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
     g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
     
-    g_df_ems['weight'] = np.multiply(g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values,g_df_ems['g_element'].values)
-    g_df_abs['weight'] = np.multiply(g_df_abs['BE'].values + g_df_abs['k+q_FD'].values,g_df_abs['g_element'].values)
-
+    g_df_ems['weight'] = np.multiply(np.multiply(g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values,g_df_ems['g_element'].values),g_df_ems['gaussian'])/13.6056980659
+    g_df_abs['weight'] = np.multiply(np.multiply((g_df_abs['BE'].values + g_df_abs['k+q_FD'].values),g_df_abs['g_element'].values),g_df_ems['gaussian'])/13.6056980659
     
     
-    
-    abs_sr = g_df_abs.groupby(['k_inds'])['weight'].agg('sum')
+    abs_sr = g_df_abs.groupby(['k_inds'])['weight'].agg('sum')*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(g_df['q_id'].values))
     abs_scattering = abs_sr.to_frame().reset_index()
     
-    ems_sr = g_df_ems.groupby(['k_inds'])['weight'].agg('sum')
+    ems_sr = g_df_ems.groupby(['k_inds'])['weight'].agg('sum')*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(g_df['q_id'].values))
     ems_scattering = ems_sr.to_frame().reset_index()
     
-    return abs_scattering,ems_scattering
+    return ems_scattering,abs_scattering
 
 
-# In[25]:
+# In[111]:
 
 
-abs_scattering,ems_scattering = scattering_rate(g_df)
+ems_scattering,abs_scattering = scattering_rate(full_g_df)
 
 
-# In[ ]:
+# In[112]:
+
+
+abs_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+ems_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+abs_scattering_array[abs_scattering['k_inds'].values-1] = abs_scattering['weight'].values
+ems_scattering_array[ems_scattering['k_inds'].values-1] = ems_scattering['weight'].values
+
+
+# In[120]:
+
+
+import matplotlib.cm as cm
+plt.rcParams.update({'font.size': 40})
+plt.rcParams.update({'lines.linewidth': 3.5})
+
+fig = plt.figure(figsize=(12,10))
+ax = plt.gca()
+
+
+plt.scatter((enk_df['energy [Ryd]'].values-enk_df['energy [Ryd]'].min())*13.6056980659,(abs_scattering_array+ems_scattering_array),c = 'Red')
+#plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+#plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+plt.ylabel('Scattering Rate [1/ps]')
+plt.xlabel('Energy [eV]')
+#plt.legend()
+plt.ylim((-0.1,20.1))
+plt.show()
+fig.savefig('test.png', bbox_inches='tight')
+
+
+# In[123]:
+
+
+len(full_g_df)
+
+
+# In[136]:
+
+
+np.sum(full_g_df['k_en [eV]'] > (full_g_df['k_en [eV]'].min()+ 0.25))/len(full_g_df)
+
+
+# In[138]:
+
+
+del ems_scattering
+del abs_scattering
+
+
+# In[209]:
 
 
 def coupling_matrix_calc(g_df):
@@ -1086,242 +1024,139 @@ def coupling_matrix_calc(g_df):
     # Physical constants
     e = 1.602*10**(-19) # fundamental electronic charge [C]
     kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    
+    h = 1.0545718*10**(-34)
     
     g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
     g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
     
-    g_df_ems['weight'] = np.multiply(g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values,g_df_ems['g_element'].values)
-    g_df_abs['weight'] = np.multiply(g_df_abs['BE'].values + g_df_abs['k+q_FD'].values,g_df_abs['g_element'].values)
-
-    g_df_abs['id'] = g_df_abs.groupby(['k_inds','k+q_inds']).ngroup()
-    g_df_ems['id'] = g_df_ems.groupby(['k_inds','k+q_inds']).ngroup()    
+    g_df_ems['weight'] = np.multiply(np.multiply((g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values),g_df_ems['g_element'].values),g_df_ems['gaussian'])/13.6056980659
+    g_df_abs['weight'] = np.multiply(np.multiply((g_df_abs['BE'].values + g_df_abs['k+q_FD'].values),g_df_abs['g_element'].values),g_df_abs['gaussian'])/13.6056980659 
     
-    
-    
-    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds','id'])['weight'].agg('sum')
+    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
     summed_abs_df = abs_sr.to_frame().reset_index()
     
-    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds','id'])['weight'].agg('sum')
+    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
     summed_ems_df = ems_sr.to_frame().reset_index()
     
     return summed_abs_df,summed_ems_df
 
 
-# In[ ]:
+# In[210]:
 
 
-abs_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
-ems_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
-abs_scattering_array[abs_scattering['k_inds'].values-1] = abs_scattering['weight'].values
-ems_scattering_array[ems_scattering['k_inds'].values-1] = ems_scattering['weight'].values
+summed_abs_df,summed_ems_df = coupling_matrix_calc(full_g_df)
 
 
-# In[ ]:
-
-
-import matplotlib.cm as cm
-plt.rcParams.update({'font.size': 40})
-plt.rcParams.update({'lines.linewidth': 3.5})
-
-fig = plt.figure(figsize=(12,10))
-ax = plt.gca()
-
-plt.scatter(enk_df['energy [Ryd]'].values,abs_scattering_array+ems_scattering_array,c = 'Red')
-#plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-#plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-plt.ylabel('Scattering Rate [1/fs]')
-plt.xlabel('Energy [Ryd]')
-#plt.legend()
-plt.show()
-fig.savefig('test.png', bbox_inches='tight')
-
-
-# In[ ]:
-
-
-abs_scattering_array+ems_scattering_array
-
-
-# In[ ]:
-
-
-summed_abs_df,summed_ems_df = coupling_matrix_calc(g_df)
-
-
-# In[ ]:
-
-
-interesting_abs = summed_abs_df.groupby(['k_inds'])['weight'].agg('sum').to_frame().reset_index()
-
-
-# In[ ]:
-
-
-interesting_ems = summed_ems_df.groupby(['k_inds'])['weight'].agg('sum').to_frame().reset_index()
-
-
-# In[ ]:
-
-
-len(interesting_abs)
-
-
-# In[ ]:
-
-
-g_df.loc[(g_df['k_inds'] == 2213)* g_df['k+q_inds'] == 502]
-
-
-# In[ ]:
-
-
-g_df.loc[(g_df['q_inds'] == 4015)*(g_df['collision_state'] == -1)]
-
-
-# In[ ]:
-
-
-summed_abs_df.loc[summed_abs_df['id'] == 500]
-
-
-# In[ ]:
-
-
-summed_ems_df.loc[summed_ems_df['id'] == 539]
-
-
-# In[ ]:
-
-
-summed_ems_df.loc[summed_ems_df['k+q_inds'] == 1019]
-
-
-# In[ ]:
+# In[211]:
 
 
 abs_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
 ems_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
 
-
-# In[ ]:
-
-
 abs_array[summed_abs_df['k_inds'].values-1,summed_abs_df['k+q_inds'].values-1] = summed_abs_df['weight'].values
 ems_array[summed_ems_df['k_inds'].values-1,summed_ems_df['k+q_inds'].values-1] = summed_ems_df['weight'].values
 
 
-# In[ ]:
+# In[308]:
+
+
+collision_array = (np.transpose(abs_array+ems_array)-(abs_array+ems_array))*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(full_g_df['q_id'].values))
+
+
+# In[324]:
+
+
+sorted_indices = cart_kpts_df.sort_values(['kx [1/A]','ky [1/A]','kz [1/A]'],ascending=True)['k_inds'].values-1
+i = np.argsort(sorted_indices)
+switch1 = collision_array[:,i]
+switch2 = switch1[i,:]
+
+
+# In[326]:
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 plt.set_cmap('inferno')
 fig = plt.figure(figsize=(20, 12.2))
+plt.rcParams.update({'font.size': 20})
 
 ax = fig.add_subplot(111)
-ax.set_title('Collision Matrix')
-plt.imshow(abs_array/np.max(abs_array))
+ax.set_title('Collision Matrix (kpt ascending)')
+plt.imshow(np.abs(switch2),origin = 'lower')
 ax.set_aspect('equal')
 plt.xlabel('k index')
 plt.ylabel('k_p index')
 
-cax = fig.add_axes([0.12, 0.1, 0.78, 0.8])
+cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
 cax.get_xaxis().set_visible(False)
 cax.get_yaxis().set_visible(False)
 cax.patch.set_alpha(0)
 cax.set_frame_on(False)
 cbar = plt.colorbar(orientation='vertical')
-cbar.set_label('Coupling Rate [arb]', rotation=270)
+cbar.set_label('Coupling Rate [fs^-1]')
+fig.savefig('test.png', bbox_inches='tight')
 plt.show()
 
 
-# In[ ]:
+# In[319]:
+
+
+sorted_indices = cart_kpts_df.sort_values(['energy'],ascending=True)['k_inds'].values-1
+i = np.argsort(sorted_indices)
+switch1 = collision_array[:,i]
+switch2 = switch1[i,:]
+
+
+# In[323]:
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 plt.set_cmap('inferno')
-
 fig = plt.figure(figsize=(20, 12.2))
+plt.rcParams.update({'font.size': 20})
 
 ax = fig.add_subplot(111)
-ax.set_title('colorMap')
-plt.imshow(ems_array/np.max(ems_array))
+ax.set_title('Collision Matrix (energy ascending)')
+plt.imshow(np.abs(switch2),origin = 'lower')
 ax.set_aspect('equal')
+plt.xlabel('k index')
+plt.ylabel('k_p index')
 
-cax = fig.add_axes([0.12, 0.1, 0.78, 0.8])
+cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
 cax.get_xaxis().set_visible(False)
 cax.get_yaxis().set_visible(False)
 cax.patch.set_alpha(0)
 cax.set_frame_on(False)
-plt.colorbar(orientation='vertical')
+cbar = plt.colorbar(orientation='vertical')
+cbar.set_label('Coupling Rate [fs^-1]')
+fig.savefig('test.png', bbox_inches='tight')
 plt.show()
 
 
-# In[ ]:
+# In[315]:
 
 
-plt.imshow(ems_array);
-plt.colorbar()
-plt.show()
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
 
-# In[ ]:
+# In[322]:
 
 
-import matplotlib as mpl
-from matplotlib import pyplot
-import numpy as np
-
-# make a color map of fixed colors
-cmap = mpl.colors.LinearSegmentedColormap.from_list('my_colormap',
-                                           ['blue','black','red'],
-                                           256)
-
-# tell imshow about color map so that only set colors are used
-img = pyplot.imshow(ems_array*1000,interpolation='nearest',
-                    cmap = cmap2,
-                    origin='lower')
-
-pyplot.show()
+check_symmetric(np.abs(collision_array))
 
 
-# In[ ]:
+# In[317]:
 
 
-np.sum(abs_array+ems_array,axis=1)
-
-
-# In[69]:
-
-
-import matplotlib as mpl
-from matplotlib import pyplot
-import numpy as np
-
-# make a color map of fixed colors
-cmap = mpl.colors.LinearSegmentedColormap.from_list('my_colormap',
-                                           ['blue','black','red'],
-                                           256)
-
-# tell imshow about color map so that only set colors are used
-img = pyplot.imshow(ems_array*1000,interpolation='nearest',
-                    cmap = cmap2,
-                    origin='lower')
-
-pyplot.show()
-
-
-# In[71]:
-
-
-"hello"
+np.sum(collision_array,axis=0)
 
 
 # ## Data validation (Peishi Updated: 4/30)
 
-# In[110]:
+# In[22]:
 
 
 def plot_bandstructure(kpts, enk): 
@@ -1379,7 +1214,9 @@ def plot_bandstructure(kpts, enk):
     ang_tol = 1 * deg2rad  # 1 degree in radians 
 
     enkonly = np.array(enk['energy [Ryd]'])[:, np.newaxis] 
+    enkinds = np.array(enk['k_inds'])
     kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) 
+    kptsinds = np.array(kpts['k_inds'])
     kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] 
 
     dot_l = np.zeros(len(kpts))
@@ -1394,83 +1231,161 @@ def plot_bandstructure(kpts, enk):
 
     lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))
     xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))
+    
+    linds = kptsinds[lpath]
+    xinds = kptsinds[xpath]
+    lkmag = kptsmag[lpath]
+    xkmag = kptsmag[xpath]
 
     plt.figure() 
-    plt.plot(kptsmag[lpath], enkonly[lpath], '.') 
-    plt.plot(-1*kptsmag[xpath], enkonly[xpath], '.') 
+    
+    for i, ki in enumerate(linds):
+        energies = enkonly[enkinds == ki, 0]
+        thiskmag = lkmag[i]
+        if len(energies) > 1:
+            veck = np.ones((len(energies), 1)) * thiskmag
+            plt.plot(veck, theseenergies, '.', color='C0')
+        else:
+            plt.plot(thiskmag,energies, '.', color='C0')
+    
+    for i, ki in enumerate(xinds):
+        energies = enkonly[enkinds == ki, 0]
+        thiskmag = lkmag[i]
+        if len(energies) > 1:
+            veck = np.ones((len(energies), 1)) * thiskmag
+            plt.plot(-1*veck, energies, '.', color='C1')
+        else:
+            plt.plot(-1*thiskmag,energies, '.', color='C1')
+        
     plt.xlabel('k magnitude') 
     plt.ylabel('Energy in Ry')
     plt.show()
 
 
-# In[111]:
+# In[23]:
 
 
 plot_bandstructure(cart_kpts_df, enk_df)
 
 
-# In[112]:
+# In[35]:
 
 
-# plot_bandstructure(edit_cart_qpts_df, enq_df)
-kpts = cart_kpts_df
-enk = enk_df
+def plot_dispersion(kpts, enk): 
+    '''Plots electron bandstructure. 
+    
+    Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X 
+    
+    Parameters: 
+    ------------ 
+    kpts : dataframe containing 
+        k_inds : vector_like, shape (n,1) 
+        Index of k point 
 
-kpts = edit_cart_qpts_df
-enk = enq_df
+        'kx [1/A]' : vector_like, shape (n,1) 
+        x-coordinate in Cartesian momentum space     
 
-a = 5.556 #[A] 
-b1 = (2*np.pi/a) * np.array([1, -1, 1]) 
-b2 = (2*np.pi/a) * np.array([1, 1, -1]) 
-b3 = (2*np.pi/a) * np.array([-1, 1, 1]) 
+        'ky [1/A]' : vector_like, shape (n,1) 
+        y-coordinate in Cartesian momentum space 
 
-# L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 
-# X point in BZ is given by 0.5*b2 + 0.5*b3 
-lpoint = 0.5 * (b1 + b2 + b3) 
-xpoint = 0.5 * (b2 + b3) 
+        'kz [1/A]' : vector_like, shape (n,1) 
+        z-coordinate in Cartesian momentum space 
 
-# We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. 
-# Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies 
-deg2rad = 2*np.pi/360 
-ang_tol = 1 * deg2rad  # 1 degree in radians 
+    enk : dataframe containing 
+        k_inds : vector_like, shape (n,1) 
+        Index of k point 
 
-kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) 
-kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] 
+        band_inds : vector_like, shape (n,1) 
+        Band index 
 
-print(kptsonly.shape)
-print(kptsmag.shape)
+        energy [Ryd] : vector_like, shape (n,1) 
+        Energy associated with k point in Rydberg units 
 
-dot_l = np.zeros(len(kpts))
-dot_x = np.zeros(len(kpts))
+    Returns: 
+    --------- 
+    No variable returns. Just plots the dispersion  
+    '''
+    
+    # Lattice constant and reciprocal lattice vectors 
+    # b1 = 2 pi/a (kx - ky + kz) 
+    # b2 = 2 pi/a (kx + ky - kz) 
+    # b3 = 2 pi/a (-kx + ky + kz) 
+    a = 5.556 #[A] 
+    b1 = (2*np.pi/a) * np.array([1, -1, 1]) 
+    b2 = (2*np.pi/a) * np.array([1, 1, -1]) 
+    b3 = (2*np.pi/a) * np.array([-1, 1, 1]) 
 
-# Separate assignment for gamma point to avoid divide by zero error
-nongamma = kptsmag!=0
-dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) 
-dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) 
-dot_l[np.squeeze(kptsmag==0)] = 0 
-dot_x[np.squeeze(kptsmag==0)] = 0 
+    # L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 
+    # X point in BZ is given by 0.5*b2 + 0.5*b3 
+    lpoint = 0.5 * (b1 + b2 + b3) 
+    xpoint = 0.5 * (b2 + b3) 
 
-lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))
-xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))
+    # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. 
+    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies 
+    deg2rad = 2*np.pi/360 
+    ang_tol = 1 * deg2rad  # 1 degree in radians 
 
-# Need to reshape the energy dataframe for easy plotting if there are multiple bands
-enk_ra = np.array(enk.iloc[:,:])
-enk_ra.sort(axis=0)
-nk = int(np.max(enk_ra[:, 0]))  # nk = number of kpts = highest kpts index
-if np.mod(len(enk_ra), nk) != 0:
-    exit('Something is wack with the number of bands and kpoints in the array')
-else:
-    nb = int(len(enk_ra) / nk)
-enkonly = enk_ra[:, 2]
-enk_by_band = np.reshape(enkonly, (nk, nb), order='C')
+    print(list(kpts))
+    
+    enkonly = np.array(enk['energy [Ryd]'])[:, np.newaxis] 
+    enkinds = np.array(enk['q_inds'])
+    kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) 
+    kptsinds = np.array(kpts['q_inds'])
+    kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] 
 
-print(enk_by_band.shape)
+    dot_l = np.zeros(len(kpts))
+    dot_x = np.zeros(len(kpts))
 
-plt.figure()
-for b in range(nb):
-    plt.plot(kptsmag[lpath], enk_by_band[lpath, b], '.', color='C0') 
-    plt.plot(-1*kptsmag[xpath], enk_by_band[xpath, b], '.', color='C1') 
-plt.xlabel('k magnitude') 
-plt.ylabel('Energy in Ry')
-plt.show()
+    # Separate assignment for gamma point to avoid divide by zero error
+    nongamma = kptsmag!=0
+    dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) 
+    dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) 
+    dot_l[np.squeeze(kptsmag==0)] = 0 
+    dot_x[np.squeeze(kptsmag==0)] = 0 
+
+    lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))
+    xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))
+    
+    linds = kptsinds[lpath]
+    xinds = kptsinds[xpath]
+    lkmag = kptsmag[lpath]
+    xkmag = kptsmag[xpath]
+
+    plt.figure() 
+    
+    for i, ki in enumerate(linds):
+        energies = enkonly[enkinds == ki, 0]
+        thiskmag = lkmag[i]
+        if len(energies) > 1:
+            veck = np.ones((len(energies), 1)) * thiskmag
+            plt.plot(veck, energies, '.', color='C0')
+        else:
+            plt.plot(thiskmag,energies, '.', color='C0')
+    
+    for i, ki in enumerate(xinds):
+        energies = enkonly[enkinds == ki, 0]
+        thiskmag = lkmag[i]
+        if len(energies) > 1:
+            veck = np.ones((len(energies), 1)) * thiskmag
+            plt.plot(-1*veck, energies, '.', color='C1')
+        else:
+            plt.plot(-1*thiskmag,energies, '.', color='C1')
+        
+    plt.xlabel('k magnitude') 
+    plt.ylabel('Energy in Ry')
+    plt.show()
+
+
+# In[36]:
+
+
+# kpts = edit_cart_qpts_df
+# enk = enq_df
+plot_dispersion(edit_cart_qpts_df, enq_df)
+
+
+# In[ ]:
+
+
+
 
