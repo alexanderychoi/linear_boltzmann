@@ -12,8 +12,104 @@ import plotly
 plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
+def bz_3dscatter():
+    trace1 = go.Scatter3d(
+        x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / (a)),
+        y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / (a)),
+        z=cart_kpts_df['kz [1/A]'].values / (2 * np.pi / (a)),
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=enk_df['energy [Ryd]'],
+            colorscale='Rainbow',
+            showscale=True,
+            opacity=1
+        )
+    )
+
+    trace2 = go.Scatter
+
+    data = [trace1]
+    layout = go.Layout(
+        scene=dict(
+            xaxis=dict(
+                title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
+            yaxis=dict(
+                title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
+            zaxis=dict(
+                title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
+    fig = go.Figure(data=data, layout=layout)
+    py.iplot(fig, filename='simple-3d-scatter')
+
+    trace1 = go.Scatter3d(
+        x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / (a)),
+        y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / (a)),
+        z=cart_kpts_df['kz [1/A]'].values / (2 * np.pi / (a)),
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=cart_kpts_df['v_mag [m/s]'],
+            colorscale='Rainbow',
+            showscale=True,
+            opacity=1
+        )
+    )
+
+    trace2 = go.Scatter
+
+    trace1 = go.Scatter3d(
+        x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / a),
+        y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / a),
+        z=cart_kpts_df['kz [1/A]'].values / (2 * np.pi / a),
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=cart_kpts_df['k_inds'],
+            colorscale='Rainbow',
+            showscale=True,
+            opacity=1
+        )
+    )
+
+    trace2 = go.Scatter
+
+    data = [trace1]
+    layout = go.Layout(
+        scene=dict(
+            xaxis=dict(
+                title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
+            yaxis=dict(
+                title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
+            zaxis=dict(
+                title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
+    fig = go.Figure(data=data, layout=layout)
+    py.iplot(fig, filename='simple-3d-scatter')
+
+    trace1 = go.Scatter3d(
+        x=edit_cart_qpts_df['kx [1/A]'].values,
+        y=edit_cart_qpts_df['ky [1/A]'].values,
+        z=edit_cart_qpts_df['kz [1/A]'].values,
+        mode='markers',
+        marker=dict(
+            size=2,
+            opacity=1
+        )
+    )
+
+    data = [trace1]
+    layout = go.Layout(
+        scene=dict(
+            xaxis=dict(
+                title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
+            yaxis=dict(
+                title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
+            zaxis=dict(
+                title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
+    fig = go.Figure(data=data, layout=layout)
+    py.iplot(fig, filename='simple-3d-scatter')
+
 def plot_dispersion(kpts, enk):
-    '''Plots electron bandstructure.
+    '''Plots phonon dispersion.
 
     Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X
 

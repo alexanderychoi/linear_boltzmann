@@ -1,9 +1,9 @@
 #!/usr/bin/env python
+"""Data processing module for the electron-phonon collision matrix
 
-# Data processing module for the electron-phonon collision matrix
-
-# This is meant to be a frills-free calculation of the electron-phonon collision matrix utilizing the data from
-# Jin Jian Zhou for GaAs.
+This is meant to be a frills-free calculation of the electron-phonon collision matrix utilizing the data from
+Jin Jian Zhou for GaAs.
+"""
 
 import numpy as np
 
@@ -30,8 +30,9 @@ import matplotlib.cm as cm
 import plotly.offline as py
 import plotly.graph_objs as go
 import plotly
-#plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
+# plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
 plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
+
 
 def loadfromfile():
     # Physical parameter definition
@@ -53,7 +54,18 @@ def loadfromfile():
 
     g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
     g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-    g_df = g_df.drop(["m_band","n_band"],axis=1)
+    g_df = g_df.drop(["m_band", "n_band"],axis=1)
+
+    # Importing electron k points
+    kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
+    kpts.columns = ['0']
+    kpts_array = kpts['0'].values
+    new_kpt_array = np.zeros((len(kpts_array), 4))
+    for i1 in trange(len(kpts_array)):
+        new_kpt_array[i1, :] = kpts_array[i1].split()
+
+    kpts_df = pd.DataFrame(data=new_kpt_array, columns=['k_inds', 'b1', 'b2', 'b3'])
+    kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric, downcast='integer')
 
     # Import electron energy library
     enk = pd.read_csv('gaas.enk', sep='\t',header= None)
@@ -65,7 +77,6 @@ def loadfromfile():
 
     enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])
     enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
-    enk_df = enk_df.drop(['band_inds'],axis=1)
 
     # Import phonon energy library
     enq = pd.read_csv('gaas.enq', sep='\t',header= None)
@@ -77,7 +88,6 @@ def loadfromfile():
 
     enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
     enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-
 
     # Import phonon q-point index
     qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
@@ -101,7 +111,7 @@ def loadfromfile():
     enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
     enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
 
-    return g_df,
+    return g_df, kpts_df, enk_df, qpts_df, enq_df
 
 
 ## Data Processing (Alex Updated: 4/30)
@@ -202,147 +212,55 @@ kb = 1.38064852*10**(-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
 T = 300
 e = 1.602*10**(-19)
 
-# Shifting k vectors back into BZ
-kvel = pd.read_csv('gaas.vel', sep='\t',header= None,skiprows=[0,1,2])
-kvel.columns = ['0']
-kvel_array = kvel['0'].values
-new_kvel_array = np.zeros((len(kvel_array),10))
-for i1 in trange(len(kvel_array)):
-    new_kvel_array[i1,:] = kvel_array[i1].split()
-    
-kvel_df = pd.DataFrame(data=new_kvel_array,columns = ['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])
-kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
+def shift_into_fbz(qpts_df):
+    # Shifting k vectors back into BZ
+    kvel = pd.read_csv('gaas.vel', sep='\t',header= None,skiprows=[0,1,2])
+    kvel.columns = ['0']
+    kvel_array = kvel['0'].values
+    new_kvel_array = np.zeros((len(kvel_array),10))
+    for i1 in trange(len(kvel_array)):
+        new_kvel_array[i1,:] = kvel_array[i1].split()
 
-kvel_edit = kvel_df.copy(deep=True)
+    kvel_df = pd.DataFrame(data=new_kvel_array,columns = ['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])
+    kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
 
-# Shift the points back into the first BZ
-kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
-kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
+    kvel_edit = kvel_df.copy(deep=True)
 
-ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
-ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
+    # Shift the points back into the first BZ
+    kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
+    kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
 
-kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
-kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
+    ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
+    ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
 
-kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1
-kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
+    kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
+    kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
 
-kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
-kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
+    kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1
+    kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
 
-kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
-kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
+    kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
+    kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
 
-kvel_df = kvel_edit.copy(deep=True)
-kvel_df.head()
+    kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
+    kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
 
-cart_kpts_df = kvel_df.copy(deep=True)
-cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/a
-cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/a
-cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a
+    kvel_df = kvel_edit.copy(deep=True)
+    kvel_df.head()
 
-cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
+    cart_kpts_df = kvel_df.copy(deep=True)
+    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/a
+    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/a
+    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a
 
-# Making Cartesian qpoints
-cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
+    cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
 
-trace1 = go.Scatter3d(
-    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
-    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
-    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
-    mode='markers',
-    marker=dict(
-        size=2,
-        color=enk_df['energy [Ryd]'],
-        colorscale='Rainbow',
-        showscale=True,
-        opacity=1
-    )
-)
+    # Making Cartesian qpoints
+    cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
+    return cart_qpts_df,edit_cart_qpts_df
 
-trace2 = go.Scatter
 
-data = [trace1]
-layout = go.Layout(
-                    scene = dict(
-                    xaxis = dict(
-                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
-                    yaxis = dict(
-                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
-                    zaxis = dict(
-                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
-fig = go.Figure(data=data, layout=layout)
-py.iplot(fig, filename='simple-3d-scatter')
 
-trace1 = go.Scatter3d(
-    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
-    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
-    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
-    mode='markers',
-    marker=dict(
-        size=2,
-        color=cart_kpts_df['v_mag [m/s]'],
-        colorscale='Rainbow',
-        showscale=True,
-        opacity=1
-    )
-)
-
-trace2 = go.Scatter
-
-cart_kpts_df  = cart_kpts_df.drop(['bands'],axis=1)
-
-trace1 = go.Scatter3d(
-    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
-    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
-    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
-    mode='markers',
-    marker=dict(
-        size=2,
-        color=cart_kpts_df['k_inds'],
-        colorscale='Rainbow',
-        showscale=True,
-        opacity=1
-    )
-)
-
-trace2 = go.Scatter
-
-data = [trace1]
-layout = go.Layout(
-                    scene = dict(
-                    xaxis = dict(
-                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
-                    yaxis = dict(
-                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
-                    zaxis = dict(
-                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
-fig = go.Figure(data=data, layout=layout)
-py.iplot(fig, filename='simple-3d-scatter')
-
-trace1 = go.Scatter3d(
-    x=edit_cart_qpts_df['kx [1/A]'].values,
-    y=edit_cart_qpts_df['ky [1/A]'].values,
-    z=edit_cart_qpts_df['kz [1/A]'].values,
-    mode='markers',
-    marker=dict(
-        size=2,
-        opacity=1
-    )
-)
-
-data = [trace1]
-layout = go.Layout(
-                    scene = dict(
-                    xaxis = dict(
-                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
-                    yaxis = dict(
-                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
-                    zaxis = dict(
-                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
-fig = go.Figure(data=data, layout=layout)
-py.iplot(fig, filename='simple-3d-scatter')
 
 
 def fermi_distribution(g_df,mu,T):
@@ -674,81 +592,81 @@ def populate_reciprocals(g_df):
 # In[7]:
 
 
-g_df = bosonic_processing(g_df,enq_df,T)
-g_df = fermionic_processing(g_df,cart_kpts_df,mu,T,b)
+# g_df = bosonic_processing(g_df,enq_df,T)
+# g_df = fermionic_processing(g_df,cart_kpts_df,mu,T,b)
 
 
 # In[8]:
 
 
-np.sum(g_df['collision_state'] == 1),np.sum(g_df['collision_state'] == -1),
+# np.sum(g_df['collision_state'] == 1),np.sum(g_df['collision_state'] == -1),
 
 
 # In[10]:
 
 
-full_g_df = populate_reciprocals(g_df)
+# full_g_df = populate_reciprocals(g_df)
 
 
 # In[11]:
 
 
-del g_df
+# del g_df
 
 
 # In[13]:
 
 
-np.sum(full_g_df['collision_state'] == 1),np.sum(full_g_df['collision_state'] == -1),
+# np.sum(full_g_df['collision_state'] == 1),np.sum(full_g_df['collision_state'] == -1),
 
 
 # In[14]:
 
 
-full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
-       'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
-       'k_FD', 'k+q_FD','collision_state', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
-       'kqy [1/A]', 'kqz [1/A]', 'k_pair_id','gaussian']]
+# full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
+#        'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
+#        'k_FD', 'k+q_FD','collision_state', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
+#        'kqy [1/A]', 'kqz [1/A]', 'k_pair_id','gaussian']]
 
 
 # In[64]:
 
 
-collisionless_df = full_g_df.loc[full_g_df['collision_state'].isnull()]
-low_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']]
-high_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']]
+# collisionless_df = full_g_df.loc[full_g_df['collision_state'].isnull()]
+# low_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']]
+# high_collisionless_df = collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']]
 
 
 # In[78]:
 
 
-low_collisionless_df['collision_state'] = 1
-high_collisionless_df['collision_state'] = -1
-
-collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']] = low_collisionless_df
-collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']] = high_collisionless_df
-
-full_g_df.loc[full_g_df['collision_state'].isnull()] = collisionless_df
+# low_collisionless_df['collision_state'] = 1
+# high_collisionless_df['collision_state'] = -1
+#
+# collisionless_df.loc[collisionless_df['k_inds']<collisionless_df['k+q_inds']] = low_collisionless_df
+# collisionless_df.loc[collisionless_df['k_inds']>collisionless_df['k+q_inds']] = high_collisionless_df
+#
+# full_g_df.loc[full_g_df['collision_state'].isnull()] = collisionless_df
 
 
 # In[80]:
 
 
-del collisionless_df
-del low_collisionless_df
-del high_collisionless_df
+# del collisionless_df
+# del low_collisionless_df
+# del high_collisionless_df
 
 
 # In[93]:
 
 
-full_g_df= gaussian_weight(full_g_df,b)
+# full_g_df= gaussian_weight(full_g_df,b)
 
 
 # In[109]:
 
 
-full_g_df.head()
+# full_g_df.head()
 
 
 # In[110]:
@@ -831,57 +749,57 @@ def scattering_rate(g_df):
 # In[111]:
 
 
-ems_scattering,abs_scattering = scattering_rate(full_g_df)
+# ems_scattering,abs_scattering = scattering_rate(full_g_df)
 
 
 # In[112]:
 
 
-abs_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
-ems_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
-abs_scattering_array[abs_scattering['k_inds'].values-1] = abs_scattering['weight'].values
-ems_scattering_array[ems_scattering['k_inds'].values-1] = ems_scattering['weight'].values
+# abs_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+# ems_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+# abs_scattering_array[abs_scattering['k_inds'].values-1] = abs_scattering['weight'].values
+# ems_scattering_array[ems_scattering['k_inds'].values-1] = ems_scattering['weight'].values
 
 
 # In[120]:
 
 
 
-plt.rcParams.update({'font.size': 40})
-plt.rcParams.update({'lines.linewidth': 3.5})
+# plt.rcParams.update({'font.size': 40})
+# plt.rcParams.update({'lines.linewidth': 3.5})
+#
+# fig = plt.figure(figsize=(12,10))
+# ax = plt.gca()
 
-fig = plt.figure(figsize=(12,10))
-ax = plt.gca()
 
-
-plt.scatter((enk_df['energy [Ryd]'].values-enk_df['energy [Ryd]'].min())*13.6056980659,(abs_scattering_array+ems_scattering_array),c = 'Red')
-#plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-#plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
-plt.ylabel('Scattering Rate [1/ps]')
-plt.xlabel('Energy [eV]')
-#plt.legend()
-plt.ylim((-0.1,20.1))
-plt.show()
-fig.savefig('test.png', bbox_inches='tight')
+# plt.scatter((enk_df['energy [Ryd]'].values-enk_df['energy [Ryd]'].min())*13.6056980659,(abs_scattering_array+ems_scattering_array),c = 'Red')
+# #plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+# #plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+# plt.ylabel('Scattering Rate [1/ps]')
+# plt.xlabel('Energy [eV]')
+# #plt.legend()
+# plt.ylim((-0.1,20.1))
+# plt.show()
+# fig.savefig('test.png', bbox_inches='tight')
 
 
 # In[123]:
 
 
-len(full_g_df)
+# len(full_g_df)
 
 
 # In[136]:
 
 
-np.sum(full_g_df['k_en [eV]'] > (full_g_df['k_en [eV]'].min()+ 0.25))/len(full_g_df)
+# np.sum(full_g_df['k_en [eV]'] > (full_g_df['k_en [eV]'].min()+ 0.25))/len(full_g_df)
 
 
 # In[138]:
 
 
-del ems_scattering
-del abs_scattering
+# del ems_scattering
+# del abs_scattering
 
 
 # In[209]:
@@ -963,86 +881,86 @@ def coupling_matrix_calc(g_df):
 # In[210]:
 
 
-summed_abs_df,summed_ems_df = coupling_matrix_calc(full_g_df)
+# summed_abs_df,summed_ems_df = coupling_matrix_calc(full_g_df)
 
 
 # In[211]:
 
 
-abs_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
-ems_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
-
-abs_array[summed_abs_df['k_inds'].values-1,summed_abs_df['k+q_inds'].values-1] = summed_abs_df['weight'].values
-ems_array[summed_ems_df['k_inds'].values-1,summed_ems_df['k+q_inds'].values-1] = summed_ems_df['weight'].values
+# abs_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
+# ems_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
+#
+# abs_array[summed_abs_df['k_inds'].values-1,summed_abs_df['k+q_inds'].values-1] = summed_abs_df['weight'].values
+# ems_array[summed_ems_df['k_inds'].values-1,summed_ems_df['k+q_inds'].values-1] = summed_ems_df['weight'].values
 
 
 # In[308]:
 
 
-collision_array = (np.transpose(abs_array+ems_array)-(abs_array+ems_array))*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(full_g_df['q_id'].values))
+# collision_array = (np.transpose(abs_array+ems_array)-(abs_array+ems_array))*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(full_g_df['q_id'].values))
 
 
 # In[324]:
 
 
-sorted_indices = cart_kpts_df.sort_values(['kx [1/A]','ky [1/A]','kz [1/A]'],ascending=True)['k_inds'].values-1
-i = np.argsort(sorted_indices)
-switch1 = collision_array[:,i]
-switch2 = switch1[i,:]
-
-plt.set_cmap('inferno')
-fig = plt.figure(figsize=(20, 12.2))
-plt.rcParams.update({'font.size': 20})
-
-ax = fig.add_subplot(111)
-ax.set_title('Collision Matrix (kpt ascending)')
-plt.imshow(np.abs(switch2),origin = 'lower')
-ax.set_aspect('equal')
-plt.xlabel('k index')
-plt.ylabel('k_p index')
-
-cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
-cax.get_xaxis().set_visible(False)
-cax.get_yaxis().set_visible(False)
-cax.patch.set_alpha(0)
-cax.set_frame_on(False)
-cbar = plt.colorbar(orientation='vertical')
-cbar.set_label('Coupling Rate [fs^-1]')
-fig.savefig('test.png', bbox_inches='tight')
-plt.show()
+# sorted_indices = cart_kpts_df.sort_values(['kx [1/A]','ky [1/A]','kz [1/A]'],ascending=True)['k_inds'].values-1
+# i = np.argsort(sorted_indices)
+# switch1 = collision_array[:,i]
+# switch2 = switch1[i,:]
+#
+# plt.set_cmap('inferno')
+# fig = plt.figure(figsize=(20, 12.2))
+# plt.rcParams.update({'font.size': 20})
+#
+# ax = fig.add_subplot(111)
+# ax.set_title('Collision Matrix (kpt ascending)')
+# plt.imshow(np.abs(switch2),origin = 'lower')
+# ax.set_aspect('equal')
+# plt.xlabel('k index')
+# plt.ylabel('k_p index')
+#
+# cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
+# cax.get_xaxis().set_visible(False)
+# cax.get_yaxis().set_visible(False)
+# cax.patch.set_alpha(0)
+# cax.set_frame_on(False)
+# cbar = plt.colorbar(orientation='vertical')
+# cbar.set_label('Coupling Rate [fs^-1]')
+# fig.savefig('test.png', bbox_inches='tight')
+# plt.show()
 
 
 # In[319]:
 
 
-sorted_indices = cart_kpts_df.sort_values(['energy'],ascending=True)['k_inds'].values-1
-i = np.argsort(sorted_indices)
-switch1 = collision_array[:,i]
-switch2 = switch1[i,:]
+# sorted_indices = cart_kpts_df.sort_values(['energy'],ascending=True)['k_inds'].values-1
+# i = np.argsort(sorted_indices)
+# switch1 = collision_array[:,i]
+# switch2 = switch1[i,:]
 
 
 # In[323]:
 
-plt.set_cmap('inferno')
-fig = plt.figure(figsize=(20, 12.2))
-plt.rcParams.update({'font.size': 20})
-
-ax = fig.add_subplot(111)
-ax.set_title('Collision Matrix (energy ascending)')
-plt.imshow(np.abs(switch2),origin = 'lower')
-ax.set_aspect('equal')
-plt.xlabel('k index')
-plt.ylabel('k_p index')
-
-cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
-cax.get_xaxis().set_visible(False)
-cax.get_yaxis().set_visible(False)
-cax.patch.set_alpha(0)
-cax.set_frame_on(False)
-cbar = plt.colorbar(orientation='vertical')
-cbar.set_label('Coupling Rate [fs^-1]')
-fig.savefig('test.png', bbox_inches='tight')
-plt.show()
+# plt.set_cmap('inferno')
+# fig = plt.figure(figsize=(20, 12.2))
+# plt.rcParams.update({'font.size': 20})
+#
+# ax = fig.add_subplot(111)
+# ax.set_title('Collision Matrix (energy ascending)')
+# plt.imshow(np.abs(switch2),origin = 'lower')
+# ax.set_aspect('equal')
+# plt.xlabel('k index')
+# plt.ylabel('k_p index')
+#
+# cax = fig.add_axes([0.12, 0.1, 0.75, 0.82])
+# cax.get_xaxis().set_visible(False)
+# cax.get_yaxis().set_visible(False)
+# cax.patch.set_alpha(0)
+# cax.set_frame_on(False)
+# cbar = plt.colorbar(orientation='vertical')
+# cbar.set_label('Coupling Rate [fs^-1]')
+# fig.savefig('test.png', bbox_inches='tight')
+# plt.show()
 
 
 # In[315]:
@@ -1055,23 +973,31 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 # In[322]:
 
 
-check_symmetric(np.abs(collision_array))
+# check_symmetric(np.abs(collision_array))
 
 
 # In[317]:
 
 
-np.sum(collision_array,axis=0)
+# np.sum(collision_array,axis=0)
 
 
 def main():
+    # Physical parameter definition
+    a = 5.556                        # Lattice constant for GaAs [A]
+    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    T = 300                          # Lattice temeprature [K]
+    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
+    mu = 5.780                       # Chemical potential [eV]
+    b = 8/1000                       # Gaussian broadening [eV]
+
     # At this point, the processed data are:
     # e-ph matrix elements = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']]
     # k-points = kpts_df[['k_inds','b1','b2','b3']]
     # q-points = qpts_df[['q_inds','b1','b2','b3']]
     # k-energy = enk_df[['k_inds','band_inds','energy [Ryd]']]
     # q-energy = enq_df[['q_inds','im_mode','energy [Ryd]']]
-    pass
+    loadfromfile()
 
 
 if __name__ == '__main__':

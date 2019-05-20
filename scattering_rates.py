@@ -90,6 +90,14 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 
 def main():
+    # Physical parameter definition
+    a = 5.556                        # Lattice constant for GaAs [A]
+    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    T = 300                          # Lattice temeprature [K]
+    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
+    mu = 5.780                       # Chemical potential [eV]
+    b = 8/1000                       # Gaussian broadening [eV]
+
     check_symmetric(np.abs(collision_array))
 
 
