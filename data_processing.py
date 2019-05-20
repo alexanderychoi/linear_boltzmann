@@ -1,1520 +1,1476 @@
-{
- "cells": [
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Processing the electron-phonon collision matrix"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "This is meant to be a frills-free calculation of the electron-phonon collision matrix utiizing the data from Jin Jian Zhou for GaAs."
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## Package imports"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 1,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import numpy as np\n",
-    "\n",
-    "# Image processing tools\n",
-    "import skimage\n",
-    "import skimage.filters\n",
-    "\n",
-    "import pandas as pd\n",
-    "import scipy.optimize\n",
-    "import scipy.stats as st\n",
-    "import numba\n",
-    "import itertools\n",
-    "\n",
-    "from mpl_toolkits.mplot3d import Axes3D\n",
-    "import matplotlib.pyplot as plt\n",
-    "\n",
-    "from numpy.linalg import inv\n",
-    "\n",
-    "from tqdm import tqdm, trange\n",
-    "from scipy import special, optimize\n",
-    "from scipy import integrate\n",
-    "\n",
-    "import plotly.plotly as py\n",
-    "import plotly.graph_objs as go\n",
-    "import plotly\n",
-    "#plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')\n",
-    "plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## Data processing"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "Take the raw text files and convert them into useful dataframes."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 2,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# Physical parameter definition\n",
-    "a = 5.556                        # Lattice constant for GaAs [A]\n",
-    "kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "T = 300                          # Lattice temeprature [K]\n",
-    "e = 1.602*10**(-19)              # Fundamental electronic charge [C]\n",
-    "mu = 5.780                       # Chemical potential [eV]\n",
-    "b = 8/1000                       # Gaussian broadening [eV]"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 3,
-   "metadata": {},
-   "outputs": [
-    {
-     "name": "stderr",
-     "output_type": "stream",
-     "text": [
-      "100%|████████████████████████████████████████████████████████████████████| 7854608/7854608 [00:33<00:00, 231506.60it/s]\n"
-     ]
-    }
-   ],
-   "source": [
-    "data = pd.read_csv('gaas.eph_matrix', sep='\\t',header= None,skiprows=(0,1))\n",
-    "data.columns = ['0']\n",
-    "data_array = data['0'].values\n",
-    "new_array = np.zeros((len(data_array),7))\n",
-    "for i1 in trange(len(data_array)):\n",
-    "    new_array[i1,:] = data_array[i1].split()\n",
-    "    \n",
-    "g_df = pd.DataFrame(data=new_array,columns = ['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])\n",
-    "g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']] = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']].apply(pd.to_numeric,downcast = 'integer')\n",
-    "\n",
-    "\n",
-    "g_df = g_df.drop([\"m_band\",\"n_band\"],axis=1)"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Question: What does the number of k-points correspond to? 100^3 is what you told me but there are only ~2300 or so unique k point indices."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 4,
-   "metadata": {},
-   "outputs": [
-    {
-     "name": "stderr",
-     "output_type": "stream",
-     "text": [
-      "100%|██████████████████████████████████████████████████████████████████████████| 2213/2213 [00:00<00:00, 317029.67it/s]\n",
-      "100%|██████████████████████████████████████████████████████████████████████| 126480/126480 [00:00<00:00, 327670.28it/s]\n",
-      "100%|████████████████████████████████████████████████████████████████████████| 21080/21080 [00:00<00:00, 315470.35it/s]\n"
-     ]
-    }
-   ],
-   "source": [
-    "# Import electron energy library\n",
-    "enk = pd.read_csv('gaas.enk', sep='\\t',header= None)\n",
-    "enk.columns = ['0']\n",
-    "enk_array = enk['0'].values\n",
-    "new_enk_array = np.zeros((len(enk_array),3))\n",
-    "for i1 in trange(len(enk_array)):\n",
-    "    new_enk_array[i1,:] = enk_array[i1].split()\n",
-    "    \n",
-    "enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])\n",
-    "enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')\n",
-    "enk_df = enk_df.drop(['band_inds'],axis=1)\n",
-    "\n",
-    "# Import phonon energy library\n",
-    "enq = pd.read_csv('gaas.enq', sep='\\t',header= None)\n",
-    "enq.columns = ['0']\n",
-    "enq_array = enq['0'].values\n",
-    "new_enq_array = np.zeros((len(enq_array),3))\n",
-    "for i1 in trange(len(enq_array)):\n",
-    "    new_enq_array[i1,:] = enq_array[i1].split()\n",
-    "    \n",
-    "enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])\n",
-    "enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')\n",
-    "\n",
-    "\n",
-    "# Import phonon q-point index\n",
-    "qpts = pd.read_csv('gaas.qpts', sep='\\t',header= None)\n",
-    "qpts.columns = ['0']\n",
-    "qpts_array = qpts['0'].values\n",
-    "new_qpt_array = np.zeros((len(qpts_array),4))\n",
-    "\n",
-    "for i1 in trange(len(qpts_array)):\n",
-    "    new_qpt_array[i1,:] = qpts_array[i1].split()\n",
-    "    \n",
-    "qpts_df = pd.DataFrame(data=new_qpt_array,columns = ['q_inds','b1','b2','b3'])\n",
-    "qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric,downcast = 'integer')"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Question: Why is the energy difference between max and min states ~0.43 eV? Thought it should be around 0.3 eV?"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 5,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "text/plain": [
-       "0.4373955800678173"
-      ]
-     },
-     "execution_count": 5,
-     "metadata": {},
-     "output_type": "execute_result"
-    }
-   ],
-   "source": [
-    "(enk_df['energy [Ryd]'].max()-enk_df['energy [Ryd]'].min())*13.6056980659"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 6,
-   "metadata": {},
-   "outputs": [
-    {
-     "name": "stderr",
-     "output_type": "stream",
-     "text": [
-      "100%|██████████████████████████████████████████████████████████████████████████| 2213/2213 [00:00<00:00, 184915.03it/s]\n"
-     ]
-    }
-   ],
-   "source": [
-    "# Import electron k-point index and group velocities\n",
-    "\n",
-    "kvel = pd.read_csv('gaas.vel', sep='\\t',header= None,skiprows=[0,1,2])\n",
-    "kvel.columns = ['0']\n",
-    "kvel_array = kvel['0'].values\n",
-    "new_kvel_array = np.zeros((len(kvel_array),10))\n",
-    "for i1 in trange(len(kvel_array)):\n",
-    "    new_kvel_array[i1,:] = kvel_array[i1].split()\n",
-    "    \n",
-    "kvel_df = pd.DataFrame(data=new_kvel_array,columns = ['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])\n",
-    "kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')\n",
-    "\n",
-    "kvel_edit = kvel_df.copy(deep=True)\n",
-    "\n",
-    "# Shift the points back into the first BZ\n",
-    "kx_plus = kvel_df['kx [2pi/alat]'] > 0.5\n",
-    "kx_minus = kvel_df['kx [2pi/alat]'] < -0.5\n",
-    "\n",
-    "ky_plus = kvel_df['ky [2pi/alat]'] > 0.5\n",
-    "ky_minus = kvel_df['ky [2pi/alat]'] < -0.5\n",
-    "\n",
-    "kz_plus = kvel_df['kz [2pi/alat]'] > 0.5\n",
-    "kz_minus = kvel_df['kz [2pi/alat]'] < -0.5\n",
-    "\n",
-    "kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1\n",
-    "kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1\n",
-    "\n",
-    "kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1\n",
-    "kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1\n",
-    "\n",
-    "kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1\n",
-    "kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1\n",
-    "\n",
-    "kvel_df = kvel_edit.copy(deep=True)\n",
-    "kvel_df.head()\n",
-    "\n",
-    "cart_kpts_df = kvel_df.copy(deep=True)\n",
-    "cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/a\n",
-    "cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/a\n",
-    "cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a\n",
-    "\n",
-    "cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']\n",
-    "\n",
-    "cart_kpts_df  = cart_kpts_df.drop(['bands'],axis=1)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 7,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def fermi_distribution(g_df,mu,T):\n",
-    "    \"\"\"\n",
-    "    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "        k_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (pre-collision)\n",
-    "        \n",
-    "        q_inds : vector_like, shape (n,1)\n",
-    "        Index of q point\n",
-    "        \n",
-    "        k+q_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (post-collision)\n",
-    "        \n",
-    "        m_band : vector_like, shape (n,1)\n",
-    "        Band index of post-collision state\n",
-    "        \n",
-    "        n_band : vector_like, shape (n,1)\n",
-    "        Band index of pre-collision state\n",
-    "        \n",
-    "        im_mode : vector_like, shape (n,1)\n",
-    "        Polarization of phonon mode\n",
-    "        \n",
-    "        g_element : vector_like, shape (n,1)\n",
-    "        E-ph matrix element\n",
-    "        \n",
-    "        k_energy : vector_like, shape (n,1)\n",
-    "        Energy of the pre collision state\n",
-    "        \n",
-    "        k+q_energy : vector_like, shape (n,1)\n",
-    "        Energy of the post collision state\n",
-    "        \n",
-    "        \n",
-    "    mu : scalar\n",
-    "    Chemical potential of electronic states [eV]\n",
-    "    \n",
-    "    T : scalar\n",
-    "    Lattice temperature in Kelvin\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "\n",
-    "        ...\n",
-    "        k_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of pre collision state\n",
-    "        \n",
-    "        k+q_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of post collision state\n",
-    "         \n",
-    "    \"\"\"\n",
-    "    # Physical constants    \n",
-    "    e = 1.602*10**(-19) # fundamental electronic charge [C]\n",
-    "    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "\n",
-    "\n",
-    "    g_df['k_FD'] = (np.exp((g_df['k_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)\n",
-    "    g_df['k+q_FD'] = (np.exp((g_df['k+q_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)\n",
-    "\n",
-    "    return g_df\n",
-    "\n",
-    "\n",
-    "def bose_distribution(g_df,T):\n",
-    "    \"\"\"\n",
-    "    This function takes a list of q-point indices and returns the Bose-Einstein distributions associated with each q-point on that list.    \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "        ...\n",
-    "    \n",
-    "    T : scalar\n",
-    "    Lattice temperature in Kelvin\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "\n",
-    "        ...\n",
-    "        \n",
-    "        BE : vector_like, shape (n,1)\n",
-    "        Bose-einstein distribution\n",
-    "         \n",
-    "    \"\"\"\n",
-    "    # Physical constants    \n",
-    "    e = 1.602*10**(-19) # fundamental electronic charge [C]\n",
-    "    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "\n",
-    "    g_df['BE'] = (np.exp((g_df['q_en [eV]'].values*e)/(kb*T)) - 1)**(-1)\n",
-    "    return g_df\n",
-    "\n",
-    "\n",
-    "def bosonic_processing(g_df,enq_df,T):\n",
-    "    \"\"\"\n",
-    "    This function takes the g dataframe and assigns a phonon energy from the relevant phonon library to each collision and the appropriate Bose-Einstein distribution.\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    ...\n",
-    "        BE : vector_like, shape (n,1)\n",
-    "        Bose-Einstein distribution of the phonon mediating a collision\n",
-    "        \n",
-    "        q_en [eV] : vector_like, shape (n,1)\n",
-    "        The energy of the phonon mode mediating a collision\n",
-    "         \n",
-    "    \"\"\"\n",
-    "    \n",
-    "    # Physical constants\n",
-    "    e = 1.602*10**(-19) # fundamental electronic charge [C]\n",
-    "    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "    \n",
-    "    modified_g_df = g_df.copy(deep=True)\n",
-    "    modified_g_df.set_index(['q_inds', 'im_mode'], inplace=True)\n",
-    "    modified_g_df = modified_g_df.sort_index()\n",
-    "    modified_enq_df = enq_df.copy(deep=True)\n",
-    "    modified_enq_df.set_index(['q_inds', 'im_mode'], inplace=True)\n",
-    "    modified_enq_df = modified_enq_df.sort_index()\n",
-    "    modified_enq_df = modified_enq_df.loc[modified_g_df.index.unique()]\n",
-    "    \n",
-    "    modified_enq_df = modified_enq_df.reset_index()\n",
-    "    modified_enq_df = modified_enq_df.sort_values(['q_inds','im_mode'],ascending=True)\n",
-    "    modified_enq_df = modified_enq_df[['q_inds','im_mode','energy [Ryd]']]\n",
-    "    modified_enq_df['q_id'] = modified_enq_df.groupby(['q_inds','im_mode']).ngroup()\n",
-    "    g_df['q_id'] = g_df.sort_values(['q_inds','im_mode'],ascending=True).groupby(['q_inds','im_mode']).ngroup()\n",
-    "    \n",
-    "    g_df['q_en [eV]'] = modified_enq_df['energy [Ryd]'].values[g_df['q_id'].values]*13.6056980659\n",
-    "    \n",
-    "    g_df = bose_distribution(g_df,T)\n",
-    "    \n",
-    "    return g_df\n",
-    "\n",
-    "\n",
-    "def fermionic_processing(g_df,cart_kpts_df,mu,T):\n",
-    "    \"\"\"\n",
-    "    This function takes the g dataframe and assigns an electron energy from the relevant electron library to the pre and post collision states and the appropriate Fermi-Diract distributions.\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    ...\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    ...\n",
-    "        k_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of pre collision state\n",
-    "        \n",
-    "        k+q_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of post collision state\n",
-    "         \n",
-    "    \"\"\"\n",
-    "\n",
-    "    # Pre-collision\n",
-    "    modified_g_df_k = g_df.copy(deep=True)\n",
-    "    modified_g_df_k.set_index(['k_inds'], inplace=True)\n",
-    "    modified_g_df_k = modified_g_df_k.sort_index()\n",
-    "\n",
-    "    modified_k_df = cart_kpts_df.copy(deep=True)\n",
-    "    modified_k_df.set_index(['k_inds'], inplace=True)\n",
-    "    modified_k_df = modified_k_df.sort_index()\n",
-    "    modified_k_df = modified_k_df.loc[modified_g_df_k.index.unique()]\n",
-    "    \n",
-    "    modified_k_df = modified_k_df.reset_index()\n",
-    "    modified_k_df = modified_k_df.sort_values(['k_inds'],ascending=True)\n",
-    "    modified_k_df = modified_k_df[['k_inds','energy','kx [1/A]','ky [1/A]','kz [1/A]']]\n",
-    "    \n",
-    "    modified_k_df['k_id'] = modified_k_df.groupby(['k_inds']).ngroup()\n",
-    "    g_df['k_id'] = g_df.sort_values(['k_inds'],ascending=True).groupby(['k_inds']).ngroup()   \n",
-    "    g_df['k_en [eV]'] = modified_k_df['energy'].values[g_df['k_id'].values]\n",
-    "    \n",
-    "    g_df['kx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k_id'].values]\n",
-    "    g_df['ky [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k_id'].values]\n",
-    "    g_df['kz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k_id'].values]\n",
-    "\n",
-    "    \n",
-    "    # Post-collision\n",
-    "    modified_g_df_kq = g_df.copy(deep=True)\n",
-    "    modified_g_df_kq.set_index(['k_inds'], inplace=True)\n",
-    "    modified_g_df_kq = modified_g_df_kq.sort_index()\n",
-    "    \n",
-    "    modified_k_df = cart_kpts_df.copy(deep=True)\n",
-    "    modified_k_df.set_index(['k_inds'], inplace=True)\n",
-    "    modified_k_df = modified_k_df.sort_index()\n",
-    "    modified_k_df = modified_k_df.loc[modified_g_df_kq.index.unique()]\n",
-    "    \n",
-    "    modified_k_df = modified_k_df.reset_index()\n",
-    "    modified_k_df = modified_k_df.sort_values(['k_inds'],ascending=True)\n",
-    "    modified_k_df = modified_k_df[['k_inds','energy','kx [1/A]','ky [1/A]','kz [1/A]']]\n",
-    "    \n",
-    "    modified_k_df['k+q_id'] = modified_k_df.groupby(['k_inds']).ngroup()\n",
-    "    g_df['k+q_id'] = g_df.sort_values(['k+q_inds'],ascending=True).groupby(['k+q_inds']).ngroup()   \n",
-    "    g_df['k+q_en [eV]'] = modified_k_df['energy'].values[g_df['k+q_id'].values]\n",
-    "    \n",
-    "    g_df['kqx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k+q_id'].values]\n",
-    "    g_df['kqy [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k+q_id'].values]\n",
-    "    g_df['kqz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k+q_id'].values]\n",
-    "\n",
-    "    \n",
-    "    g_df = fermi_distribution(g_df,mu, T)\n",
-    "    \n",
-    "    g_df = g_df.drop(['k_id','k+q_id'],axis=1)\n",
-    "        \n",
-    "    return g_df\n",
-    "\n",
-    "def gaussian_weight(g_df,n):\n",
-    "    \"\"\"\n",
-    "    This function assigns the value of the delta function approximated by a Gaussian with broadening n.\n",
-    "    \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "\n",
-    "        ...\n",
-    "            \n",
-    "    n : scalar\n",
-    "    Broadening of Gaussian in eV\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \"\"\"\n",
-    "    \n",
-    "    energy_delta_ems = g_df['k_en [eV]'].values - g_df['k+q_en [eV]'].values - g_df['q_en [eV]'].values\n",
-    "    energy_delta_abs = g_df['k_en [eV]'].values - g_df['k+q_en [eV]'].values + g_df['q_en [eV]'].values\n",
-    "    \n",
-    "    g_df['abs_gaussian'] = 1/np.sqrt(np.pi)*1/n*np.exp(-(energy_delta_abs/n)**2)\n",
-    "    g_df['ems_gaussian'] = 1/np.sqrt(np.pi)*1/n*np.exp(-(energy_delta_ems/n)**2)\n",
-    "    \n",
-    "    return g_df\n",
-    "\n",
-    "def populate_reciprocals(g_df,b):\n",
-    "    \"\"\"\n",
-    "    The g^2 elements are invariant under substitution of k and k'. Jin-Jian provided the minimal set, that is for a given k-pair linked through a particular collision \n",
-    "    and characterized by a say an emission, the reciprocal absorbtion is not included. Here we repopulate these states.\n",
-    "    -----------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    ...\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    g_df : pandas dataframe containing:\n",
-    "    \n",
-    "    ...\n",
-    "         \n",
-    "    \"\"\"\n",
-    "\n",
-    "    modified_g_df = g_df.copy(deep=True)\n",
-    "\n",
-    "    flipped_inds = g_df['k_inds']>g_df['k+q_inds']\n",
-    "    modified_g_df.loc[flipped_inds,'k_inds'] = g_df.loc[flipped_inds,'k+q_inds']\n",
-    "    modified_g_df.loc[flipped_inds,'k+q_inds'] = g_df.loc[flipped_inds,'k_inds']\n",
-    "\n",
-    "    modified_g_df.loc[flipped_inds,'k_FD'] = g_df.loc[flipped_inds,'k+q_FD']\n",
-    "    modified_g_df.loc[flipped_inds,'k+q_FD'] = g_df.loc[flipped_inds,'k_FD']\n",
-    "\n",
-    "    modified_g_df.loc[flipped_inds,'k_en [eV]'] = g_df.loc[flipped_inds,'k+q_en [eV]']\n",
-    "    modified_g_df.loc[flipped_inds,'k+q_en [eV]'] = g_df.loc[flipped_inds,'k_en [eV]']\n",
-    "    \n",
-    "    modified_g_df.loc[flipped_inds,'kqx [1/A]'] = g_df.loc[flipped_inds,'kx [1/A]']\n",
-    "    modified_g_df.loc[flipped_inds,'kqy [1/A]'] = g_df.loc[flipped_inds,'ky [1/A]']\n",
-    "    modified_g_df.loc[flipped_inds,'kqz [1/A]'] = g_df.loc[flipped_inds,'kz [1/A]']\n",
-    "    modified_g_df.loc[flipped_inds,'kx [1/A]'] = g_df.loc[flipped_inds,'kqx [1/A]']\n",
-    "    modified_g_df.loc[flipped_inds,'ky [1/A]'] = g_df.loc[flipped_inds,'kqy [1/A]']\n",
-    "    modified_g_df.loc[flipped_inds,'kz [1/A]'] = g_df.loc[flipped_inds,'kqz [1/A]']\n",
-    "    \n",
-    "    modified_g_df['k_pair_id'] = modified_g_df.groupby(['k_inds','k+q_inds']).ngroup()\n",
-    "\n",
-    "\n",
-    "    reverse_df = modified_g_df.copy(deep=True)\n",
-    "\n",
-    "    reverse_df['k_inds'] = modified_g_df['k+q_inds']\n",
-    "    reverse_df['k+q_inds'] = modified_g_df['k_inds']\n",
-    "\n",
-    "    reverse_df['k_FD'] = modified_g_df['k+q_FD']\n",
-    "    reverse_df['k+q_FD'] = modified_g_df['k_FD']\n",
-    "\n",
-    "    reverse_df['k_en [eV]'] = modified_g_df['k+q_en [eV]']\n",
-    "    reverse_df['k+q_en [eV]'] = modified_g_df['k_en [eV]']\n",
-    "    \n",
-    "    reverse_df['kqx [1/A]'] = modified_g_df['kx [1/A]']\n",
-    "    reverse_df['kqy [1/A]'] = modified_g_df['ky [1/A]']\n",
-    "    reverse_df['kqz [1/A]'] = modified_g_df['kz [1/A]']\n",
-    "    reverse_df['kx [1/A]'] = modified_g_df['kqx [1/A]']\n",
-    "    reverse_df['ky [1/A]'] = modified_g_df['kqy [1/A]']\n",
-    "    reverse_df['kz [1/A]'] = modified_g_df['kqz [1/A]']\n",
-    "\n",
-    "    full_g_df = modified_g_df.append(reverse_df)\n",
-    "    \n",
-    "    full_g_df = gaussian_weight(full_g_df,b)\n",
-    "\n",
-    "    \n",
-    "    return full_g_df"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 8,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "g_df = bosonic_processing(g_df,enq_df,T)\n",
-    "g_df = fermionic_processing(g_df,cart_kpts_df,mu,T)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 9,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "full_g_df = populate_reciprocals(g_df,b)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 10,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "del g_df"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 11,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',\n",
-    "       'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',\n",
-    "       'k_FD', 'k+q_FD', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',\n",
-    "       'kqy [1/A]', 'kqz [1/A]', 'k_pair_id','abs_gaussian','ems_gaussian']]"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Question: Go over paper. The way I determine absorption vs emission is through energies of pre and post collision states. It's important to make this distinction because the weights in the summation are different. There are a number of states where the energy of the post-collision state is equivalent to that of the pre-collision state. I account for this by permitting both emission and absorption. Ask about magnitude of Boltzmann weights. Ask if Jin Jian accounts for population using the chemical potential in the Fermi-Dirac distribution."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 12,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "text/html": [
-       "<div>\n",
-       "<style scoped>\n",
-       "    .dataframe tbody tr th:only-of-type {\n",
-       "        vertical-align: middle;\n",
-       "    }\n",
-       "\n",
-       "    .dataframe tbody tr th {\n",
-       "        vertical-align: top;\n",
-       "    }\n",
-       "\n",
-       "    .dataframe thead th {\n",
-       "        text-align: right;\n",
-       "    }\n",
-       "</style>\n",
-       "<table border=\"1\" class=\"dataframe\">\n",
-       "  <thead>\n",
-       "    <tr style=\"text-align: right;\">\n",
-       "      <th></th>\n",
-       "      <th>k_inds</th>\n",
-       "      <th>q_inds</th>\n",
-       "      <th>k+q_inds</th>\n",
-       "      <th>im_mode</th>\n",
-       "      <th>g_element</th>\n",
-       "      <th>q_id</th>\n",
-       "      <th>q_en [eV]</th>\n",
-       "      <th>BE</th>\n",
-       "      <th>k_en [eV]</th>\n",
-       "      <th>k+q_en [eV]</th>\n",
-       "      <th>...</th>\n",
-       "      <th>k+q_FD</th>\n",
-       "      <th>kx [1/A]</th>\n",
-       "      <th>ky [1/A]</th>\n",
-       "      <th>kz [1/A]</th>\n",
-       "      <th>kqx [1/A]</th>\n",
-       "      <th>kqy [1/A]</th>\n",
-       "      <th>kqz [1/A]</th>\n",
-       "      <th>k_pair_id</th>\n",
-       "      <th>abs_gaussian</th>\n",
-       "      <th>ems_gaussian</th>\n",
-       "    </tr>\n",
-       "  </thead>\n",
-       "  <tbody>\n",
-       "    <tr>\n",
-       "      <th>0</th>\n",
-       "      <td>1</td>\n",
-       "      <td>1</td>\n",
-       "      <td>2</td>\n",
-       "      <td>5</td>\n",
-       "      <td>6.279619e-20</td>\n",
-       "      <td>1</td>\n",
-       "      <td>0.033090</td>\n",
-       "      <td>0.385195</td>\n",
-       "      <td>6.065254</td>\n",
-       "      <td>6.093535</td>\n",
-       "      <td>...</td>\n",
-       "      <td>0.000005</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0</td>\n",
-       "      <td>49.134747</td>\n",
-       "      <td>1.949553e-24</td>\n",
-       "    </tr>\n",
-       "    <tr>\n",
-       "      <th>1</th>\n",
-       "      <td>1</td>\n",
-       "      <td>1</td>\n",
-       "      <td>2</td>\n",
-       "      <td>6</td>\n",
-       "      <td>1.016675e-02</td>\n",
-       "      <td>2</td>\n",
-       "      <td>0.035405</td>\n",
-       "      <td>0.340956</td>\n",
-       "      <td>6.065254</td>\n",
-       "      <td>6.093535</td>\n",
-       "      <td>...</td>\n",
-       "      <td>0.000005</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0</td>\n",
-       "      <td>31.909667</td>\n",
-       "      <td>2.115260e-26</td>\n",
-       "    </tr>\n",
-       "    <tr>\n",
-       "      <th>2</th>\n",
-       "      <td>1</td>\n",
-       "      <td>1</td>\n",
-       "      <td>26</td>\n",
-       "      <td>4</td>\n",
-       "      <td>1.167235e-08</td>\n",
-       "      <td>0</td>\n",
-       "      <td>0.033090</td>\n",
-       "      <td>0.385198</td>\n",
-       "      <td>6.065254</td>\n",
-       "      <td>6.093535</td>\n",
-       "      <td>...</td>\n",
-       "      <td>0.000005</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>1</td>\n",
-       "      <td>49.135806</td>\n",
-       "      <td>1.950089e-24</td>\n",
-       "    </tr>\n",
-       "    <tr>\n",
-       "      <th>3</th>\n",
-       "      <td>1</td>\n",
-       "      <td>1</td>\n",
-       "      <td>26</td>\n",
-       "      <td>5</td>\n",
-       "      <td>3.516638e-20</td>\n",
-       "      <td>1</td>\n",
-       "      <td>0.033090</td>\n",
-       "      <td>0.385195</td>\n",
-       "      <td>6.065254</td>\n",
-       "      <td>6.093535</td>\n",
-       "      <td>...</td>\n",
-       "      <td>0.000005</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>1</td>\n",
-       "      <td>49.134747</td>\n",
-       "      <td>1.949553e-24</td>\n",
-       "    </tr>\n",
-       "    <tr>\n",
-       "      <th>4</th>\n",
-       "      <td>1</td>\n",
-       "      <td>1</td>\n",
-       "      <td>26</td>\n",
-       "      <td>6</td>\n",
-       "      <td>1.016675e-02</td>\n",
-       "      <td>2</td>\n",
-       "      <td>0.035405</td>\n",
-       "      <td>0.340956</td>\n",
-       "      <td>6.065254</td>\n",
-       "      <td>6.093535</td>\n",
-       "      <td>...</td>\n",
-       "      <td>0.000005</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.0</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>-0.011309</td>\n",
-       "      <td>0.011309</td>\n",
-       "      <td>1</td>\n",
-       "      <td>31.909667</td>\n",
-       "      <td>2.115260e-26</td>\n",
-       "    </tr>\n",
-       "  </tbody>\n",
-       "</table>\n",
-       "<p>5 rows × 21 columns</p>\n",
-       "</div>"
-      ],
-      "text/plain": [
-       "   k_inds  q_inds  k+q_inds  im_mode     g_element  q_id  q_en [eV]        BE  \\\n",
-       "0       1       1         2        5  6.279619e-20     1   0.033090  0.385195   \n",
-       "1       1       1         2        6  1.016675e-02     2   0.035405  0.340956   \n",
-       "2       1       1        26        4  1.167235e-08     0   0.033090  0.385198   \n",
-       "3       1       1        26        5  3.516638e-20     1   0.033090  0.385195   \n",
-       "4       1       1        26        6  1.016675e-02     2   0.035405  0.340956   \n",
-       "\n",
-       "   k_en [eV]  k+q_en [eV]  ...    k+q_FD  kx [1/A]  ky [1/A]  kz [1/A]  \\\n",
-       "0   6.065254     6.093535  ...  0.000005       0.0       0.0       0.0   \n",
-       "1   6.065254     6.093535  ...  0.000005       0.0       0.0       0.0   \n",
-       "2   6.065254     6.093535  ...  0.000005       0.0       0.0       0.0   \n",
-       "3   6.065254     6.093535  ...  0.000005       0.0       0.0       0.0   \n",
-       "4   6.065254     6.093535  ...  0.000005       0.0       0.0       0.0   \n",
-       "\n",
-       "   kqx [1/A]  kqy [1/A]  kqz [1/A]  k_pair_id  abs_gaussian  ems_gaussian  \n",
-       "0  -0.011309   0.011309  -0.011309          0     49.134747  1.949553e-24  \n",
-       "1  -0.011309   0.011309  -0.011309          0     31.909667  2.115260e-26  \n",
-       "2   0.011309  -0.011309   0.011309          1     49.135806  1.950089e-24  \n",
-       "3   0.011309  -0.011309   0.011309          1     49.134747  1.949553e-24  \n",
-       "4   0.011309  -0.011309   0.011309          1     31.909667  2.115260e-26  \n",
-       "\n",
-       "[5 rows x 21 columns]"
-      ]
-     },
-     "execution_count": 12,
-     "metadata": {},
-     "output_type": "execute_result"
-    }
-   ],
-   "source": [
-    "full_g_df.head()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 22,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def scattering_rate(g_df):\n",
-    "    \"\"\"\n",
-    "    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    \n",
-    "    abs_g_df : pandas dataframe containing:\n",
-    "\n",
-    "        k_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (pre-collision)\n",
-    "        \n",
-    "        q_inds : vector_like, shape (n,1)\n",
-    "        Index of q point\n",
-    "        \n",
-    "        k+q_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (post-collision)\n",
-    "        \n",
-    "        m_band : vector_like, shape (n,1)\n",
-    "        Band index of post-collision state\n",
-    "        \n",
-    "        n_band : vector_like, shape (n,1)\n",
-    "        Band index of pre-collision state\n",
-    "        \n",
-    "        im_mode : vector_like, shape (n,1)\n",
-    "        Polarization of phonon mode\n",
-    "        \n",
-    "        g_element : vector_like, shape (n,1)\n",
-    "        E-ph matrix element\n",
-    "        \n",
-    "        k_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of pre collision state\n",
-    "        \n",
-    "        k+q_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of post collision state\n",
-    "        \n",
-    "        k_energy : vector_like, shape (n,1)\n",
-    "        Energy of the pre collision state\n",
-    "        \n",
-    "        k+q_energy : vector_like, shape (n,1)\n",
-    "        Energy of the post collision state\n",
-    "        \n",
-    "            \n",
-    "    T : scalar\n",
-    "    Lattice temperature in Kelvin\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    \n",
-    "         \n",
-    "    \"\"\"\n",
-    "    \n",
-    "    \n",
-    "    # Physical constants\n",
-    "    e = 1.602*10**(-19) # fundamental electronic charge [C]\n",
-    "    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "    h = 1.0545718*10**(-34)\n",
-    "    \n",
-    "    g_df['ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values,g_df['g_element'].values),g_df['ems_gaussian'])/13.6056980659\n",
-    "    g_df['abs_weight'] = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values),g_df['g_element'].values),g_df['abs_gaussian'])/13.6056980659\n",
-    "    \n",
-    "    g_df['weight'] = g_df['ems_weight'].values + g_df['abs_weight'].values\n",
-    "    \n",
-    "    \n",
-    "    sr = g_df.groupby(['k_inds'])['weight'].agg('sum')*2*np.pi*2.418*10**(17)*10**(-12)/len(np.unique(g_df['q_id'].values))\n",
-    "    scattering = sr.to_frame().reset_index()\n",
-    "    \n",
-    "\n",
-    "    return scattering"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 23,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "scattering = scattering_rate(full_g_df)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 27,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))\n",
-    "scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "# Question: Is this the right way of calculating the scattering rate? Just a naive sum and normalization by the number of phonons? Is there some weight that I'm missing? What's the reason for the deviation? There are obviously some convergence issues at low k-point magnitude."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 32,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "image/png": "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\n",
-      "text/plain": [
-       "<Figure size 864x720 with 1 Axes>"
-      ]
-     },
-     "metadata": {
-      "needs_background": "light"
-     },
-     "output_type": "display_data"
-    }
-   ],
-   "source": [
-    "import matplotlib.cm as cm\n",
-    "plt.rcParams.update({'font.size': 40})\n",
-    "plt.rcParams.update({'lines.linewidth': 3.5})\n",
-    "\n",
-    "fig = plt.figure(figsize=(12,10))\n",
-    "ax = plt.gca()\n",
-    "\n",
-    "\n",
-    "plt.scatter((enk_df['energy [Ryd]'].values-enk_df['energy [Ryd]'].min())*13.6056980659,(scattering_array),c = 'Red')\n",
-    "#plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))\n",
-    "#plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))\n",
-    "plt.ylabel('Scattering Rate [1/ps]')\n",
-    "plt.xlabel('Energy [eV]')\n",
-    "#plt.legend()\n",
-    "plt.ylim((-0.1,20.1))\n",
-    "plt.show()\n",
-    "fig.savefig('test.png', bbox_inches='tight')"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 36,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "text/plain": [
-       "2213"
-      ]
-     },
-     "execution_count": 36,
-     "metadata": {},
-     "output_type": "execute_result"
-    }
-   ],
-   "source": [
-    "len(scattering_array)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 33,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "text/plain": [
-       "15709216"
-      ]
-     },
-     "execution_count": 33,
-     "metadata": {},
-     "output_type": "execute_result"
-    }
-   ],
-   "source": [
-    "len(full_g_df)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 34,
-   "metadata": {},
-   "outputs": [
-    {
-     "data": {
-      "text/plain": [
-       "0.9922069949257811"
-      ]
-     },
-     "execution_count": 34,
-     "metadata": {},
-     "output_type": "execute_result"
-    }
-   ],
-   "source": [
-    "np.sum(full_g_df['k_en [eV]'] > (full_g_df['k_en [eV]'].min()+ 0.25))/len(full_g_df)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 21,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def coupling_matrix_calc(g_df):\n",
-    "    \"\"\"\n",
-    "    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    \n",
-    "    abs_g_df : pandas dataframe containing:\n",
-    "\n",
-    "        k_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (pre-collision)\n",
-    "        \n",
-    "        q_inds : vector_like, shape (n,1)\n",
-    "        Index of q point\n",
-    "        \n",
-    "        k+q_inds : vector_like, shape (n,1)\n",
-    "        Index of k point (post-collision)\n",
-    "        \n",
-    "        m_band : vector_like, shape (n,1)\n",
-    "        Band index of post-collision state\n",
-    "        \n",
-    "        n_band : vector_like, shape (n,1)\n",
-    "        Band index of pre-collision state\n",
-    "        \n",
-    "        im_mode : vector_like, shape (n,1)\n",
-    "        Polarization of phonon mode\n",
-    "        \n",
-    "        g_element : vector_like, shape (n,1)\n",
-    "        E-ph matrix element\n",
-    "        \n",
-    "        k_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of pre collision state\n",
-    "        \n",
-    "        k+q_fermi_dist : vector_like, shape (n,1)\n",
-    "        Fermi distribution of post collision state\n",
-    "        \n",
-    "        k_energy : vector_like, shape (n,1)\n",
-    "        Energy of the pre collision state\n",
-    "        \n",
-    "        k+q_energy : vector_like, shape (n,1)\n",
-    "        Energy of the post collision state\n",
-    "        \n",
-    "            \n",
-    "    T : scalar\n",
-    "    Lattice temperature in Kelvin\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    \n",
-    "    \n",
-    "         \n",
-    "    \"\"\"\n",
-    "    \n",
-    "    \n",
-    "    # Physical constants\n",
-    "    e = 1.602*10**(-19) # fundamental electronic charge [C]\n",
-    "    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]\n",
-    "    h = 1.0545718*10**(-34)\n",
-    "    \n",
-    "    g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)\n",
-    "    g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)\n",
-    "    \n",
-    "    g_df_ems['weight'] = np.multiply(np.multiply((g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values),g_df_ems['g_element'].values),g_df_ems['gaussian'])/13.6056980659\n",
-    "    g_df_abs['weight'] = np.multiply(np.multiply((g_df_abs['BE'].values + g_df_abs['k+q_FD'].values),g_df_abs['g_element'].values),g_df_abs['gaussian'])/13.6056980659 \n",
-    "    \n",
-    "    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')\n",
-    "    summed_abs_df = abs_sr.to_frame().reset_index()\n",
-    "    \n",
-    "    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')\n",
-    "    summed_ems_df = ems_sr.to_frame().reset_index()\n",
-    "    \n",
-    "    return summed_abs_df,summed_ems_df"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def cartesian_q_points(qpts_df):\n",
-    "    \"\"\"\n",
-    "    Given a dataframe containing indexed q-points in terms of the crystal lattice vector, return the dataframe with cartesian q coordinates.     \n",
-    "    Parameters:\n",
-    "    -----------\n",
-    "    qpts_df : pandas dataframe containing:\n",
-    "        \n",
-    "        q_inds : vector_like, shape (n,1)\n",
-    "        Index of q point\n",
-    "        \n",
-    "        kx : vector_like, shape (n,1)\n",
-    "        x-coordinate in momentum space [1/A]    \n",
-    "        \n",
-    "        ky : vector_like, shape (n,1)\n",
-    "        y-coordinate in momentum space [1/A]  \n",
-    "        \n",
-    "        kz : vector_like, shape (n,1)\n",
-    "        z-coordinate in momentum space [1/A]\n",
-    "        \n",
-    "    For FCC lattice, use the momentum space primitive vectors as per:\n",
-    "    http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php\n",
-    "    \n",
-    "    b1 = 2 pi/a (kx - ky + kz)\n",
-    "    b2 = 2 pi/a (kx + ky - kz)\n",
-    "    b3 = 2 pi/a (-kx + ky + kz)\n",
-    "    \n",
-    "    Returns:\n",
-    "    --------\n",
-    "    cart_kpts_df : pandas dataframe containing:\n",
-    "    \n",
-    "        q_inds : vector_like, shape (n,1)\n",
-    "        Index of q point\n",
-    "        \n",
-    "        kx : vector_like, shape (n,1)\n",
-    "        x-coordinate in Cartesian momentum space [1/m]    \n",
-    "        \n",
-    "        ky : vector_like, shape (n,1)\n",
-    "        y-coordinate in Cartesian momentum space [1/m]  \n",
-    "        \n",
-    "        kz : vector_like, shape (n,1)\n",
-    "        z-coordinate in Cartesian momentum space [1/m]  \n",
-    "    \"\"\"\n",
-    "    \n",
-    "    # Need a lattice constant for GaAs. This is obviously somewhat sensitive to temperature.\n",
-    "    a = 5.556 #[A]\n",
-    "    \n",
-    "    cartesian_df = pd.DataFrame(columns = ['q_inds','kx [1/A]','ky [1/A]','kz [1/A]'])\n",
-    "    \n",
-    "    con1 = pd.DataFrame(columns = ['kx [1/A]','ky [1/A]','kz [1/A]'])\n",
-    "    con1['kx [1/A]'] = np.ones(len(qpts_df))*-1\n",
-    "    con1['ky [1/A]'] = np.ones(len(qpts_df))*-1\n",
-    "    con1['kz [1/A]'] = np.ones(len(qpts_df))*1\n",
-    "\n",
-    "    con2 = con1.copy(deep=True)\n",
-    "    con2['kx [1/A]'] = con2['kx [1/A]'].values*-1\n",
-    "    con2['ky [1/A]'] = con2['ky [1/A]'].values*-1\n",
-    "\n",
-    "    con3 = con1.copy(deep=True)\n",
-    "    con3['ky [1/A]'] = con2['ky [1/A]'].values\n",
-    "    con3['kz [1/A]'] = con3['kz [1/A]'].values*-1\n",
-    "    \n",
-    "    \n",
-    "    cartesian_df['kx [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kx [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kx [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kx [1/A]'].values))\n",
-    "    cartesian_df['ky [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['ky [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['ky [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['ky [1/A]'].values))\n",
-    "    cartesian_df['kz [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kz [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kz [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kz [1/A]'].values))\n",
-    "\n",
-    "    cartesian_df['q_inds'] = qpts_df['q_inds'].values\n",
-    "    \n",
-    "    cartesian_df_edit = cartesian_df.copy(deep=True)\n",
-    "\n",
-    "    qx_plus = cartesian_df['kx [1/A]'] > 0.5\n",
-    "    qx_minus = cartesian_df['kx [1/A]'] < -0.5\n",
-    "\n",
-    "    qy_plus = cartesian_df['ky [1/A]'] > 0.5\n",
-    "    qy_minus = cartesian_df['ky [1/A]'] < -0.5\n",
-    "\n",
-    "    qz_plus = cartesian_df['kz [1/A]'] > 0.5\n",
-    "    qz_minus = cartesian_df['kz [1/A]'] < -0.5\n",
-    "\n",
-    "    cartesian_df_edit.loc[qx_plus,'kx [1/A]'] = cartesian_df.loc[qx_plus,'kx [1/A]'] -1\n",
-    "    cartesian_df_edit.loc[qx_minus,'kx [1/A]'] = cartesian_df.loc[qx_minus,'kx [1/A]'] +1\n",
-    "\n",
-    "    cartesian_df_edit.loc[qy_plus,'ky [1/A]'] = cartesian_df.loc[qy_plus,'ky [1/A]'] -1\n",
-    "    cartesian_df_edit.loc[qy_minus,'ky [1/A]'] = cartesian_df.loc[qy_minus,'ky [1/A]'] +1\n",
-    "\n",
-    "    cartesian_df_edit.loc[qz_plus,'kz [1/A]'] = cartesian_df.loc[qz_plus,'kz [1/A]'] -1\n",
-    "    cartesian_df_edit.loc[qz_minus,'kz [1/A]'] = cartesian_df.loc[qz_minus,'kz [1/A]'] +1\n",
-    "    \n",
-    "    return cartesian_df,cartesian_df_edit"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## Data validation (Peishi Updated: 4/30)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def plot_bandstructure(kpts, enk): \n",
-    "    '''Plots electron bandstructure. \n",
-    "    \n",
-    "    Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X \n",
-    "    \n",
-    "    Parameters: \n",
-    "    ------------ \n",
-    "    kpts : dataframe containing \n",
-    "        k_inds : vector_like, shape (n,1) \n",
-    "        Index of k point \n",
-    "\n",
-    "        'kx [1/A]' : vector_like, shape (n,1) \n",
-    "        x-coordinate in Cartesian momentum space     \n",
-    "\n",
-    "        'ky [1/A]' : vector_like, shape (n,1) \n",
-    "        y-coordinate in Cartesian momentum space \n",
-    "\n",
-    "        'kz [1/A]' : vector_like, shape (n,1) \n",
-    "        z-coordinate in Cartesian momentum space \n",
-    "\n",
-    "    enk : dataframe containing \n",
-    "        k_inds : vector_like, shape (n,1) \n",
-    "        Index of k point \n",
-    "\n",
-    "        band_inds : vector_like, shape (n,1) \n",
-    "        Band index \n",
-    "\n",
-    "        energy [Ryd] : vector_like, shape (n,1) \n",
-    "        Energy associated with k point in Rydberg units \n",
-    "\n",
-    "    Returns: \n",
-    "    --------- \n",
-    "    No variable returns. Just plots the dispersion  \n",
-    "    '''\n",
-    "    \n",
-    "    # Lattice constant and reciprocal lattice vectors \n",
-    "    # b1 = 2 pi/a (kx - ky + kz) \n",
-    "    # b2 = 2 pi/a (kx + ky - kz) \n",
-    "    # b3 = 2 pi/a (-kx + ky + kz) \n",
-    "    a = 5.556 #[A] \n",
-    "    b1 = (2*np.pi/a) * np.array([1, -1, 1]) \n",
-    "    b2 = (2*np.pi/a) * np.array([1, 1, -1]) \n",
-    "    b3 = (2*np.pi/a) * np.array([-1, 1, 1]) \n",
-    "\n",
-    "    # L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 \n",
-    "    # X point in BZ is given by 0.5*b2 + 0.5*b3 \n",
-    "    lpoint = 0.5 * (b1 + b2 + b3) \n",
-    "    xpoint = 0.5 * (b2 + b3) \n",
-    "\n",
-    "    # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. \n",
-    "    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies \n",
-    "    deg2rad = 2*np.pi/360 \n",
-    "    ang_tol = 1 * deg2rad  # 1 degree in radians \n",
-    "\n",
-    "    enkonly = np.array(enk['energy [Ryd]'])[:, np.newaxis] \n",
-    "    enkinds = np.array(enk['k_inds'])\n",
-    "    kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) \n",
-    "    kptsinds = np.array(kpts['k_inds'])\n",
-    "    kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] \n",
-    "\n",
-    "    dot_l = np.zeros(len(kpts))\n",
-    "    dot_x = np.zeros(len(kpts))\n",
-    "\n",
-    "    # Separate assignment for gamma point to avoid divide by zero error\n",
-    "    nongamma = kptsmag!=0\n",
-    "    dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) \n",
-    "    dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) \n",
-    "    dot_l[np.squeeze(kptsmag==0)] = 0 \n",
-    "    dot_x[np.squeeze(kptsmag==0)] = 0 \n",
-    "\n",
-    "    lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))\n",
-    "    xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))\n",
-    "    \n",
-    "    linds = kptsinds[lpath]\n",
-    "    xinds = kptsinds[xpath]\n",
-    "    lkmag = kptsmag[lpath]\n",
-    "    xkmag = kptsmag[xpath]\n",
-    "\n",
-    "    plt.figure() \n",
-    "    \n",
-    "    for i, ki in enumerate(linds):\n",
-    "        energies = enkonly[enkinds == ki, 0]\n",
-    "        thiskmag = lkmag[i]\n",
-    "        if len(energies) > 1:\n",
-    "            veck = np.ones((len(energies), 1)) * thiskmag\n",
-    "            plt.plot(veck, theseenergies, '.', color='C0')\n",
-    "        else:\n",
-    "            plt.plot(thiskmag,energies, '.', color='C0')\n",
-    "    \n",
-    "    for i, ki in enumerate(xinds):\n",
-    "        energies = enkonly[enkinds == ki, 0]\n",
-    "        thiskmag = lkmag[i]\n",
-    "        if len(energies) > 1:\n",
-    "            veck = np.ones((len(energies), 1)) * thiskmag\n",
-    "            plt.plot(-1*veck, energies, '.', color='C1')\n",
-    "        else:\n",
-    "            plt.plot(-1*thiskmag,energies, '.', color='C1')\n",
-    "        \n",
-    "    plt.xlabel('k magnitude') \n",
-    "    plt.ylabel('Energy in Ry')\n",
-    "    plt.show()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "plot_bandstructure(cart_kpts_df, enk_df)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "def plot_dispersion(kpts, enk): \n",
-    "    '''Plots electron bandstructure. \n",
-    "    \n",
-    "    Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X \n",
-    "    \n",
-    "    Parameters: \n",
-    "    ------------ \n",
-    "    kpts : dataframe containing \n",
-    "        k_inds : vector_like, shape (n,1) \n",
-    "        Index of k point \n",
-    "\n",
-    "        'kx [1/A]' : vector_like, shape (n,1) \n",
-    "        x-coordinate in Cartesian momentum space     \n",
-    "\n",
-    "        'ky [1/A]' : vector_like, shape (n,1) \n",
-    "        y-coordinate in Cartesian momentum space \n",
-    "\n",
-    "        'kz [1/A]' : vector_like, shape (n,1) \n",
-    "        z-coordinate in Cartesian momentum space \n",
-    "\n",
-    "    enk : dataframe containing \n",
-    "        k_inds : vector_like, shape (n,1) \n",
-    "        Index of k point \n",
-    "\n",
-    "        band_inds : vector_like, shape (n,1) \n",
-    "        Band index \n",
-    "\n",
-    "        energy [Ryd] : vector_like, shape (n,1) \n",
-    "        Energy associated with k point in Rydberg units \n",
-    "\n",
-    "    Returns: \n",
-    "    --------- \n",
-    "    No variable returns. Just plots the dispersion  \n",
-    "    '''\n",
-    "    \n",
-    "    # Lattice constant and reciprocal lattice vectors \n",
-    "    # b1 = 2 pi/a (kx - ky + kz) \n",
-    "    # b2 = 2 pi/a (kx + ky - kz) \n",
-    "    # b3 = 2 pi/a (-kx + ky + kz) \n",
-    "    a = 5.556 #[A] \n",
-    "    b1 = (2*np.pi/a) * np.array([1, -1, 1]) \n",
-    "    b2 = (2*np.pi/a) * np.array([1, 1, -1]) \n",
-    "    b3 = (2*np.pi/a) * np.array([-1, 1, 1]) \n",
-    "\n",
-    "    # L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 \n",
-    "    # X point in BZ is given by 0.5*b2 + 0.5*b3 \n",
-    "    lpoint = 0.5 * (b1 + b2 + b3) \n",
-    "    xpoint = 0.5 * (b2 + b3) \n",
-    "\n",
-    "    # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. \n",
-    "    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies \n",
-    "    deg2rad = 2*np.pi/360 \n",
-    "    ang_tol = 1 * deg2rad  # 1 degree in radians \n",
-    "\n",
-    "    print(list(kpts))\n",
-    "    \n",
-    "    enkonly = np.array(enk['energy [Ryd]'])[:, np.newaxis] \n",
-    "    enkinds = np.array(enk['q_inds'])\n",
-    "    kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) \n",
-    "    kptsinds = np.array(kpts['q_inds'])\n",
-    "    kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] \n",
-    "\n",
-    "    dot_l = np.zeros(len(kpts))\n",
-    "    dot_x = np.zeros(len(kpts))\n",
-    "\n",
-    "    # Separate assignment for gamma point to avoid divide by zero error\n",
-    "    nongamma = kptsmag!=0\n",
-    "    dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) \n",
-    "    dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) \n",
-    "    dot_l[np.squeeze(kptsmag==0)] = 0 \n",
-    "    dot_x[np.squeeze(kptsmag==0)] = 0 \n",
-    "\n",
-    "    lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))\n",
-    "    xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))\n",
-    "    \n",
-    "    linds = kptsinds[lpath]\n",
-    "    xinds = kptsinds[xpath]\n",
-    "    lkmag = kptsmag[lpath]\n",
-    "    xkmag = kptsmag[xpath]\n",
-    "\n",
-    "    plt.figure() \n",
-    "    \n",
-    "    for i, ki in enumerate(linds):\n",
-    "        energies = enkonly[enkinds == ki, 0]\n",
-    "        thiskmag = lkmag[i]\n",
-    "        if len(energies) > 1:\n",
-    "            veck = np.ones((len(energies), 1)) * thiskmag\n",
-    "            plt.plot(veck, energies, '.', color='C0')\n",
-    "        else:\n",
-    "            plt.plot(thiskmag,energies, '.', color='C0')\n",
-    "    \n",
-    "    for i, ki in enumerate(xinds):\n",
-    "        energies = enkonly[enkinds == ki, 0]\n",
-    "        thiskmag = lkmag[i]\n",
-    "        if len(energies) > 1:\n",
-    "            veck = np.ones((len(energies), 1)) * thiskmag\n",
-    "            plt.plot(-1*veck, energies, '.', color='C1')\n",
-    "        else:\n",
-    "            plt.plot(-1*thiskmag,energies, '.', color='C1')\n",
-    "        \n",
-    "    plt.xlabel('k magnitude') \n",
-    "    plt.ylabel('Energy in Ry')\n",
-    "    plt.show()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# kpts = edit_cart_qpts_df\n",
-    "# enk = enq_df\n",
-    "plot_dispersion(edit_cart_qpts_df, enq_df)"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.7.3"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 2
-}
+#!/usr/bin/env python
+# coding: utf-8
+
+# ## Importing data (Alex updated: 4/30/19)
+
+# In[1]:
+
+
+import numpy as np
+
+# Image processing tools
+import skimage
+import skimage.filters
+
+import pandas as pd
+import scipy.optimize
+import scipy.stats as st
+import numba
+import itertools
+
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+
+from numpy.linalg import inv
+
+from tqdm import tqdm, trange
+from scipy import special, optimize
+from scipy import integrate
+
+import plotly.offline as py
+import plotly.graph_objs as go
+import plotly
+#plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
+plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
+
+
+# Load the e-ph matrix elements data. The two numbers reported at the end should be the same. If they are not, there are duplicate e-ph elements. It's VERY IMPORTANT to note that the g elements here are actually |g|^2 which is why they are real numbers.
+
+# In[2]:
+
+
+data = pd.read_csv('gaas.eph_matrix', sep='\t',header= None,skiprows=(0,1))
+data.columns = ['0']
+data_array = data['0'].values
+new_array = np.zeros((len(data_array),7))
+for i1 in trange(len(data_array)):
+    new_array[i1,:] = data_array[i1].split()
+    
+g_df = pd.DataFrame(data=new_array,columns = ['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']] = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']].apply(pd.to_numeric,downcast = 'integer')
+len(g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element']]),len(g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element']].drop_duplicates())
+
+
+# Now load the k-point indices, q-point indices, k-point energies, phonon energies into dataframes.
+
+# In[3]:
+
+
+kpts = pd.read_csv('gaas.kpts', sep='\t',header= None)
+kpts.columns = ['0']
+kpts_array = kpts['0'].values
+new_kpt_array = np.zeros((len(kpts_array),4))
+for i1 in trange(len(kpts_array)):
+    new_kpt_array[i1,:] = kpts_array[i1].split()
+    
+kpts_df = pd.DataFrame(data=new_kpt_array,columns = ['k_inds','b1','b2','b3'])
+kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
+kpts_df.head()
+
+
+# In[4]:
+
+
+enk = pd.read_csv('gaas.enk', sep='\t',header= None)
+enk.columns = ['0']
+enk_array = enk['0'].values
+new_enk_array = np.zeros((len(enk_array),3))
+for i1 in trange(len(enk_array)):
+    new_enk_array[i1,:] = enk_array[i1].split()
+    
+enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])
+enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
+enk_df.head()
+
+
+# In[95]:
+
+
+enq = pd.read_csv('gaas.enq', sep='\t',header= None)
+enq.columns = ['0']
+enq_array = enq['0'].values
+new_enq_array = np.zeros((len(enq_array),3))
+for i1 in trange(len(enq_array)):
+    new_enq_array[i1,:] = enq_array[i1].split()
+    
+enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
+enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
+print(enq_df.shape)
+enq_df.head()
+
+
+# In[96]:
+
+
+qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
+qpts.columns = ['0']
+qpts_array = qpts['0'].values
+new_qpt_array = np.zeros((len(qpts_array),4))
+
+for i1 in trange(len(qpts_array)):
+    new_qpt_array[i1,:] = qpts_array[i1].split()
+    
+qpts_df = pd.DataFrame(data=new_qpt_array,columns = ['q_inds','b1','b2','b3'])
+qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric,downcast = 'integer')
+print(qpts_df.shape)
+qpts_df.head()
+
+Processed data:
+
+e-ph matrix elements = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']]
+k-points = kpts_df[['k_inds','b1','b2','b3']]
+q-points = qpts_df[['q_inds','b1','b2','b3']]
+k-energy = enk_df[['k_inds','band_inds','energy [Ryd]']]
+q-energy = enq_df[['q_inds','im_mode','energy [Ryd]']]
+# ## Data Processing (Alex Updated: 4/30)
+
+# In[7]:
+
+
+def cartesian_q_points(qpts_df):
+    """
+    Given a dataframe containing indexed q-points in terms of the crystal lattice vector, return the dataframe with cartesian q coordinates.     
+    Parameters:
+    -----------
+    qpts_df : pandas dataframe containing:
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        kx : vector_like, shape (n,1)
+        x-coordinate in momentum space [1/A]    
+        
+        ky : vector_like, shape (n,1)
+        y-coordinate in momentum space [1/A]  
+        
+        kz : vector_like, shape (n,1)
+        z-coordinate in momentum space [1/A]
+        
+    For FCC lattice, use the momentum space primitive vectors as per:
+    http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
+    
+    b1 = 2 pi/a (kx - ky + kz)
+    b2 = 2 pi/a (kx + ky - kz)
+    b3 = 2 pi/a (-kx + ky + kz)
+    
+    Returns:
+    --------
+    cart_kpts_df : pandas dataframe containing:
+    
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        kx : vector_like, shape (n,1)
+        x-coordinate in Cartesian momentum space [1/m]    
+        
+        ky : vector_like, shape (n,1)
+        y-coordinate in Cartesian momentum space [1/m]  
+        
+        kz : vector_like, shape (n,1)
+        z-coordinate in Cartesian momentum space [1/m]  
+    """
+    
+    # Need a lattice constant for GaAs. This is obviously somewhat sensitive to temperature.
+    a = 5.556 #[A]
+    
+    cartesian_df = pd.DataFrame(columns = ['q_inds','kx [1/A]','ky [1/A]','kz [1/A]'])
+    
+    con1 = pd.DataFrame(columns = ['kx [1/A]','ky [1/A]','kz [1/A]'])
+    con1['kx [1/A]'] = np.ones(len(qpts_df))*-1
+    con1['ky [1/A]'] = np.ones(len(qpts_df))*-1
+    con1['kz [1/A]'] = np.ones(len(qpts_df))*1
+
+    con2 = con1.copy(deep=True)
+    con2['kx [1/A]'] = con2['kx [1/A]'].values*-1
+    con2['ky [1/A]'] = con2['ky [1/A]'].values*-1
+
+    con3 = con1.copy(deep=True)
+    con3['ky [1/A]'] = con2['ky [1/A]'].values
+    con3['kz [1/A]'] = con3['kz [1/A]'].values*-1
+    
+    
+    cartesian_df['kx [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kx [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kx [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kx [1/A]'].values))
+    cartesian_df['ky [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['ky [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['ky [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['ky [1/A]'].values))
+    cartesian_df['kz [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kz [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kz [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kz [1/A]'].values))
+
+    cartesian_df['q_inds'] = qpts_df['q_inds'].values
+    
+    cartesian_df_edit = cartesian_df.copy(deep=True)
+
+    qx_plus = cartesian_df['kx [1/A]'] > 0.5
+    qx_minus = cartesian_df['kx [1/A]'] < -0.5
+
+    qy_plus = cartesian_df['ky [1/A]'] > 0.5
+    qy_minus = cartesian_df['ky [1/A]'] < -0.5
+
+    qz_plus = cartesian_df['kz [1/A]'] > 0.5
+    qz_minus = cartesian_df['kz [1/A]'] < -0.5
+
+    cartesian_df_edit.loc[qx_plus,'kx [1/A]'] = cartesian_df.loc[qx_plus,'kx [1/A]'] -1
+    cartesian_df_edit.loc[qx_minus,'kx [1/A]'] = cartesian_df.loc[qx_minus,'kx [1/A]'] +1
+
+    cartesian_df_edit.loc[qy_plus,'ky [1/A]'] = cartesian_df.loc[qy_plus,'ky [1/A]'] -1
+    cartesian_df_edit.loc[qy_minus,'ky [1/A]'] = cartesian_df.loc[qy_minus,'ky [1/A]'] +1
+
+    cartesian_df_edit.loc[qz_plus,'kz [1/A]'] = cartesian_df.loc[qz_plus,'kz [1/A]'] -1
+    cartesian_df_edit.loc[qz_minus,'kz [1/A]'] = cartesian_df.loc[qz_minus,'kz [1/A]'] +1
+    
+    return cartesian_df,cartesian_df_edit
+
+
+# In[8]:
+
+
+a = 5.556 #[A]
+kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+T = 300
+e = 1.602*10**(-19)
+
+
+# In[9]:
+
+
+kvel = pd.read_csv('gaas.vel', sep='\t',header= None,skiprows=[0,1,2])
+kvel.columns = ['0']
+kvel_array = kvel['0'].values
+new_kvel_array = np.zeros((len(kvel_array),10))
+for i1 in trange(len(kvel_array)):
+    new_kvel_array[i1,:] = kvel_array[i1].split()
+    
+kvel_df = pd.DataFrame(data=new_kvel_array,columns = ['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])
+kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
+
+kvel_edit = kvel_df.copy(deep=True)
+
+kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
+kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
+
+ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
+ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
+
+kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
+kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
+
+kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1
+kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
+
+kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
+kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
+
+kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
+kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
+
+kvel_df = kvel_edit.copy(deep=True)
+kvel_df.head()
+
+cart_kpts_df = kvel_df.copy(deep=True)
+cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/a
+cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/a
+cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a
+
+cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
+
+
+# In[10]:
+
+
+cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
+
+
+# In[66]:
+
+
+trace1 = go.Scatter3d(
+    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
+    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
+    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
+    mode='markers',
+    marker=dict(
+        size=2,
+        color=enk_df['energy [Ryd]'],
+        colorscale='Rainbow',
+        showscale=True,
+        opacity=1
+    )
+)
+
+trace2 = go.Scatter
+
+data = [trace1]
+layout = go.Layout(
+                    scene = dict(
+                    xaxis = dict(
+                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
+                    yaxis = dict(
+                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
+                    zaxis = dict(
+                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
+fig = go.Figure(data=data, layout=layout)
+py.iplot(fig, filename='simple-3d-scatter')
+
+
+# In[12]:
+
+
+trace1 = go.Scatter3d(
+    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
+    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
+    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
+    mode='markers',
+    marker=dict(
+        size=2,
+        color=cart_kpts_df['v_mag [m/s]'],
+        colorscale='Rainbow',
+        showscale=True,
+        opacity=1
+    )
+)
+
+trace2 = go.Scatter
+
+data = [trace1]
+layout = go.Layout(
+                    scene = dict(
+                    xaxis = dict(
+                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
+                    yaxis = dict(
+                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
+                    zaxis = dict(
+                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
+fig = go.Figure(data=data, layout=layout)
+py.iplot(fig, filename='simple-3d-scatter')
+
+
+# In[13]:
+
+
+trace1 = go.Scatter3d(
+    x=cart_kpts_df['kx [1/A]'].values/(2*np.pi/(a)),
+    y=cart_kpts_df['ky [1/A]'].values/(2*np.pi/(a)),
+    z=cart_kpts_df['kz [1/A]'].values/(2*np.pi/(a)),
+    mode='markers',
+    marker=dict(
+        size=2,
+        color=cart_kpts_df['k_inds'],
+        colorscale='Rainbow',
+        showscale=True,
+        opacity=1
+    )
+)
+
+trace2 = go.Scatter
+
+data = [trace1]
+layout = go.Layout(
+                    scene = dict(
+                    xaxis = dict(
+                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
+                    yaxis = dict(
+                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
+                    zaxis = dict(
+                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
+fig = go.Figure(data=data, layout=layout)
+py.iplot(fig, filename='simple-3d-scatter')
+
+
+# In[14]:
+
+
+trace1 = go.Scatter3d(
+    x=edit_cart_qpts_df['kx [1/A]'].values,
+    y=edit_cart_qpts_df['ky [1/A]'].values,
+    z=edit_cart_qpts_df['kz [1/A]'].values,
+    mode='markers',
+    marker=dict(
+        size=2,
+        opacity=1
+    )
+)
+
+data = [trace1]
+layout = go.Layout(
+                    scene = dict(
+                    xaxis = dict(
+                        title='kx',titlefont = dict(family='Oswald, monospace',size=18)),
+                    yaxis = dict(
+                        title='ky',titlefont = dict(family='Oswald, monospace',size=18)),
+                    zaxis = dict(
+                        title='kz',titlefont = dict(family='Oswald, monospace',size=18)),))
+fig = go.Figure(data=data, layout=layout)
+py.iplot(fig, filename='simple-3d-scatter')
+
+
+# In[16]:
+
+
+def fermi_distribution(g_df,mu,T):
+    """
+    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
+    Parameters:
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+        
+        
+    mu : scalar
+    Chemical potential of electronic states [eV]
+    
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+         
+    """
+    # Physical constants    
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+
+
+    g_df['k_FD'] = (np.exp((g_df['k_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)
+    g_df['k+q_FD'] = (np.exp((g_df['k+q_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)
+
+    return g_df
+
+
+# In[17]:
+
+
+def bose_distribution(g_df,T):
+    """
+    This function takes a list of q-point indices and returns the Bose-Einstein distributions associated with each q-point on that list.    
+    Parameters:
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+        
+        
+    mu : scalar
+    Chemical potential of electronic states [eV]
+    
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        BE : vector_like, shape (n,1)
+        Bose-einstein distribution
+         
+    """
+    # Physical constants    
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+
+    g_df['BE'] = (np.exp((g_df['q_en [eV]'].values*e)/(kb*T)) - 1)**(-1)
+    return g_df
+
+
+# In[18]:
+
+
+def fermionic_processing(g_df,cart_kpts_df,enk_df,mu,T):
+    """
+    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
+    Parameters:
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+               
+    cart_kpts_df : pandas dataframe containing:
+    
+        k_inds : vector_like, shape (n,1)
+        Index of k point
+        
+        kx : vector_like, shape (n,1)
+        x-coordinate in Cartesian momentum space [1/m]    
+        
+        ky : vector_like, shape (n,1)
+        y-coordinate in Cartesian momentum space [1/m]  
+        
+        kz : vector_like, shape (n,1)
+        z-coordinate in Cartesian momentum space [1/m]
+        
+    enk_df : pandas dataframe containing
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point
+        
+        band_inds : vector_like, shape (n,1)
+        Band index
+        
+        energy [Ryd] : vector_like, shape (n,1)
+        Energy associated with k point in Rydberg units
+        
+        
+    mu : scalar
+    Chemical potential of electronic states [eV]
+    
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+         
+    """
+    
+    # Physical constants
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    
+    index_vector = cart_kpts_df['k_inds'].values    
+    g_df['k_en [eV]'] = np.zeros(len(g_df))
+    g_df['k+q_en [eV]'] = np.zeros(len(g_df))
+    g_df['collision_state'] = np.zeros(len(g_df))
+    
+    for i1 in trange(len(cart_kpts_df)):
+        index = index_vector[i1]
+        
+        g_slice_k = g_df['k_inds'] == index        
+        g_slice_kq = g_df['k+q_inds'] == index
+        
+        k_slice = cart_kpts_df['k_inds'] == index
+        enk_slice = enk_df['k_inds'] == index
+        
+        g_df.loc[g_slice_k,'k_en [eV]'] = enk_df.loc[enk_slice,'energy [Ryd]'].values*13.6056980659 
+        g_df.loc[g_slice_kq,'k+q_en [eV]'] = enk_df.loc[enk_slice,'energy [Ryd]'].values*13.6056980659
+        
+    abs_inds = g_df['k_en [eV]'] < g_df['k+q_en [eV]'] #absorbed indices
+    ems_inds = g_df['k_en [eV]'] > g_df['k+q_en [eV]'] #emission indices
+    
+    g_df.loc[abs_inds,'collision_state'] = 1
+    g_df.loc[ems_inds,'collision_state'] = -1
+    
+    g_df = fermi_distribution(g_df,mu, T)
+    
+    return g_df
+
+
+# In[20]:
+
+
+def bosonic_processing(g_df,enq_df,T):
+    """
+    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
+    Parameters:
+    -----------
+    
+    g_df : pandas dataframe containing:
+    
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+               
+    cart_qpts_df : pandas dataframe containing:
+    
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        kx : vector_like, shape (n,1)
+        x-coordinate in Cartesian momentum space [1/m]    
+        
+        ky : vector_like, shape (n,1)
+        y-coordinate in Cartesian momentum space [1/m]  
+        
+        kz : vector_like, shape (n,1)
+        z-coordinate in Cartesian momentum space [1/m]
+        
+    enq_df : pandas dataframe containing
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point
+        
+        im_mode : vector_like, shape (n,1)
+        Phonon polarization index
+        
+        energy [Ryd] : vector_like, shape (n,1)
+        Energy associated with k point in Rydberg units
+        
+            
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+         
+    """
+    
+    # Physical constants
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    
+    modified_g_df = g_df.copy(deep=True)
+    modified_g_df.set_index(['q_inds', 'im_mode'], inplace=True)
+    modified_g_df = modified_g_df.sort_index()
+    modified_enq_df = enq_df.copy(deep=True)
+    modified_enq_df.set_index(['q_inds', 'im_mode'], inplace=True)
+    modified_enq_df = modified_enq_df.sort_index()
+    modified_enq_df = modified_enq_df.loc[modified_g_df.index.unique()]
+    
+    modified_enq_df = modified_enq_df.reset_index()
+    modified_enq_df = modified_enq_df.sort_values(['q_inds','im_mode'],ascending=True)
+    modified_enq_df = modified_enq_df[['q_inds','im_mode','energy [Ryd]']]
+    modified_enq_df['q_id'] = modified_enq_df.groupby(['q_inds','im_mode']).ngroup()
+    g_df['q_id'] = g_df.sort_values(['q_inds','im_mode'],ascending=True).groupby(['q_inds','im_mode']).ngroup()
+    
+    g_df['q_en [eV]'] = modified_enq_df['energy [Ryd]'].values[g_df['q_id'].values]*13.6056980659
+    
+    g_df = bose_distribution(g_df,T)
+    
+    return g_df,modified_enq_df
+
+
+# In[35]:
+
+
+g_df.loc[g_df['q_id'] == 1000].head()
+
+
+# In[68]:
+
+
+g_df.loc[g_df['k_inds'] == 79]
+
+
+# In[60]:
+
+
+np.abs(-enk_df.loc[enk_df['k_inds'] == 10]['energy [Ryd]'].values+enk_df.loc[enk_df['k_inds'] == 79]['energy [Ryd]'].values)*13.6056980659
+
+
+# In[61]:
+
+
+np.abs(-enk_df.loc[enk_df['k_inds'] == 34]['energy [Ryd]'].values+enk_df.loc[enk_df['k_inds'] == 87]['energy [Ryd]'].values)*13.6056980659
+
+
+# In[55]:
+
+
+enq_df.loc[enq_df['q_inds'] == 177]
+
+
+# In[19]:
+
+
+g_df = fermionic_processing(g_df,cart_kpts_df,enk_df,5.780,300)
+
+
+# In[21]:
+
+
+g_df,modified_enq_df = bosonic_processing(g_df,enq_df,T)
+
+
+# In[34]:
+
+
+modified_enq_df.loc[modified_enq_df['q_id'] == 1000].head()
+
+
+# In[62]:
+
+
+cart_kpts_df.loc[cart_kpts_df['k_inds']==231]
+
+
+# In[63]:
+
+
+cart_kpts_df.loc[cart_kpts_df['k_inds']==1201]
+
+
+# In[32]:
+
+
+g_df.loc[g_df['collision_state'] == 0]
+
+
+# In[66]:
+
+
+np.min(g_df['g_element'].values)
+
+
+# In[22]:
+
+
+g_df.head()
+
+
+# In[ ]:
+
+
+
+
+
+# In[42]:
+
+
+g_df['k_en [eV]'] - g_df['k+q_en [eV]']
+
+
+# In[40]:
+
+
+np.max(g_df['k_en [eV]'])-np.min(g_df['k_en [eV]'])
+
+
+# In[41]:
+
+
+(np.max(enk_df['energy [Ryd]'])-np.min(enk_df['energy [Ryd]']))*13.6056980659
+
+
+# In[24]:
+
+
+def scattering_rate(g_df):
+    """
+    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
+    Parameters:
+    -----------
+    
+    abs_g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+        
+            
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    
+         
+    """
+    
+    
+    # Physical constants
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    
+    
+    g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
+    g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
+    
+    g_df_ems['weight'] = np.multiply(g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values,g_df_ems['g_element'].values)
+    g_df_abs['weight'] = np.multiply(g_df_abs['BE'].values + g_df_abs['k+q_FD'].values,g_df_abs['g_element'].values)
+
+    
+    
+    
+    abs_sr = g_df_abs.groupby(['k_inds'])['weight'].agg('sum')
+    abs_scattering = abs_sr.to_frame().reset_index()
+    
+    ems_sr = g_df_ems.groupby(['k_inds'])['weight'].agg('sum')
+    ems_scattering = ems_sr.to_frame().reset_index()
+    
+    return abs_scattering,ems_scattering
+
+
+# In[25]:
+
+
+abs_scattering,ems_scattering = scattering_rate(g_df)
+
+
+# In[ ]:
+
+
+def coupling_matrix_calc(g_df):
+    """
+    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.      
+    Parameters:
+    -----------
+    
+    abs_g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+        
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+        
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+        
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+        
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+        
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+        
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+        
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+        
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+        
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+        
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+        
+            
+    T : scalar
+    Lattice temperature in Kelvin
+    
+    Returns:
+    --------
+    
+    
+         
+    """
+    
+    
+    # Physical constants
+    e = 1.602*10**(-19) # fundamental electronic charge [C]
+    kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    
+    
+    g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
+    g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
+    
+    g_df_ems['weight'] = np.multiply(g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values,g_df_ems['g_element'].values)
+    g_df_abs['weight'] = np.multiply(g_df_abs['BE'].values + g_df_abs['k+q_FD'].values,g_df_abs['g_element'].values)
+
+    g_df_abs['id'] = g_df_abs.groupby(['k_inds','k+q_inds']).ngroup()
+    g_df_ems['id'] = g_df_ems.groupby(['k_inds','k+q_inds']).ngroup()    
+    
+    
+    
+    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds','id'])['weight'].agg('sum')
+    summed_abs_df = abs_sr.to_frame().reset_index()
+    
+    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds','id'])['weight'].agg('sum')
+    summed_ems_df = ems_sr.to_frame().reset_index()
+    
+    return summed_abs_df,summed_ems_df
+
+
+# In[ ]:
+
+
+abs_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+ems_scattering_array = np.zeros(len(np.unique(enk_df['k_inds'])))
+abs_scattering_array[abs_scattering['k_inds'].values-1] = abs_scattering['weight'].values
+ems_scattering_array[ems_scattering['k_inds'].values-1] = ems_scattering['weight'].values
+
+
+# In[ ]:
+
+
+import matplotlib.cm as cm
+plt.rcParams.update({'font.size': 40})
+plt.rcParams.update({'lines.linewidth': 3.5})
+
+fig = plt.figure(figsize=(12,10))
+ax = plt.gca()
+
+plt.scatter(enk_df['energy [Ryd]'].values,abs_scattering_array+ems_scattering_array,c = 'Red')
+#plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+#plt.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+plt.ylabel('Scattering Rate [1/fs]')
+plt.xlabel('Energy [Ryd]')
+#plt.legend()
+plt.show()
+fig.savefig('test.png', bbox_inches='tight')
+
+
+# In[ ]:
+
+
+abs_scattering_array+ems_scattering_array
+
+
+# In[ ]:
+
+
+summed_abs_df,summed_ems_df = coupling_matrix_calc(g_df)
+
+
+# In[ ]:
+
+
+interesting_abs = summed_abs_df.groupby(['k_inds'])['weight'].agg('sum').to_frame().reset_index()
+
+
+# In[ ]:
+
+
+interesting_ems = summed_ems_df.groupby(['k_inds'])['weight'].agg('sum').to_frame().reset_index()
+
+
+# In[ ]:
+
+
+len(interesting_abs)
+
+
+# In[ ]:
+
+
+g_df.loc[(g_df['k_inds'] == 2213)* g_df['k+q_inds'] == 502]
+
+
+# In[ ]:
+
+
+g_df.loc[(g_df['q_inds'] == 4015)*(g_df['collision_state'] == -1)]
+
+
+# In[ ]:
+
+
+summed_abs_df.loc[summed_abs_df['id'] == 500]
+
+
+# In[ ]:
+
+
+summed_ems_df.loc[summed_ems_df['id'] == 539]
+
+
+# In[ ]:
+
+
+summed_ems_df.loc[summed_ems_df['k+q_inds'] == 1019]
+
+
+# In[ ]:
+
+
+abs_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
+ems_array = np.zeros((len(np.unique(enk_df['k_inds'])),len(np.unique(enk_df['k_inds']))))
+
+
+# In[ ]:
+
+
+abs_array[summed_abs_df['k_inds'].values-1,summed_abs_df['k+q_inds'].values-1] = summed_abs_df['weight'].values
+ems_array[summed_ems_df['k_inds'].values-1,summed_ems_df['k+q_inds'].values-1] = summed_ems_df['weight'].values
+
+
+# In[ ]:
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+plt.set_cmap('inferno')
+fig = plt.figure(figsize=(20, 12.2))
+
+ax = fig.add_subplot(111)
+ax.set_title('Collision Matrix')
+plt.imshow(abs_array/np.max(abs_array))
+ax.set_aspect('equal')
+plt.xlabel('k index')
+plt.ylabel('k_p index')
+
+cax = fig.add_axes([0.12, 0.1, 0.78, 0.8])
+cax.get_xaxis().set_visible(False)
+cax.get_yaxis().set_visible(False)
+cax.patch.set_alpha(0)
+cax.set_frame_on(False)
+cbar = plt.colorbar(orientation='vertical')
+cbar.set_label('Coupling Rate [arb]', rotation=270)
+plt.show()
+
+
+# In[ ]:
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+plt.set_cmap('inferno')
+
+fig = plt.figure(figsize=(20, 12.2))
+
+ax = fig.add_subplot(111)
+ax.set_title('colorMap')
+plt.imshow(ems_array/np.max(ems_array))
+ax.set_aspect('equal')
+
+cax = fig.add_axes([0.12, 0.1, 0.78, 0.8])
+cax.get_xaxis().set_visible(False)
+cax.get_yaxis().set_visible(False)
+cax.patch.set_alpha(0)
+cax.set_frame_on(False)
+plt.colorbar(orientation='vertical')
+plt.show()
+
+
+# In[ ]:
+
+
+plt.imshow(ems_array);
+plt.colorbar()
+plt.show()
+
+
+# In[ ]:
+
+
+import matplotlib as mpl
+from matplotlib import pyplot
+import numpy as np
+
+# make a color map of fixed colors
+cmap = mpl.colors.LinearSegmentedColormap.from_list('my_colormap',
+                                           ['blue','black','red'],
+                                           256)
+
+# tell imshow about color map so that only set colors are used
+img = pyplot.imshow(ems_array*1000,interpolation='nearest',
+                    cmap = cmap2,
+                    origin='lower')
+
+pyplot.show()
+
+
+# In[ ]:
+
+
+np.sum(abs_array+ems_array,axis=1)
+
+
+# In[69]:
+
+
+import matplotlib as mpl
+from matplotlib import pyplot
+import numpy as np
+
+# make a color map of fixed colors
+cmap = mpl.colors.LinearSegmentedColormap.from_list('my_colormap',
+                                           ['blue','black','red'],
+                                           256)
+
+# tell imshow about color map so that only set colors are used
+img = pyplot.imshow(ems_array*1000,interpolation='nearest',
+                    cmap = cmap2,
+                    origin='lower')
+
+pyplot.show()
+
+
+# In[71]:
+
+
+"hello"
+
+
+# ## Data validation (Peishi Updated: 4/30)
+
+# In[110]:
+
+
+def plot_bandstructure(kpts, enk): 
+    '''Plots electron bandstructure. 
+    
+    Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X 
+    
+    Parameters: 
+    ------------ 
+    kpts : dataframe containing 
+        k_inds : vector_like, shape (n,1) 
+        Index of k point 
+
+        'kx [1/A]' : vector_like, shape (n,1) 
+        x-coordinate in Cartesian momentum space     
+
+        'ky [1/A]' : vector_like, shape (n,1) 
+        y-coordinate in Cartesian momentum space 
+
+        'kz [1/A]' : vector_like, shape (n,1) 
+        z-coordinate in Cartesian momentum space 
+
+    enk : dataframe containing 
+        k_inds : vector_like, shape (n,1) 
+        Index of k point 
+
+        band_inds : vector_like, shape (n,1) 
+        Band index 
+
+        energy [Ryd] : vector_like, shape (n,1) 
+        Energy associated with k point in Rydberg units 
+
+    Returns: 
+    --------- 
+    No variable returns. Just plots the dispersion  
+    '''
+    
+    # Lattice constant and reciprocal lattice vectors 
+    # b1 = 2 pi/a (kx - ky + kz) 
+    # b2 = 2 pi/a (kx + ky - kz) 
+    # b3 = 2 pi/a (-kx + ky + kz) 
+    a = 5.556 #[A] 
+    b1 = (2*np.pi/a) * np.array([1, -1, 1]) 
+    b2 = (2*np.pi/a) * np.array([1, 1, -1]) 
+    b3 = (2*np.pi/a) * np.array([-1, 1, 1]) 
+
+    # L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 
+    # X point in BZ is given by 0.5*b2 + 0.5*b3 
+    lpoint = 0.5 * (b1 + b2 + b3) 
+    xpoint = 0.5 * (b2 + b3) 
+
+    # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. 
+    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies 
+    deg2rad = 2*np.pi/360 
+    ang_tol = 1 * deg2rad  # 1 degree in radians 
+
+    enkonly = np.array(enk['energy [Ryd]'])[:, np.newaxis] 
+    kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) 
+    kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] 
+
+    dot_l = np.zeros(len(kpts))
+    dot_x = np.zeros(len(kpts))
+
+    # Separate assignment for gamma point to avoid divide by zero error
+    nongamma = kptsmag!=0
+    dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) 
+    dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) 
+    dot_l[np.squeeze(kptsmag==0)] = 0 
+    dot_x[np.squeeze(kptsmag==0)] = 0 
+
+    lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))
+    xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))
+
+    plt.figure() 
+    plt.plot(kptsmag[lpath], enkonly[lpath], '.') 
+    plt.plot(-1*kptsmag[xpath], enkonly[xpath], '.') 
+    plt.xlabel('k magnitude') 
+    plt.ylabel('Energy in Ry')
+    plt.show()
+
+
+# In[111]:
+
+
+plot_bandstructure(cart_kpts_df, enk_df)
+
+
+# In[112]:
+
+
+# plot_bandstructure(edit_cart_qpts_df, enq_df)
+kpts = cart_kpts_df
+enk = enk_df
+
+kpts = edit_cart_qpts_df
+enk = enq_df
+
+a = 5.556 #[A] 
+b1 = (2*np.pi/a) * np.array([1, -1, 1]) 
+b2 = (2*np.pi/a) * np.array([1, 1, -1]) 
+b3 = (2*np.pi/a) * np.array([-1, 1, 1]) 
+
+# L point in BZ is given by 0.5*b1 + 0.5*b2 + 0.5*b3 
+# X point in BZ is given by 0.5*b2 + 0.5*b3 
+lpoint = 0.5 * (b1 + b2 + b3) 
+xpoint = 0.5 * (b2 + b3) 
+
+# We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors. 
+# Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies 
+deg2rad = 2*np.pi/360 
+ang_tol = 1 * deg2rad  # 1 degree in radians 
+
+kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2*np.pi/a) 
+kptsmag = np.linalg.norm(kptsonly, axis=1)[:, np.newaxis] 
+
+print(kptsonly.shape)
+print(kptsmag.shape)
+
+dot_l = np.zeros(len(kpts))
+dot_x = np.zeros(len(kpts))
+
+# Separate assignment for gamma point to avoid divide by zero error
+nongamma = kptsmag!=0
+dot_l[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, lpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(lpoint) 
+dot_x[np.squeeze(nongamma)] = np.divide(np.dot(kptsonly, xpoint[:, np.newaxis])[nongamma], kptsmag[nongamma]) / np.linalg.norm(xpoint) 
+dot_l[np.squeeze(kptsmag==0)] = 0 
+dot_x[np.squeeze(kptsmag==0)] = 0 
+
+lpath = np.logical_or(np.arccos(dot_l) < ang_tol, np.squeeze(kptsmag == 0))
+xpath = np.logical_or(np.arccos(dot_x) < ang_tol, np.squeeze(kptsmag == 0))
+
+# Need to reshape the energy dataframe for easy plotting if there are multiple bands
+enk_ra = np.array(enk.iloc[:,:])
+enk_ra.sort(axis=0)
+nk = int(np.max(enk_ra[:, 0]))  # nk = number of kpts = highest kpts index
+if np.mod(len(enk_ra), nk) != 0:
+    exit('Something is wack with the number of bands and kpoints in the array')
+else:
+    nb = int(len(enk_ra) / nk)
+enkonly = enk_ra[:, 2]
+enk_by_band = np.reshape(enkonly, (nk, nb), order='C')
+
+print(enk_by_band.shape)
+
+plt.figure()
+for b in range(nb):
+    plt.plot(kptsmag[lpath], enk_by_band[lpath, b], '.', color='C0') 
+    plt.plot(-1*kptsmag[xpath], enk_by_band[xpath, b], '.', color='C1') 
+plt.xlabel('k magnitude') 
+plt.ylabel('Energy in Ry')
+plt.show()
+

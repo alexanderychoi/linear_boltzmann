@@ -244,7 +244,7 @@ DFPT \sep hot-electron noise \sep semiconductor-amplifiers
 
 \noindent The appropriate initial condition is $g_{n,\mathbf{k}}(t=0) = (v_x - v_d) f_{n,\mathbf{k}}$. Sums over this effective distribution function yield the non-equilibrium diffusion coefficient. 
 
-\noindent It is instructive to consider how one would solve the first problem, Eqn.\ref{steady}, the steady Boltzmann equation for the deviational steady distribution $\delta f_{n,\mathbf{k}}$. We can postulate the existence of a solution of the form $\delta f_{n,\mathbf{k}} = e^{- \tilde{A} k_x} z_{n,\mathbf{k}}$. $z_{n,\mathbf{k}}$ is some unknown function and the preceding function is the matrix exponential of $\tilde{A} = \frac{h}{eE} A$. In light of this new notation, the steady Boltzmann equation can be written:
+\noindent It is instructive to consider how one would solve the first problem, Eqn.\ref{steady}, the steady Boltzmann equation for the deviational steady distribution $\delta f_{n,\mathbf{k}}$. We can postulate the existence of a solution of the form $\delta f_{n,\mathbf{k}} = e^{-k_x \tilde{A}} z_{n,\mathbf{k}}$. $z_{n,\mathbf{k}}$ is some unknown function and the preceding function is the matrix exponential of $\tilde{A} = \frac{h}{eE} A$. In light of this new notation, the steady Boltzmann equation can be written:
 
 \begin{equation}
     \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = -\tilde{A} \delta f_{n,\mathbf{k}} + \frac{\hbar v_x}{k_B T} f_{n,\mathbf{k}}^0
@@ -253,25 +253,25 @@ DFPT \sep hot-electron noise \sep semiconductor-amplifiers
 Differentiating the proposed solution results in the following expression.
 
 \begin{multline}
-    \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = (e^{- \tilde{A} k_x})' z_{n,\mathbf{k}} + e^{- \tilde{A} k_x} z_{n,\mathbf{k}}' = -\tilde{A} e^{- \tilde{A} k_x} z_{n,\mathbf{k}} + e^{- \tilde{A} k_x} z_{n,\mathbf{k}}' = -\tilde{A} \delta f_{n,\mathbf{k}} + e^{- \tilde{A} k_x} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} 
+    \frac{\partial \delta f_{n,\mathbf{k}}}{\partial k_x} = (e^{-k_x \tilde{A}})' z_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}}' = -\tilde{A} e^{-k_x \tilde{A}} z_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}}' = -\tilde{A} \delta f_{n,\mathbf{k}} + e^{-k_x \tilde{A}} z_{n,\mathbf{k}} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} 
 \end{multline}
 
 \noindent Of course this relationship implies the following constraint on $z_{n,\mathbf{k}}$.
 
 \begin{equation}
-    e^{- \tilde{A} k_x} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} = \frac{\hbar v_x}{k_B T} f_{n,\mathbf{k}}^0
+    e^{-k_x \tilde{A}} \frac{\partial z_{n,\mathbf{k}}}{\partial k_x} = \frac{\hbar v_x}{k_B T} f_{n,\mathbf{k}}^0
 \end{equation}
 
 \noindent Which can be rearranged to show:
 
 \begin{equation}
-    z_{n,\mathbf{k}} = \int_{-\infty}^{k_x} d\mu \, e^{\tilde{A} \mu} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + B
+    z_{n,\mathbf{k}} = \int_{-\infty}^{k_x} d\mu \, e^{\mu \tilde{A}} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + B
 \end{equation}
 
 \noindent Therefore the solution to the steady linear Boltzmann equation can be expressed:
 
 \begin{equation}
-    \delta f_{n,\mathbf{k}} = e^{- \tilde{A} k_x} z_{n,\mathbf{k}} = e^{- \tilde{A} k_x} \,  \int_{-\infty}^{k_x} d\mu \, e^{\tilde{A} \mu} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + e^{- \tilde{A} k_x} B
+    \delta f_{n,\mathbf{k}} = e^{-k_x \tilde{A}} z_{n,\mathbf{k}} = e^{-k_x \tilde{A}} \,  \int_{-\infty}^{k_x} d\mu \, e^{\mu \tilde{A}} \, \frac{\hbar v_x(\mu)}{k_B T} f_{n,\mu}^0 + e^{-k_x \tilde{A}} B
 \end{equation}
 
 \noindent B is determined by the condition $\delta f_{n,\mathbf{k}}(k_x = -\infty) = 0$. Thus it is seen that the solution to the steady BKE can be obtained by taking the appropriate summations over the matrix exponential of the linear collision matrix. We need to look into efficient numerical methods for performing these summations. Basically its going to be efficient diagonalization to calculate the matrix exponential for sparse matrix, then efficient parallelized matrix product sums.
