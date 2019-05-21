@@ -98,6 +98,8 @@ def main():
     mu = 5.780                       # Chemical potential [eV]
     b = 8/1000                       # Gaussian broadening [eV]
 
+    g_df, kpts_df, enk_df, qpts_df, enq_df = data_processing.loadfromfile()
+
     check_symmetric(np.abs(collision_array))
 
 

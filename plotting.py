@@ -2,6 +2,8 @@
 
 import data_processing
 
+import pandas as pd
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
@@ -12,7 +14,7 @@ import plotly
 plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
-def bz_3dscatter():
+def bz_3dscatter(cart_kpts_df):
     trace1 = go.Scatter3d(
         x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / (a)),
         y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / (a)),

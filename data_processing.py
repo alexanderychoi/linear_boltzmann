@@ -11,6 +11,7 @@ import numpy as np
 import skimage
 import skimage.filters
 
+import os
 import pandas as pd
 import scipy.optimize
 import scipy.stats as st
@@ -30,31 +31,37 @@ import matplotlib.cm as cm
 import plotly.offline as py
 import plotly.graph_objs as go
 import plotly
-# plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
 plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
-def loadfromfile():
+class physical_constants:
+    """A class with constants to be passed into any method"""
     # Physical parameter definition
     a = 5.556                        # Lattice constant for GaAs [A]
     kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    T = 300                          # Lattice temeprature [K]
+    T = 300                          # Lattice temperature [K]
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
     mu = 5.780                       # Chemical potential [eV]
     b = 8/1000                       # Gaussian broadening [eV]
 
-    # Take the raw text files and convert them into useful dataframes.
 
-    data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
-    data.columns = ['0']
-    data_array = data['0'].values
-    new_array = np.zeros((len(data_array),7))
-    for i1 in trange(len(data_array)):
-        new_array[i1,:] = data_array[i1].split()
+def loadfromfile():
+    """Takes the raw text files and converts them into useful dataframes."""
+    if os.path.isfile('matrix_el.h5'):
+        g_df = pd.read_hdf('matrix_el.h5', key='df')
+        print('loaded matrix elements from hdf5')
+    else:
+        data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
+        data.columns = ['0']
+        data_array = data['0'].values
+        new_array = np.zeros((len(data_array),7))
+        for i1 in trange(len(data_array)):
+            new_array[i1,:] = data_array[i1].split()
 
-    g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
-    g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-    g_df = g_df.drop(["m_band", "n_band"],axis=1)
+        g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+        g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+        g_df = g_df.drop(["m_band", "n_band"],axis=1)
+        g_df.to_hdf('matrix_el.h5', key='df')
 
     # Importing electron k points
     kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
@@ -114,13 +121,12 @@ def loadfromfile():
     return g_df, kpts_df, enk_df, qpts_df, enq_df
 
 
-## Data Processing (Alex Updated: 4/30)
-
-
-def cartesian_q_points(qpts_df):
+def cartesian_q_points(qpts_df, con):
     """Given a dataframe containing indexed q-points in terms of the crystal lattice vector, return the dataframe with cartesian q coordinates.
     Parameters:
     -----------
+    con :  instance of the physical_constants class
+
     qpts_df : pandas dataframe containing:
         
         q_inds : vector_like, shape (n,1)
@@ -158,10 +164,6 @@ def cartesian_q_points(qpts_df):
         kz : vector_like, shape (n,1)
         z-coordinate in Cartesian momentum space [1/m]  
     """
-    
-    # Need a lattice constant for GaAs. This is obviously somewhat sensitive to temperature.
-    a = 5.556  # [A]
-    
     cartesian_df = pd.DataFrame(columns = ['q_inds','kx [1/A]','ky [1/A]','kz [1/A]'])
     
     con1 = pd.DataFrame(columns = ['kx [1/A]','ky [1/A]','kz [1/A]'])
@@ -176,8 +178,7 @@ def cartesian_q_points(qpts_df):
     con3 = con1.copy(deep=True)
     con3['ky [1/A]'] = con2['ky [1/A]'].values
     con3['kz [1/A]'] = con3['kz [1/A]'].values*-1
-    
-    
+
     cartesian_df['kx [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kx [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kx [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kx [1/A]'].values))
     cartesian_df['ky [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['ky [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['ky [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['ky [1/A]'].values))
     cartesian_df['kz [1/A]'] = np.multiply(qpts_df['b1'].values,(con1['kz [1/A]'].values)) + np.multiply(qpts_df['b2'].values,(con2['kz [1/A]'].values)) + np.multiply(qpts_df['b3'].values,(con3['kz [1/A]'].values))
@@ -195,26 +196,21 @@ def cartesian_q_points(qpts_df):
     qz_plus = cartesian_df['kz [1/A]'] > 0.5
     qz_minus = cartesian_df['kz [1/A]'] < -0.5
 
-    cartesian_df_edit.loc[qx_plus,'kx [1/A]'] = cartesian_df.loc[qx_plus,'kx [1/A]'] -1
-    cartesian_df_edit.loc[qx_minus,'kx [1/A]'] = cartesian_df.loc[qx_minus,'kx [1/A]'] +1
+    cartesian_df_edit.loc[qx_plus,'kx [1/A]'] = cartesian_df.loc[qx_plus,'kx [1/A]'] - 1
+    cartesian_df_edit.loc[qx_minus,'kx [1/A]'] = cartesian_df.loc[qx_minus,'kx [1/A]'] + 1
 
-    cartesian_df_edit.loc[qy_plus,'ky [1/A]'] = cartesian_df.loc[qy_plus,'ky [1/A]'] -1
-    cartesian_df_edit.loc[qy_minus,'ky [1/A]'] = cartesian_df.loc[qy_minus,'ky [1/A]'] +1
+    cartesian_df_edit.loc[qy_plus,'ky [1/A]'] = cartesian_df.loc[qy_plus,'ky [1/A]'] - 1
+    cartesian_df_edit.loc[qy_minus,'ky [1/A]'] = cartesian_df.loc[qy_minus,'ky [1/A]'] + 1
 
-    cartesian_df_edit.loc[qz_plus,'kz [1/A]'] = cartesian_df.loc[qz_plus,'kz [1/A]'] -1
-    cartesian_df_edit.loc[qz_minus,'kz [1/A]'] = cartesian_df.loc[qz_minus,'kz [1/A]'] +1
+    cartesian_df_edit.loc[qz_plus,'kz [1/A]'] = cartesian_df.loc[qz_plus,'kz [1/A]'] - 1
+    cartesian_df_edit.loc[qz_minus,'kz [1/A]'] = cartesian_df.loc[qz_minus,'kz [1/A]'] + 1
     
     return cartesian_df,cartesian_df_edit
 
 
-a = 5.556  # [A]
-kb = 1.38064852*10**(-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-T = 300
-e = 1.602*10**(-19)
-
-def shift_into_fbz(qpts_df):
-    # Shifting k vectors back into BZ
-    kvel = pd.read_csv('gaas.vel', sep='\t',header= None,skiprows=[0,1,2])
+def shift_into_fbz(qpts_df, con):
+    """Shifting k vectors back into BZ."""
+    kvel = pd.read_csv('gaas.vel', sep='\t', header=None, skiprows=[0, 1, 2])
     kvel.columns = ['0']
     kvel_array = kvel['0'].values
     new_kvel_array = np.zeros((len(kvel_array),10))
@@ -249,18 +245,15 @@ def shift_into_fbz(qpts_df):
     kvel_df.head()
 
     cart_kpts_df = kvel_df.copy(deep=True)
-    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/a
-    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/a
-    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/a
+    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/con.a
+    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/con.a
+    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/con.a
 
     cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
 
     # Making Cartesian qpoints
     cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
     return cart_qpts_df,edit_cart_qpts_df
-
-
-
 
 
 def fermi_distribution(g_df,mu,T):
@@ -321,7 +314,6 @@ def fermi_distribution(g_df,mu,T):
     # Physical constants    
     e = 1.602*10**(-19) # fundamental electronic charge [C]
     kb = 1.38064852*10**(-23); # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-
 
     g_df['k_FD'] = (np.exp((g_df['k_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)
     g_df['k+q_FD'] = (np.exp((g_df['k+q_en [eV]'].values*e - mu*e)/(kb*T)) + 1)**(-1)
@@ -764,7 +756,6 @@ def scattering_rate(g_df):
 # In[120]:
 
 
-
 # plt.rcParams.update({'font.size': 40})
 # plt.rcParams.update({'lines.linewidth': 3.5})
 #
@@ -983,21 +974,25 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 
 def main():
-    # Physical parameter definition
-    a = 5.556                        # Lattice constant for GaAs [A]
-    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    T = 300                          # Lattice temeprature [K]
-    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
-    mu = 5.780                       # Chemical potential [eV]
-    b = 8/1000                       # Gaussian broadening [eV]
+
+    con = physical_constants()
+
+    g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile()
 
     # At this point, the processed data are:
-    # e-ph matrix elements = g_df[['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']]
-    # k-points = kpts_df[['k_inds','b1','b2','b3']]
-    # q-points = qpts_df[['q_inds','b1','b2','b3']]
-    # k-energy = enk_df[['k_inds','band_inds','energy [Ryd]']]
-    # q-energy = enq_df[['q_inds','im_mode','energy [Ryd]']]
-    loadfromfile()
+    # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
+    # k-points = kpts_df['k_inds','b1','b2','b3']
+    # q-points = qpts_df['q_inds','b1','b2','b3']
+    # k-energy = enk_df['k_inds','band_inds','energy [Ryd]']
+    # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
+
+    cartesian_df, cartesian_df_edit = cartesian_q_points(qpts_df, con)
+
+    shift_into_fbz(qpts_df, con)
+
+
+
+
 
 
 if __name__ == '__main__':
