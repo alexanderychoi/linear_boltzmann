@@ -6,7 +6,7 @@ from tqdm import tqdm, trange
 
 # Load in the data from native .txt files
 
-def load_vel_data(dirname):
+def load_vel_data(dirname,cons):
     """Dirname is the name of the directory where the .VEL file is stored.
     The k-points are given in Cartesian coordinates and are not yet shifted
     back into the first Brillouin Zone.
@@ -258,7 +258,190 @@ def populate_reciprocals(g_df,b):
     return full_g_df
 
 
+class physical_constants:
+    """A class with constants to be passed into any method"""
+    # Physical parameter definition
+    a = 5.556                        # Lattice constant for GaAs [A]
+    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    T = 300                          # Lattice temperature [K]
+    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
+    mu = 5.780                       # Chemical potential [eV]
+    b = 8/1000                       # Gaussian broadening [eV]
 
+
+def loadfromfile():
+    """Takes the raw text files and converts them into useful dataframes."""
+    if os.path.isfile('matrix_el.h5'):
+        g_df = pd.read_hdf('matrix_el.h5', key='df')
+        print('loaded matrix elements from hdf5')
+    else:
+        data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
+        data.columns = ['0']
+        data_array = data['0'].values
+        new_array = np.zeros((len(data_array),7))
+        for i1 in trange(len(data_array)):
+            new_array[i1,:] = data_array[i1].split()
+
+        g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+        g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+        g_df = g_df.drop(["m_band", "n_band"],axis=1)
+        g_df.to_hdf('matrix_el.h5', key='df')
+
+
+def cartesian_q_points(qpts_df, con):
+    """Given a dataframe containing indexed q-points in terms of the crystal lattice vector, return the dataframe with cartesian q coordinates.
+    Parameters:
+    -----------
+    con :  instance of the physical_constants class
+    qpts_df : pandas dataframe containing:
+
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+
+        kx : vector_like, shape (n,1)
+        x-coordinate in momentum space [1/A]
+
+        ky : vector_like, shape (n,1)
+        y-coordinate in momentum space [1/A]
+
+        kz : vector_like, shape (n,1)
+        z-coordinate in momentum space [1/A]
+
+    For FCC lattice, use the momentum space primitive vectors as per:
+    http://lampx.tugraz.at/~hadley/ss1/bzones/fcc.php
+
+    b1 = 2 pi/a (kx - ky + kz)
+    b2 = 2 pi/a (kx + ky - kz)
+    b3 = 2 pi/a (-kx + ky + kz)
+
+    Returns:
+    --------
+    cart_kpts_df : pandas dataframe containing:
+
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+
+        kx : vector_like, shape (n,1)
+        x-coordinate in Cartesian momentum space [1/m]
+
+        ky : vector_like, shape (n,1)
+        y-coordinate in Cartesian momentum space [1/m]
+
+        kz : vector_like, shape (n,1)
+        z-coordinate in Cartesian momentum space [1/m]
+    """
+    cartesian_df = pd.DataFrame(columns=['q_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+
+    con1 = pd.DataFrame(columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+    con1['kx [1/A]'] = np.ones(len(qpts_df)) * -1
+    con1['ky [1/A]'] = np.ones(len(qpts_df)) * -1
+    con1['kz [1/A]'] = np.ones(len(qpts_df)) * 1
+
+    con2 = con1.copy(deep=True)
+    con2['kx [1/A]'] = con2['kx [1/A]'].values * -1
+    con2['ky [1/A]'] = con2['ky [1/A]'].values * -1
+
+    con3 = con1.copy(deep=True)
+    con3['ky [1/A]'] = con2['ky [1/A]'].values
+    con3['kz [1/A]'] = con3['kz [1/A]'].values * -1
+
+    cartesian_df['kx [1/A]'] = np.multiply(qpts_df['b1'].values, (con1['kx [1/A]'].values)) + np.multiply(
+        qpts_df['b2'].values, (con2['kx [1/A]'].values)) + np.multiply(qpts_df['b3'].values, (con3['kx [1/A]'].values))
+    cartesian_df['ky [1/A]'] = np.multiply(qpts_df['b1'].values, (con1['ky [1/A]'].values)) + np.multiply(
+        qpts_df['b2'].values, (con2['ky [1/A]'].values)) + np.multiply(qpts_df['b3'].values, (con3['ky [1/A]'].values))
+    cartesian_df['kz [1/A]'] = np.multiply(qpts_df['b1'].values, (con1['kz [1/A]'].values)) + np.multiply(
+        qpts_df['b2'].values, (con2['kz [1/A]'].values)) + np.multiply(qpts_df['b3'].values, (con3['kz [1/A]'].values))
+
+    cartesian_df['q_inds'] = qpts_df['q_inds'].values
+
+    cartesian_df_edit = cartesian_df.copy(deep=True)
+
+    qx_plus = cartesian_df['kx [1/A]'] > 0.5
+    qx_minus = cartesian_df['kx [1/A]'] < -0.5
+
+    qy_plus = cartesian_df['ky [1/A]'] > 0.5
+    qy_minus = cartesian_df['ky [1/A]'] < -0.5
+
+    qz_plus = cartesian_df['kz [1/A]'] > 0.5
+    qz_minus = cartesian_df['kz [1/A]'] < -0.5
+
+    cartesian_df_edit.loc[qx_plus, 'kx [1/A]'] = cartesian_df.loc[qx_plus, 'kx [1/A]'] - 1
+    cartesian_df_edit.loc[qx_minus, 'kx [1/A]'] = cartesian_df.loc[qx_minus, 'kx [1/A]'] + 1
+
+    cartesian_df_edit.loc[qy_plus, 'ky [1/A]'] = cartesian_df.loc[qy_plus, 'ky [1/A]'] - 1
+    cartesian_df_edit.loc[qy_minus, 'ky [1/A]'] = cartesian_df.loc[qy_minus, 'ky [1/A]'] + 1
+
+    cartesian_df_edit.loc[qz_plus, 'kz [1/A]'] = cartesian_df.loc[qz_plus, 'kz [1/A]'] - 1
+    cartesian_df_edit.loc[qz_minus, 'kz [1/A]'] = cartesian_df.loc[qz_minus, 'kz [1/A]'] + 1
+
+    return cartesian_df, cartesian_df_edit
+
+
+def shift_into_fbz(qpts_df,kvel_df, con):
+    """Shifting k vectors back into BZ."""
+
+    kvel_edit = kvel_df.copy(deep=True)
+
+    # Shift the points back into the first BZ
+    kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
+    kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
+
+    ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
+    ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
+
+    kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
+    kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
+
+    kvel_edit.loc[kx_plus, 'kx [2pi/alat]'] = kvel_df.loc[kx_plus, 'kx [2pi/alat]'] -1
+    kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
+
+    kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
+    kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
+
+    kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
+    kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
+
+    kvel_df = kvel_edit.copy(deep=True)
+    kvel_df.head()
+
+    cart_kpts_df = kvel_df.copy(deep=True)
+    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/con.a
+    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values*2*np.pi/con.a
+    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values*2*np.pi/con.a
+
+    cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
+
+    # Making Cartesian qpoints
+    cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
+    return cart_qpts_df,edit_cart_qpts_df
+
+
+
+def main():
+
+    con = physical_constants()
+    enq_df = load_enq_data()
+    enk_df = load_enk_data()
+    qpt_df = load_qpt_data()
+    cart_kpts_df = load_vel_data()
+    g_df = loadfromfile()
+
+    # At this point, the processed data are:
+    # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
+    # k-points = kpts_df['k_inds','b1','b2','b3']
+    # q-points = qpts_df['q_inds','b1','b2','b3']
+    # k-energy = enk_df['k_inds','band_inds','energy [Ryd]']
+    # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
+
+    cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
+
+
+
+
+
+
+if __name__ == '__main__':
+    main()
 
 
 
