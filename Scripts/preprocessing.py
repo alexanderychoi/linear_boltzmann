@@ -1,6 +1,7 @@
 import numpy as np
 import itertools
 import plotly
+import os
 import pandas as pd
 from tqdm import tqdm, trange
 
@@ -24,9 +25,9 @@ def load_vel_data(dirname,cons):
                                     'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
     kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric, downcast='integer') # downcast indices to integer
     cart_kpts_df = kvel_df.copy(deep=True)
-    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values * 2 * np.pi / a
-    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values * 2 * np.pi / a
-    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values * 2 * np.pi / a
+    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values * 2 * np.pi / cons.a
+    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values * 2 * np.pi / cons.a
+    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values * 2 * np.pi / cons.a
     cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
                             'vz_dir', 'v_mag [m/s]']
     cart_kpts_df = cart_kpts_df.drop(['bands'], axis=1)
@@ -420,11 +421,16 @@ def shift_into_fbz(qpts_df,kvel_df, con):
 def main():
 
     con = physical_constants()
-    enq_df = load_enq_data()
-    enk_df = load_enk_data()
-    qpt_df = load_qpt_data()
-    cart_kpts_df = load_vel_data()
+    enq_df = load_enq_data('gaas.enq')
+    print('Phonon energies loaded')
+    qpt_df = load_qpt_data('gaas.qpts')
+    print('\n')
+    print('Phonon qpts loaded')
+    cart_kpts_df = load_vel_data('gaas.vel',con)
+    print('Electron kpts loaded')
+    print('Electron energies loaded')
     g_df = loadfromfile()
+    print('E-ph data loaded')
 
     # At this point, the processed data are:
     # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
@@ -434,11 +440,6 @@ def main():
     # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
 
     cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
-
-
-
-
-
 
 if __name__ == '__main__':
     main()
