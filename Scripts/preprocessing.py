@@ -30,7 +30,14 @@ def load_vel_data(dirname,cons):
     cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values * 2 * np.pi / cons.a
     cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
                             'vz_dir', 'v_mag [m/s]']
+
+    cart_kpts_df['vx [m/s]'] = np.multiply(cart_kpts_df['vx_dir'].values,cart_kpts_df['v_mag [m/s]'])
+
     cart_kpts_df = cart_kpts_df.drop(['bands'], axis=1)
+    cart_kpts_df = cart_kpts_df.drop(['vx_dir','vy_dir','vz_dir','v_mag [m/s]'], axis=1)
+
+    cart_kpts_df['FD'] = (np.exp((cart_kpts_df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb * cons.T)) + 1) ** (-1)
+
 
     return cart_kpts_df
 
@@ -164,6 +171,7 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T):
     g_df['k_id'] = g_df.sort_values(['k_inds'], ascending=True).groupby(['k_inds']).ngroup()
     g_df['k_en [eV]'] = modified_k_df['energy'].values[g_df['k_id'].values]
 
+
     g_df['kx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k_id'].values]
     g_df['ky [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k_id'].values]
     g_df['kz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k_id'].values]
@@ -185,6 +193,7 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T):
     modified_k_df['k+q_id'] = modified_k_df.groupby(['k_inds']).ngroup()
     g_df['k+q_id'] = g_df.sort_values(['k+q_inds'], ascending=True).groupby(['k+q_inds']).ngroup()
     g_df['k+q_en [eV]'] = modified_k_df['energy'].values[g_df['k+q_id'].values]
+
 
     g_df['kqx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k+q_id'].values]
     g_df['kqy [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k+q_id'].values]
@@ -256,6 +265,8 @@ def populate_reciprocals(g_df,b):
 
     full_g_df = gaussian_weight(full_g_df, b)
 
+    # full_g_df.to_hdf('full_matrix_el.h5', key='df')
+
     return full_g_df
 
 
@@ -268,6 +279,7 @@ class physical_constants:
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
     mu = 5.780                       # Chemical potential [eV]
     b = 8/1000                       # Gaussian broadening [eV]
+    h = 1.054*10**(-34)              # Reduced Planck's constant [J/s]
 
 
 def loadfromfile():
@@ -287,6 +299,8 @@ def loadfromfile():
         g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
         g_df = g_df.drop(["m_band", "n_band"],axis=1)
         g_df.to_hdf('matrix_el.h5', key='df')
+
+    return g_df
 
 
 def cartesian_q_points(qpts_df, con):
@@ -417,9 +431,42 @@ def shift_into_fbz(qpts_df,kvel_df, con):
     return cart_qpts_df,edit_cart_qpts_df
 
 
+def relaxation_times(g_df,cart_kpts_df):
+    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127"""
+    g_df['ems_weight'] = np.multiply(
+        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+        g_df['ems_gaussian']) / 13.6056980659
+    g_df['abs_weight'] = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+                                     g_df['abs_gaussian']) / 13.6056980659
+
+    g_df['weight'] = g_df['ems_weight'].values + g_df['abs_weight'].values
+
+    sr = g_df.groupby(['k_inds'])['weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+        np.unique(g_df['q_id'].values))
+    scattering = sr.to_frame().reset_index()
+
+    scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
+
+    return scattering_array
+
+
+def RTA_calculation(g_df,cart_kpts_df,E,cons):
+    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time approximation."""
+
+    scattering_array = relaxation_times(g_df,cart_kpts_df) # in seconds
+
+    diagonal_arg = cons.h/(cons.e*E)*scattering_array
+    matrix_exp = np.diag(np.exp(diagonal_arg))
+    inhomo = cons.h/(cons.kb*cons.T)*cart_kpts_df['vx [m/s]'].values*cart_kpts_df['FD'].values
+    factor = np.multiply(np.dot(matrix_exp,inhomo),cart_kpts_df['kx [1/A]'].values)*10**(10)
+    cart_kpts_df['factor'] = factor
+
+    return cart_kpts_df
+
 
 def main():
-
+    print('wut')
     con = physical_constants()
     enq_df = load_enq_data('gaas.enq')
     print('Phonon energies loaded')
@@ -440,6 +487,60 @@ def main():
     # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
 
     cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
+
+    print('Data loading completed. Starting data processing:')
+    g_df = bosonic_processing(g_df,enq_df,con.T)
+    print('Bosonic processing completed')
+    g_df = fermionic_processing(g_df,cart_kpts_df,con.mu,con.T)
+    print('Fermionic processing completed')
+    full_g_df = populate_reciprocals(g_df,con.b)
+    print('Reciprocals populated')
+    del g_df
+    full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
+                           'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
+                           'k_FD', 'k+q_FD', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
+                           'kqy [1/A]', 'kqz [1/A]', 'k_pair_id', 'abs_gaussian', 'ems_gaussian']]
+    print('g_dataframe processed')
+
+    cart_kpts_df = RTA_calculation(full_g_df, cart_kpts_df, 1, con)
+
+    cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]'], ascending=True).groupby(
+        ['ky [1/A]', 'kz [1/A]']).ngroup()
+
+    print(cart_kpts_df.head())
+
+    mod_cart_kpts_df = cart_kpts_df.loc[cart_kpts_df['slice_inds'] < 5].copy(deep=True)
+
+    import plotly.plotly as py
+    import plotly.graph_objs as go
+
+    import numpy as np
+
+    trace1 = go.Scatter3d(
+        x=mod_cart_kpts_df['kx [1/A]'],
+        y=mod_cart_kpts_df['ky [1/A]'],
+        z=mod_cart_kpts_df['kz [1/A]'],
+        mode='markers',
+        marker=dict(
+            size=12,
+            color=mod_cart_kpts_df['slice_inds'],  # set color to an array/list of desired values
+            colorscale='Viridis',  # choose a colorscale
+            opacity=0.8
+        )
+    )
+
+    data = [trace1]
+    layout = go.Layout(
+        margin=dict(
+            l=0,
+            r=0,
+            b=0,
+            t=0
+        )
+    )
+    fig = go.Figure(data=data, layout=layout)
+    py.iplot(fig, filename='3d-scatter-colorscale')
+
 
 if __name__ == '__main__':
     main()
