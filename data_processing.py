@@ -6,6 +6,7 @@ Jin Jian Zhou for GaAs.
 """
 
 import numpy as np
+import plotting
 
 # Image processing tools
 import skimage
@@ -31,37 +32,53 @@ import matplotlib.cm as cm
 import plotly.offline as py
 import plotly.graph_objs as go
 import plotly
-plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
+plotly.tools.set_credentials_file(username='peishi', api_key='KQcCXB5wcgednHNjbNqd')
+# plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
-class physical_constants:
+class PhysicalConstants:
     """A class with constants to be passed into any method"""
-    # Physical parameter definition
-    a = 5.556                        # Lattice constant for GaAs [A]
+    # Physical parameters
+    a = 5.5563606                    # Lattice constant for GaAs [Angstrom]
     kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
     T = 300                          # Lattice temperature [K]
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
     mu = 5.780                       # Chemical potential [eV]
     b = 8/1000                       # Gaussian broadening [eV]
 
+    # Lattice vectors
+    a1 = np.array([-2.7781803, 0.0000000, 2.7781803])
+    a2 = np.array([+0.0000000, 2.7781803, 2.7781803])
+    a3 = np.array([-2.7781803, 2.7781803, 0.0000000])
 
-def loadfromfile():
+    b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
+    b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
+    b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
+    # b1 = np.array([+1.1308095, -1.1308095, +1.1308095])
+    # b2 = np.array([+1.1308095, +1.1308095, -1.1308095])
+    # b3 = np.array([-1.1308095, +1.1308095, +1.1308095])
+
+
+def loadfromfile(matrixel=True):
     """Takes the raw text files and converts them into useful dataframes."""
-    if os.path.isfile('matrix_el.h5'):
-        g_df = pd.read_hdf('matrix_el.h5', key='df')
-        print('loaded matrix elements from hdf5')
-    else:
-        data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
-        data.columns = ['0']
-        data_array = data['0'].values
-        new_array = np.zeros((len(data_array),7))
-        for i1 in trange(len(data_array)):
-            new_array[i1,:] = data_array[i1].split()
+    if matrixel:  # maybe sometimes don't need matrix elements, just need the other data
+        if os.path.isfile('matrix_el.h5'):
+            g_df = pd.read_hdf('matrix_el.h5', key='df')
+            print('loaded matrix elements from hdf5')
+        else:
+            data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
+            data.columns = ['0']
+            data_array = data['0'].values
+            new_array = np.zeros((len(data_array),7))
+            for i1 in trange(len(data_array)):
+                new_array[i1,:] = data_array[i1].split()
 
-        g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
-        g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-        g_df = g_df.drop(["m_band", "n_band"],axis=1)
-        g_df.to_hdf('matrix_el.h5', key='df')
+            g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+            g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+            g_df = g_df.drop(["m_band", "n_band"],axis=1)
+            g_df.to_hdf('matrix_el.h5', key='df')
+    else:
+        g_df = []
 
     # Importing electron k points
     kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
@@ -104,8 +121,8 @@ def loadfromfile():
     for i1 in trange(len(qpts_array)):
         new_qpt_array[i1,:] = qpts_array[i1].split()
 
-    qpts_df = pd.DataFrame(data=new_qpt_array,columns = ['q_inds','b1','b2','b3'])
-    qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric,downcast = 'integer')
+    qpts_df = pd.DataFrame(data=new_qpt_array, columns=['q_inds', 'b1', 'b2', 'b3'])
+    qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
 
     # Import phonon energies
     enq = pd.read_csv('gaas.enq', sep='\t',header= None)
@@ -125,7 +142,7 @@ def cartesian_q_points(qpts_df, con):
     """Given a dataframe containing indexed q-points in terms of the crystal lattice vector, return the dataframe with cartesian q coordinates.
     Parameters:
     -----------
-    con :  instance of the physical_constants class
+    con :  instance of the PhysicalConstants class
 
     qpts_df : pandas dataframe containing:
         
@@ -208,41 +225,40 @@ def cartesian_q_points(qpts_df, con):
     return cartesian_df,cartesian_df_edit
 
 
-def shift_into_fbz(qpts_df, con):
-    """Shifting k vectors back into BZ."""
+def cartesian_kpts(con):
+    """This directly takes Cartesian kpoints from the velocity file"""
     kvel = pd.read_csv('gaas.vel', sep='\t', header=None, skiprows=[0, 1, 2])
     kvel.columns = ['0']
     kvel_array = kvel['0'].values
-    new_kvel_array = np.zeros((len(kvel_array),10))
+    new_kvel_array = np.zeros((len(kvel_array), 10))
     for i1 in trange(len(kvel_array)):
-        new_kvel_array[i1,:] = kvel_array[i1].split()
+        new_kvel_array[i1, :] = kvel_array[i1].split()
 
-    kvel_df = pd.DataFrame(data=new_kvel_array,columns = ['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])
-    kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric,downcast = 'integer')
+    kvel_df = pd.DataFrame(data=new_kvel_array, columns=['k_inds','bands','energy','kx [2pi/alat]','ky [2pi/alat]','kz [2pi/alat]','vx_dir','vy_dir','vz_dir','v_mag [m/s]'])
+    kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric, downcast='integer')
 
     kvel_edit = kvel_df.copy(deep=True)
 
-    # Shift the points back into the first BZ
-    kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
-    kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
-
-    ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
-    ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
-
-    kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
-    kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
-
-    kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1
-    kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
-
-    kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
-    kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
-
-    kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
-    kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
+    # # Shift the points back into the first BZ
+    # kx_plus = kvel_df['kx [2pi/alat]'] > 0.5
+    # kx_minus = kvel_df['kx [2pi/alat]'] < -0.5
+    #
+    # ky_plus = kvel_df['ky [2pi/alat]'] > 0.5
+    # ky_minus = kvel_df['ky [2pi/alat]'] < -0.5
+    #
+    # kz_plus = kvel_df['kz [2pi/alat]'] > 0.5
+    # kz_minus = kvel_df['kz [2pi/alat]'] < -0.5
+    #
+    # kvel_edit.loc[kx_plus,'kx [2pi/alat]'] = kvel_df.loc[kx_plus,'kx [2pi/alat]'] -1
+    # kvel_edit.loc[kx_minus,'kx [2pi/alat]'] = kvel_df.loc[kx_minus,'kx [2pi/alat]'] +1
+    #
+    # kvel_edit.loc[ky_plus,'ky [2pi/alat]'] = kvel_df.loc[ky_plus,'ky [2pi/alat]'] -1
+    # kvel_edit.loc[ky_minus,'ky [2pi/alat]'] = kvel_df.loc[ky_minus,'ky [2pi/alat]'] +1
+    #
+    # kvel_edit.loc[kz_plus,'kz [2pi/alat]'] = kvel_df.loc[kz_plus,'kz [2pi/alat]'] -1
+    # kvel_edit.loc[kz_minus,'kz [2pi/alat]'] = kvel_df.loc[kz_minus,'kz [2pi/alat]'] +1
 
     kvel_df = kvel_edit.copy(deep=True)
-    kvel_df.head()
 
     cart_kpts_df = kvel_df.copy(deep=True)
     cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values*2*np.pi/con.a
@@ -251,9 +267,7 @@ def shift_into_fbz(qpts_df, con):
 
     cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]','kz [1/A]', 'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
 
-    # Making Cartesian qpoints
-    cart_qpts_df,edit_cart_qpts_df = cartesian_q_points(qpts_df)
-    return cart_qpts_df,edit_cart_qpts_df
+    return cart_kpts_df, kvel
 
 
 def fermi_distribution(g_df,mu,T):
@@ -484,6 +498,7 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T,b):
     
     return g_df
 
+
 def gaussian_weight(g_df,n):
     """
     This function assigns the value of the delta function approximated by a Gaussian with broadening n.
@@ -511,6 +526,7 @@ def gaussian_weight(g_df,n):
     g_df.loc[ems_inds,'gaussian'] = 1/np.sqrt(np.pi)*1/n*np.exp(-(energy_delta_ems/n)**2)
     
     return g_df
+
 
 def populate_reciprocals(g_df):
     """
@@ -577,7 +593,6 @@ def populate_reciprocals(g_df):
 
     full_g_df = modified_g_df.append(reverse_df)
 
-    
     return full_g_df
 
 
@@ -972,26 +987,149 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 # np.sum(collision_array,axis=0)
 
+def vectorbasis2cartesian(coords, vecs):
+    """Transform any coordinates written in lattice vector basis into Cartesian coordinates
+
+    Given that the inputs are correct, then the transformation is a simple matrix multiply
+
+    Parameters:
+        vecs (numpy array): Array of vectors where the rows are the basis vectors given in Cartesian basis
+        coords (numpy array): Array of coordinates where each row is an independent point, so that column 1 corresponds
+            to the amount of the basis vector in row 1 of vecs, column 2 is amount of basis vector in row 2 of vecs...
+
+    Returns:
+        cartcoords (array): same size as coords but in Cartesian coordinates
+    """
+
+    cartcoords = np.matmul(coords, vecs)
+    return cartcoords
+
+
+def translate_into_fbz(coords, rlv):
+    """Manually translate coordinates back into first Brillouin zone
+
+    The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
+    with these planes. Since the FBZ is centered on Gamma, the position vectors of the high symmetry points are also
+    vectors normal to the plane. Once we have these vectors, we find the distance between a given point (u) and
+    a plane (n) using the dot product of the difference vector (u-n). And if the distance is positive, then translate
+    back into the FBZ.
+
+    Args:
+        rlv: numpy array of vectors where the rows are the reciprocal lattice vectors given in Cartesian basis
+        coords: numpy array of coordinates where each row is a point. For N points, coords is N x 3
+
+    Returns:
+        fbzcoords:
+    """
+    # First, find all the vectors defining the boundary
+    b1, b2, b3 = rlv[0, :], rlv[1, :], rlv[2, :]
+    b1pos = 0.5 * b1[:, np.newaxis]
+    b2pos = 0.5 * b2[:, np.newaxis]
+    b3pos = 0.5 * b3[:, np.newaxis]
+    lpos = 0.5 * (b1 + b2 + b3)[:, np.newaxis]
+    b1neg = -1 * b1pos
+    b2neg = -1 * b2pos
+    b3neg = -1 * b3pos
+    lneg = -1 * lpos
+    xpos = -0.5 * (b1 + b3)[:, np.newaxis]
+    ypos = 0.5 * (b2 + b3)[:, np.newaxis]
+    zpos = 0.5 * (b1 + b2)[:, np.newaxis]
+    xneg = -1 * xpos
+    yneg = -1 * ypos
+    zneg = -1 * zpos
+
+    # Place them into octants to avoid problems when finding points
+    # (naming is based on positive or negative for coordinate so octpmm means x+ y- z-. p=plus, m=minus)
+    vecs_ppp = np.concatenate((b2pos, xpos, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_ppm = np.concatenate((b1neg, xpos, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmm = np.concatenate((lneg, xpos, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmm = np.concatenate((b2neg, xneg, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmp = np.concatenate((b1pos, xneg, yneg, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpp = np.concatenate((lpos, xneg, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpm = np.concatenate((b3pos, xneg, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmp = np.concatenate((b3neg, xpos, yneg, zpos), axis=1)[:, :, np.newaxis]
+    # Construct matrix which is 3 x 4 x 8 where we have 3 Cartesian coordinates, 4 vectors per octant, and 8 octants
+    allvecs = np.concatenate((vecs_ppp, vecs_ppm, vecs_pmm, vecs_mmm, vecs_mmp, vecs_mpp, vecs_mpm, vecs_pmp), axis=2)
+
+    # Since the number of points in each octant is not equal, can't create array of similar shape. Instead the 'octant'
+    # array below is used as a boolean map where 1 (true) indicates positive, and 0 (false) indicates negative
+    octants = np.array([[1, 1, 1],
+                        [1, 1, 0],
+                        [1, 0, 0],
+                        [0, 0, 0],
+                        [0, 0, 1],
+                        [0, 1, 1],
+                        [0, 1, 0],
+                        [1, 0, 1]])
+
+    fbzcoords = np.copy(coords)
+    exitvector = np.zeros((8, 1))
+    iteration = 0
+    while not np.all(exitvector):  # don't exit until all octants have points inside
+        exitvector = np.zeros((8, 1))
+        for i in range(8):
+            oct_vecs = allvecs[:, :, i]
+            whichoct = octants[i, :]
+            if whichoct[0]:
+                xbool = fbzcoords[:, 0] > 0
+            else:
+                xbool = fbzcoords[:, 0] < 0
+            if whichoct[1]:
+                ybool = fbzcoords[:, 1] > 0
+            else:
+                ybool = fbzcoords[:, 1] < 0
+            if whichoct[2]:
+                zbool = fbzcoords[:, 2] > 0
+            else:
+                zbool = fbzcoords[:, 2] < 0
+            octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
+            octcoords = fbzcoords[octindex, :]
+            allplanes = 0
+            for j in range(oct_vecs.shape[1]):
+                diffvec = octcoords[:, :] - np.tile(oct_vecs[:, j], (octcoords.shape[0], 1))
+                dist2plane = np.dot(diffvec, oct_vecs[:, j]) / np.linalg.norm(oct_vecs[:, j])
+                outside = dist2plane[:] > 0
+                if np.any(outside):
+                    octcoords[outside, :] = octcoords[outside, :] - \
+                                            (2 * np.tile(oct_vecs[:, j], (np.count_nonzero(outside), 1)))
+                    # Times 2 because the vectors that define FBZ are half of the full recip latt vectors
+                    # print('number outside this plane is %d' % np.count_nonzero(outside))
+                else:
+                    allplanes += 1
+            if allplanes == 4:
+                exitvector[i] = 1
+            fbzcoords[octindex, :] = octcoords
+
+        iteration += 1
+        print(iteration)
+
+    print('Done bringing points into FBZ!')
+
+    return fbzcoords
+
 
 def main():
 
-    con = physical_constants()
+    con = PhysicalConstants()
+    reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
 
-    g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile()
+    g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile(matrixel=False)
 
-    # At this point, the processed data are:
-    # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
-    # k-points = kpts_df['k_inds','b1','b2','b3']
-    # q-points = qpts_df['q_inds','b1','b2','b3']
-    # k-energy = enk_df['k_inds','band_inds','energy [Ryd]']
-    # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
+    kpts = np.array(kpts_df[['b1', 'b2', 'b3']])
+    qpts = np.array(qpts_df[['b1', 'b2', 'b3']])
 
-    cartesian_df, cartesian_df_edit = cartesian_q_points(qpts_df, con)
+    cartkpts = vectorbasis2cartesian(kpts, reciplattvecs)
+    cartqpts = vectorbasis2cartesian(qpts, reciplattvecs)
 
-    shift_into_fbz(qpts_df, con)
+    # fbzcartkpts = translate_into_fbz(cartkpts, reciplattvecs)
+    fbzcartqpts = translate_into_fbz(cartqpts, reciplattvecs)
 
+    # plotting.bz_3dscatter(con, cartkpts, enk_df, useplotly=True)
+    # plotting.bz_3dscatter(con, fbzcartkpts, enk_df, useplotly=True)
+    # plotting.bz_3dscatter(con, cartqpts, enq_df, useplotly=True)
+    plotting.bz_3dscatter(con, fbzcartqpts, enq_df, useplotly=True)
 
-
+    # cartesian_df, cartesian_df_edit = cartesian_q_points(qpts_df, con)
 
 
 
