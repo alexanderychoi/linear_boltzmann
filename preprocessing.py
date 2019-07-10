@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+"""Data processing module for the electron-phonon collision matrix
+
+This is meant to be a frills-free calculation of the electron-phonon collision matrix utilizing the data from
+Jin Jian Zhou for GaAs.
+"""
+
 import numpy as np
 import itertools
 import plotly
@@ -5,7 +12,232 @@ import os
 import pandas as pd
 from tqdm import tqdm, trange
 
-# Load in the data from native .txt files
+import plotting
+
+
+class PhysicalConstants:
+    """A class with constants to be passed into any method"""
+    # Physical parameters
+    a = 5.5563606                    # Lattice constant for GaAs [Angstrom]
+    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    T = 300                          # Lattice temperature [K]
+    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
+    mu = 5.780                       # Chemical potential [eV]
+    b = 8/1000                       # Gaussian broadening [eV]
+    h = 1.054*10**(-34)              # Reduced Planck's constant [J/s]
+
+    # Lattice vectors
+    a1 = np.array([-2.7781803, 0.0000000, 2.7781803])
+    a2 = np.array([+0.0000000, 2.7781803, 2.7781803])
+    a3 = np.array([-2.7781803, 2.7781803, 0.0000000])
+
+    b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
+    b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
+    b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
+    # b1 = np.array([+1.1308095, -1.1308095, +1.1308095])
+    # b2 = np.array([+1.1308095, +1.1308095, -1.1308095])
+    # b3 = np.array([-1.1308095, +1.1308095, +1.1308095])
+
+
+def loadfromfile(matrixel=True):
+    """Takes the raw text files and converts them into useful dataframes."""
+    if matrixel:  # maybe sometimes don't need matrix elements, just need the other data
+        if os.path.isfile('matrix_el.h5'):
+            g_df = pd.read_hdf('matrix_el.h5', key='df')
+            print('loaded matrix elements from hdf5')
+        else:
+            data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
+            data.columns = ['0']
+            data_array = data['0'].values
+            new_array = np.zeros((len(data_array),7))
+            for i1 in trange(len(data_array)):
+                new_array[i1,:] = data_array[i1].split()
+
+            g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+            g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+            g_df = g_df.drop(["m_band", "n_band"],axis=1)
+            g_df.to_hdf('matrix_el.h5', key='df')
+    else:
+        g_df = []
+
+    # Importing electron k points
+    kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
+    kpts.columns = ['0']
+    kpts_array = kpts['0'].values
+    new_kpt_array = np.zeros((len(kpts_array), 4))
+    for i1 in trange(len(kpts_array)):
+        new_kpt_array[i1, :] = kpts_array[i1].split()
+
+    kpts_df = pd.DataFrame(data=new_kpt_array, columns=['k_inds', 'b1', 'b2', 'b3'])
+    kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric, downcast='integer')
+
+    # Import electron energy library
+    enk = pd.read_csv('gaas.enk', sep='\t',header= None)
+    enk.columns = ['0']
+    enk_array = enk['0'].values
+    new_enk_array = np.zeros((len(enk_array),3))
+    for i1 in trange(len(enk_array)):
+        new_enk_array[i1,:] = enk_array[i1].split()
+
+    enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])
+    enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
+
+    # Import phonon energy library
+    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
+    enq.columns = ['0']
+    enq_array = enq['0'].values
+    new_enq_array = np.zeros((len(enq_array),3))
+    for i1 in trange(len(enq_array)):
+        new_enq_array[i1,:] = enq_array[i1].split()
+
+    enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
+    enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
+
+    # Import phonon q-point index
+    qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
+    qpts.columns = ['0']
+    qpts_array = qpts['0'].values
+    new_qpt_array = np.zeros((len(qpts_array),4))
+    for i1 in trange(len(qpts_array)):
+        new_qpt_array[i1,:] = qpts_array[i1].split()
+
+    qpts_df = pd.DataFrame(data=new_qpt_array, columns=['q_inds', 'b1', 'b2', 'b3'])
+    qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
+
+    # Import phonon energies
+    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
+    enq.columns = ['0']
+    enq_array = enq['0'].values
+    new_enq_array = np.zeros((len(enq_array),3))
+    for i1 in trange(len(enq_array)):
+        new_enq_array[i1,:] = enq_array[i1].split()
+
+    enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
+    enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
+
+    return g_df, kpts_df, enk_df, qpts_df, enq_df
+
+
+def vectorbasis2cartesian(coords, vecs):
+    """Transform any coordinates written in lattice vector basis into Cartesian coordinates
+
+    Given that the inputs are correct, then the transformation is a simple matrix multiply
+
+    Parameters:
+        vecs (numpy array): Array of vectors where the rows are the basis vectors given in Cartesian basis
+        coords (numpy array): Array of coordinates where each row is an independent point, so that column 1 corresponds
+            to the amount of the basis vector in row 1 of vecs, column 2 is amount of basis vector in row 2 of vecs...
+
+    Returns:
+        cartcoords (array): same size as coords but in Cartesian coordinates
+    """
+
+    cartcoords = np.matmul(coords, vecs)
+    return cartcoords
+
+
+def translate_into_fbz(coords, rlv):
+    """Manually translate coordinates back into first Brillouin zone
+
+    The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
+    with these planes. Since the FBZ is centered on Gamma, the position vectors of the high symmetry points are also
+    vectors normal to the plane. Once we have these vectors, we find the distance between a given point (u) and
+    a plane (n) using the dot product of the difference vector (u-n). And if the distance is positive, then translate
+    back into the FBZ.
+
+    Args:
+        rlv: numpy array of vectors where the rows are the reciprocal lattice vectors given in Cartesian basis
+        coords: numpy array of coordinates where each row is a point. For N points, coords is N x 3
+
+    Returns:
+        fbzcoords:
+    """
+    # First, find all the vectors defining the boundary
+    b1, b2, b3 = rlv[0, :], rlv[1, :], rlv[2, :]
+    b1pos = 0.5 * b1[:, np.newaxis]
+    b2pos = 0.5 * b2[:, np.newaxis]
+    b3pos = 0.5 * b3[:, np.newaxis]
+    lpos = 0.5 * (b1 + b2 + b3)[:, np.newaxis]
+    b1neg = -1 * b1pos
+    b2neg = -1 * b2pos
+    b3neg = -1 * b3pos
+    lneg = -1 * lpos
+    xpos = -0.5 * (b1 + b3)[:, np.newaxis]
+    ypos = 0.5 * (b2 + b3)[:, np.newaxis]
+    zpos = 0.5 * (b1 + b2)[:, np.newaxis]
+    xneg = -1 * xpos
+    yneg = -1 * ypos
+    zneg = -1 * zpos
+
+    # Place them into octants to avoid problems when finding points
+    # (naming is based on positive or negative for coordinate so octpmm means x+ y- z-. p=plus, m=minus)
+    vecs_ppp = np.concatenate((b2pos, xpos, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_ppm = np.concatenate((b1neg, xpos, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmm = np.concatenate((lneg, xpos, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmm = np.concatenate((b2neg, xneg, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmp = np.concatenate((b1pos, xneg, yneg, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpp = np.concatenate((lpos, xneg, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpm = np.concatenate((b3pos, xneg, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmp = np.concatenate((b3neg, xpos, yneg, zpos), axis=1)[:, :, np.newaxis]
+    # Construct matrix which is 3 x 4 x 8 where we have 3 Cartesian coordinates, 4 vectors per octant, and 8 octants
+    allvecs = np.concatenate((vecs_ppp, vecs_ppm, vecs_pmm, vecs_mmm, vecs_mmp, vecs_mpp, vecs_mpm, vecs_pmp), axis=2)
+
+    # Since the number of points in each octant is not equal, can't create array of similar shape. Instead the 'octant'
+    # array below is used as a boolean map where 1 (true) indicates positive, and 0 (false) indicates negative
+    octants = np.array([[1, 1, 1],
+                        [1, 1, 0],
+                        [1, 0, 0],
+                        [0, 0, 0],
+                        [0, 0, 1],
+                        [0, 1, 1],
+                        [0, 1, 0],
+                        [1, 0, 1]])
+
+    fbzcoords = np.copy(coords)
+    exitvector = np.zeros((8, 1))
+    iteration = 0
+    while not np.all(exitvector):  # don't exit until all octants have points inside
+        exitvector = np.zeros((8, 1))
+        for i in range(8):
+            oct_vecs = allvecs[:, :, i]
+            whichoct = octants[i, :]
+            if whichoct[0]:
+                xbool = fbzcoords[:, 0] > 0
+            else:
+                xbool = fbzcoords[:, 0] < 0
+            if whichoct[1]:
+                ybool = fbzcoords[:, 1] > 0
+            else:
+                ybool = fbzcoords[:, 1] < 0
+            if whichoct[2]:
+                zbool = fbzcoords[:, 2] > 0
+            else:
+                zbool = fbzcoords[:, 2] < 0
+            octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
+            octcoords = fbzcoords[octindex, :]
+            allplanes = 0
+            for j in range(oct_vecs.shape[1]):
+                diffvec = octcoords[:, :] - np.tile(oct_vecs[:, j], (octcoords.shape[0], 1))
+                dist2plane = np.dot(diffvec, oct_vecs[:, j]) / np.linalg.norm(oct_vecs[:, j])
+                outside = dist2plane[:] > 0
+                if np.any(outside):
+                    octcoords[outside, :] = octcoords[outside, :] - \
+                                            (2 * np.tile(oct_vecs[:, j], (np.count_nonzero(outside), 1)))
+                    # Times 2 because the vectors that define FBZ are half of the full recip latt vectors
+                    # print('number outside this plane is %d' % np.count_nonzero(outside))
+                else:
+                    allplanes += 1
+            if allplanes == 4:
+                exitvector[i] = 1
+            fbzcoords[octindex, :] = octcoords
+
+        iteration += 1
+        print(iteration)
+
+    print('Done bringing points into FBZ!')
+
+    return fbzcoords
+
 
 def load_vel_data(dirname,cons):
     """Dirname is the name of the directory where the .VEL file is stored.
@@ -41,6 +273,7 @@ def load_vel_data(dirname,cons):
 
     return cart_kpts_df
 
+
 def load_enq_data(dirname):
     """Dirname is the name of the directory where the .ENQ file is stored.
     im_mode is the corresponding phonon polarization.
@@ -59,6 +292,7 @@ def load_enq_data(dirname):
 
     return enq_df
 
+
 def load_qpt_data(dirname):
     """Dirname is the name of the directory where the .QPT file is stored.
     The result of this function is a Pandas DataFrame containing the columns:
@@ -76,6 +310,7 @@ def load_qpt_data(dirname):
     qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
 
     return qpts_df
+
 
 def load_g_data(dirname):
     """Dirname is the name of the directory where the .eph_matrix file is stored.
@@ -96,8 +331,9 @@ def load_g_data(dirname):
     g_df = g_df.drop(["m_band", "n_band"], axis=1)
     return g_df
 
+
 # Now process the data to be in a more convenient form for calculations
-def fermi_distribution(g_df,mu,T):
+def fermi_distribution(g_df, mu, T):
     """This function is designed to take a Pandas DataFrame containing e-ph data and return
     the Fermi-Dirac distribution associated with both the pre- and post- collision states.
     The distribution is calculated with respect to a given chemical potential, mu"""
@@ -112,7 +348,7 @@ def fermi_distribution(g_df,mu,T):
     return g_df
 
 
-def bose_distribution(g_df,T):
+def bose_distribution(g_df, T):
     """This function is designed to take a Pandas DataFrame containing e-ph data and return
     the Bose-Einstein distribution associated with the mediating phonon mode."""
     # Physical constants
@@ -122,7 +358,8 @@ def bose_distribution(g_df,T):
     g_df['BE'] = (np.exp((g_df['q_en [eV]'].values*e)/(kb*T)) - 1)**(-1)
     return g_df
 
-def bosonic_processing(g_df,enq_df,T):
+
+def bosonic_processing(g_df, enq_df, T):
     """This function takes the e-ph DataFrame and assigns a phonon energy to each collision
     and calculates the Bose-Einstein distribution"""
     # Physical constants
@@ -149,7 +386,8 @@ def bosonic_processing(g_df,enq_df,T):
 
     return g_df
 
-def fermionic_processing(g_df,cart_kpts_df,mu,T):
+
+def fermionic_processing(g_df, cart_kpts_df, mu, T):
     """This function takes the e-ph DataFrame and assigns the relevant pre and post collision energies
     as well as the Fermi-Dirac distribution associated with both states."""
 
@@ -205,7 +443,8 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T):
 
     return g_df
 
-def gaussian_weight(g_df,n):
+
+def gaussian_weight(g_df, n):
     """This function assigns the value of the delta function of the energy conservation
     approimated by a Gaussian with broadening n"""
 
@@ -217,7 +456,8 @@ def gaussian_weight(g_df,n):
 
     return g_df
 
-def populate_reciprocals(g_df,b):
+
+def populate_reciprocals(g_df, b):
     """The g^2 elements are invariant under substitution of the pre-and post- collision indices.
     Therefore, the original e-ph matrix DataFrame only contains half the set, since the other
     half is obtainable. This function populates the appropriate reciprocal elements."""
@@ -268,39 +508,6 @@ def populate_reciprocals(g_df,b):
     # full_g_df.to_hdf('full_matrix_el.h5', key='df')
 
     return full_g_df
-
-
-class physical_constants:
-    """A class with constants to be passed into any method"""
-    # Physical parameter definition
-    a = 5.556                        # Lattice constant for GaAs [A]
-    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    T = 300                          # Lattice temperature [K]
-    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
-    mu = 5.780                       # Chemical potential [eV]
-    b = 8/1000                       # Gaussian broadening [eV]
-    h = 1.054*10**(-34)              # Reduced Planck's constant [J/s]
-
-
-def loadfromfile():
-    """Takes the raw text files and converts them into useful dataframes."""
-    if os.path.isfile('matrix_el.h5'):
-        g_df = pd.read_hdf('matrix_el.h5', key='df')
-        print('loaded matrix elements from hdf5')
-    else:
-        data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
-        data.columns = ['0']
-        data_array = data['0'].values
-        new_array = np.zeros((len(data_array),7))
-        for i1 in trange(len(data_array)):
-            new_array[i1,:] = data_array[i1].split()
-
-        g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
-        g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-        g_df = g_df.drop(["m_band", "n_band"],axis=1)
-        g_df.to_hdf('matrix_el.h5', key='df')
-
-    return g_df
 
 
 def cartesian_q_points(qpts_df, con):
@@ -466,18 +673,22 @@ def RTA_calculation(g_df,cart_kpts_df,E,cons):
 
 
 def main():
-    print('wut')
-    con = physical_constants()
-    enq_df = load_enq_data('gaas.enq')
-    print('Phonon energies loaded')
-    qpt_df = load_qpt_data('gaas.qpts')
-    print('\n')
-    print('Phonon qpts loaded')
-    cart_kpts_df = load_vel_data('gaas.vel',con)
+
+    con = PhysicalConstants()
+    reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
+
+    # The loadfromfile just loads all the relevant stuff. If you want to save time and not load the matrix elements you
+    # can specify the boolean optional input as False like I've done below. This leaves g_df empty.
+    load_matrix_elements = False
+    g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile(matrixel=load_matrix_elements)
+
+    print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
+          % load_matrix_elements)
+
+    # leaving this because my function
+    cart_kpts_df = load_vel_data('gaas.vel', con)
     print('Electron kpts loaded')
     print('Electron energies loaded')
-    g_df = loadfromfile()
-    print('E-ph data loaded')
 
     # At this point, the processed data are:
     # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
@@ -486,7 +697,18 @@ def main():
     # k-energy = enk_df['k_inds','band_inds','energy [Ryd]']
     # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
 
-    cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
+    kpts = np.array(kpts_df[['b1', 'b2', 'b3']])
+    qpts = np.array(qpts_df[['b1', 'b2', 'b3']])
+
+    cartkpts = vectorbasis2cartesian(kpts, reciplattvecs)
+    cartqpts = vectorbasis2cartesian(qpts, reciplattvecs)
+
+    # Translating kpoints works
+    fbzcartkpts = translate_into_fbz(cartkpts, reciplattvecs)
+    # Translating qpoints does not work for some reason...
+    fbzcartqpts = translate_into_fbz(cartqpts, reciplattvecs)
+
+    # cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
 
     print('Data loading completed. Starting data processing:')
     g_df = bosonic_processing(g_df,enq_df,con.T)
@@ -511,10 +733,15 @@ def main():
 
     mod_cart_kpts_df = cart_kpts_df.loc[cart_kpts_df['slice_inds'] < 5].copy(deep=True)
 
+    # I would suggest putting plot code in a separate module otherwise will start to clutter. Currently putting plot
+    # codes in the plotting.py file.
+
+    # Once you have the plot code written, since we imported the plotting module at the start of this file, we can
+    # simply plot as follows
+    plotting.bz_3dscatter(con, fbzcartqpts, enq_df, useplotly=True)
+
     import plotly.plotly as py
     import plotly.graph_objs as go
-
-    import numpy as np
 
     trace1 = go.Scatter3d(
         x=mod_cart_kpts_df['kx [1/A]'],

@@ -29,7 +29,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-import plotly.offline as py
+import plotly.offline as py9
 import plotly.graph_objs as go
 import plotly
 plotly.tools.set_credentials_file(username='peishi', api_key='KQcCXB5wcgednHNjbNqd')
