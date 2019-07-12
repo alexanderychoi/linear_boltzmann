@@ -232,7 +232,7 @@ def translate_into_fbz(coords, rlv):
             fbzcoords[octindex, :] = octcoords
 
         iteration += 1
-        print(iteration)
+        print('Finished %d iterations of bringing points into FBZ' % iteration)
 
     print('Done bringing points into FBZ!')
 
@@ -431,7 +431,6 @@ def fermionic_processing(g_df, cart_kpts_df, mu, T):
     modified_k_df['k+q_id'] = modified_k_df.groupby(['k_inds']).ngroup()
     g_df['k+q_id'] = g_df.sort_values(['k+q_inds'], ascending=True).groupby(['k+q_inds']).ngroup()
     g_df['k+q_en [eV]'] = modified_k_df['energy'].values[g_df['k+q_id'].values]
-
 
     g_df['kqx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k+q_id'].values]
     g_df['kqy [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k+q_id'].values]
@@ -677,15 +676,17 @@ def main():
     con = PhysicalConstants()
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
 
+    files_loc = '/home/peishi/calculations/first-principles-fluctuations/linear_boltzmann'
+    os.chdir(files_loc)
+
     # The loadfromfile just loads all the relevant stuff. If you want to save time and not load the matrix elements you
-    # can specify the boolean optional input as False like I've done below. This leaves g_df empty.
-    load_matrix_elements = False
+    # can specify the boolean optional input as False (currently True). This will leave g_df empty.
+    load_matrix_elements = True
     g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile(matrixel=load_matrix_elements)
 
     print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
           % load_matrix_elements)
 
-    # leaving this because my function
     cart_kpts_df = load_vel_data('gaas.vel', con)
     print('Electron kpts loaded')
     print('Electron energies loaded')
@@ -711,62 +712,89 @@ def main():
     # cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
 
     print('Data loading completed. Starting data processing:')
-    g_df = bosonic_processing(g_df,enq_df,con.T)
-    print('Bosonic processing completed')
-    g_df = fermionic_processing(g_df,cart_kpts_df,con.mu,con.T)
-    print('Fermionic processing completed')
-    full_g_df = populate_reciprocals(g_df,con.b)
-    print('Reciprocals populated')
-    del g_df
-    full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
-                           'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
-                           'k_FD', 'k+q_FD', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
-                           'kqy [1/A]', 'kqz [1/A]', 'k_pair_id', 'abs_gaussian', 'ems_gaussian']]
-    print('g_dataframe processed')
 
-    cart_kpts_df = RTA_calculation(full_g_df, cart_kpts_df, 1, con)
+    if os.path.isfile('full_g_df.h5'):
+        full_g_df = pd.read_hdf('full_g_df.h5', key='df')
+        print('Loaded the fully processed dataframe from hdf5')
+    else:
+        g_df = bosonic_processing(g_df, enq_df, con.T)
+        print('Bosonic processing completed')
 
-    cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]'], ascending=True).groupby(
-        ['ky [1/A]', 'kz [1/A]']).ngroup()
+        g_df = fermionic_processing(g_df, cart_kpts_df, con.mu, con.T)
+        print('Fermionic processing completed')
 
-    print(cart_kpts_df.head())
+        full_g_df = populate_reciprocals(g_df, con.b)
+        print('Reciprocals populated')
 
-    mod_cart_kpts_df = cart_kpts_df.loc[cart_kpts_df['slice_inds'] < 5].copy(deep=True)
+        del g_df
+        full_g_df = full_g_df[['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element', 'q_id',
+                               'q_en [eV]', 'BE', 'k_en [eV]', 'k+q_en [eV]',
+                               'k_FD', 'k+q_FD', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'kqx [1/A]',
+                               'kqy [1/A]', 'kqz [1/A]', 'k_pair_id', 'abs_gaussian', 'ems_gaussian']]
+        print('g_dataframe processed')
+        full_g_df.to_hdf('full_g_df.h5', key='df')
+
+    print('Now chunking the full_g_df so each k_ind is in its own hdf5 file')
+
+    if not os.path.isdir('chunked'):
+        os.mkdir('chunked')
+    os.chdir('chunked')
+    nk = len(np.unique(full_g_df['k_inds']))
+    if len([name for name in os.listdir('.') if os.path.isfile(name)]) == nk:
+        print('Data already chunked (probably). Not running chunking code.')
+    else:
+        for k in np.nditer(np.unique(full_g_df['k_inds'])):
+            thisdf = full_g_df[full_g_df['k_inds'] == k]
+            # NOTE: The fill length may change depending on the number of kpoints you have. I am using 4 here because I
+            # know that there are 9999 or less unique k so that the max number for k_ind is only 4 digits. If you need
+            # to increase fill length, just change {:04d} to {:0xd} where x is the largest number of digits
+            thisdf.to_hdf('full_g_{:04d}.h5'.format(k), key='df')
+
+        print('Done chunking all of the data.')
+
+    # cart_kpts_df = RTA_calculation(full_g_df, cart_kpts_df, 1, con)
+    #
+    # cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]'], ascending=True).groupby(
+    #     ['ky [1/A]', 'kz [1/A]']).ngroup()
+    #
+    # print(cart_kpts_df.head())
+    #
+    # mod_cart_kpts_df = cart_kpts_df.loc[cart_kpts_df['slice_inds'] < 5].copy(deep=True)
 
     # I would suggest putting plot code in a separate module otherwise will start to clutter. Currently putting plot
     # codes in the plotting.py file.
 
     # Once you have the plot code written, since we imported the plotting module at the start of this file, we can
     # simply plot as follows
-    plotting.bz_3dscatter(con, fbzcartqpts, enq_df, useplotly=True)
+    # plotting.bz_3dscatter(con, fbzcartqpts, enq_df, useplotly=True)
 
-    import plotly.plotly as py
-    import plotly.graph_objs as go
-
-    trace1 = go.Scatter3d(
-        x=mod_cart_kpts_df['kx [1/A]'],
-        y=mod_cart_kpts_df['ky [1/A]'],
-        z=mod_cart_kpts_df['kz [1/A]'],
-        mode='markers',
-        marker=dict(
-            size=12,
-            color=mod_cart_kpts_df['slice_inds'],  # set color to an array/list of desired values
-            colorscale='Viridis',  # choose a colorscale
-            opacity=0.8
-        )
-    )
-
-    data = [trace1]
-    layout = go.Layout(
-        margin=dict(
-            l=0,
-            r=0,
-            b=0,
-            t=0
-        )
-    )
-    fig = go.Figure(data=data, layout=layout)
-    py.iplot(fig, filename='3d-scatter-colorscale')
+    # import plotly.plotly as py
+    # import plotly.graph_objs as go
+    #
+    # trace1 = go.Scatter3d(
+    #     x=mod_cart_kpts_df['kx [1/A]'],
+    #     y=mod_cart_kpts_df['ky [1/A]'],
+    #     z=mod_cart_kpts_df['kz [1/A]'],
+    #     mode='markers',
+    #     marker=dict(
+    #         size=12,
+    #         color=mod_cart_kpts_df['slice_inds'],  # set color to an array/list of desired values
+    #         colorscale='Viridis',  # choose a colorscale
+    #         opacity=0.8
+    #     )
+    # )
+    #
+    # data = [trace1]
+    # layout = go.Layout(
+    #     margin=dict(
+    #         l=0,
+    #         r=0,
+    #         b=0,
+    #         t=0
+    #     )
+    # )
+    # fig = go.Figure(data=data, layout=layout)
+    # py.iplot(fig, filename='3d-scatter-colorscale')
 
 
 if __name__ == '__main__':
