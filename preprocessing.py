@@ -39,83 +39,25 @@ class PhysicalConstants:
     # b3 = np.array([-1.1308095, +1.1308095, +1.1308095])
 
 
-def loadfromfile(matrixel=True):
+def loadfromfile():
     """Takes the raw text files and converts them into useful dataframes."""
-    if matrixel:  # maybe sometimes don't need matrix elements, just need the other data
-        if os.path.isfile('matrix_el.h5'):
-            g_df = pd.read_hdf('matrix_el.h5', key='df')
-            print('loaded matrix elements from hdf5')
-        else:
-            data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
-            data.columns = ['0']
-            data_array = data['0'].values
-            new_array = np.zeros((len(data_array),7))
-            for i1 in trange(len(data_array)):
-                new_array[i1,:] = data_array[i1].split()
-
-            g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
-            g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-            g_df = g_df.drop(["m_band", "n_band"],axis=1)
-            g_df.to_hdf('matrix_el.h5', key='df')
+    if os.path.isfile('matrix_el.h5'):
+        g_df = pd.read_hdf('matrix_el.h5', key='df')
+        print('loaded matrix elements from hdf5')
     else:
-        g_df = []
+        data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
+        data.columns = ['0']
+        data_array = data['0'].values
+        new_array = np.zeros((len(data_array),7))
+        for i1 in trange(len(data_array)):
+            new_array[i1,:] = data_array[i1].split()
 
-    # Importing electron k points
-    kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
-    kpts.columns = ['0']
-    kpts_array = kpts['0'].values
-    new_kpt_array = np.zeros((len(kpts_array), 4))
-    for i1 in trange(len(kpts_array)):
-        new_kpt_array[i1, :] = kpts_array[i1].split()
+        g_df = pd.DataFrame(data=new_array, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
+        g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+        g_df = g_df.drop(["m_band", "n_band"],axis=1)
+        g_df.to_hdf('matrix_el.h5', key='df')
 
-    kpts_df = pd.DataFrame(data=new_kpt_array, columns=['k_inds', 'b1', 'b2', 'b3'])
-    kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric, downcast='integer')
-
-    # Import electron energy library
-    enk = pd.read_csv('gaas.enk', sep='\t',header= None)
-    enk.columns = ['0']
-    enk_array = enk['0'].values
-    new_enk_array = np.zeros((len(enk_array),3))
-    for i1 in trange(len(enk_array)):
-        new_enk_array[i1,:] = enk_array[i1].split()
-
-    enk_df = pd.DataFrame(data=new_enk_array,columns = ['k_inds','band_inds','energy [Ryd]'])
-    enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
-
-    # Import phonon energy library
-    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
-    enq.columns = ['0']
-    enq_array = enq['0'].values
-    new_enq_array = np.zeros((len(enq_array),3))
-    for i1 in trange(len(enq_array)):
-        new_enq_array[i1,:] = enq_array[i1].split()
-
-    enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
-    enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-
-    # Import phonon q-point index
-    qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
-    qpts.columns = ['0']
-    qpts_array = qpts['0'].values
-    new_qpt_array = np.zeros((len(qpts_array),4))
-    for i1 in trange(len(qpts_array)):
-        new_qpt_array[i1,:] = qpts_array[i1].split()
-
-    qpts_df = pd.DataFrame(data=new_qpt_array, columns=['q_inds', 'b1', 'b2', 'b3'])
-    qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
-
-    # Import phonon energies
-    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
-    enq.columns = ['0']
-    enq_array = enq['0'].values
-    new_enq_array = np.zeros((len(enq_array),3))
-    for i1 in trange(len(enq_array)):
-        new_enq_array[i1,:] = enq_array[i1].split()
-
-    enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
-    enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-
-    return g_df, kpts_df, enk_df, qpts_df, enq_df
+    return g_df
 
 
 def vectorbasis2cartesian(coords, vecs):
@@ -266,13 +208,35 @@ def load_vel_data(dirname,cons):
     cart_kpts_df['vx [m/s]'] = np.multiply(cart_kpts_df['vx_dir'].values,cart_kpts_df['v_mag [m/s]'])
 
     cart_kpts_df = cart_kpts_df.drop(['bands'], axis=1)
-    cart_kpts_df = cart_kpts_df.drop(['vx_dir','vy_dir','vz_dir','v_mag [m/s]'], axis=1)
+    cart_kpts_df = cart_kpts_df.drop(['vx_dir','vy_dir','vz_dir'], axis=1)
 
     cart_kpts_df['FD'] = (np.exp((cart_kpts_df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb * cons.T)) + 1) ** (-1)
 
+    cart_kpts_df['FD_der [J]'] = -np.multiply(cart_kpts_df['FD'].values**2/(cons.kb*cons.T),np.exp((cart_kpts_df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb * cons.T)))
+
+    from sklearn.cluster import KMeans
+    num_clusters = 9
+
+    my_list = np.linspace(0, num_clusters - 1, num_clusters)
+    k_means = KMeans(n_clusters=num_clusters, n_init=10)
+    X = cart_kpts_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values
+    k_means.fit(X)
+    k_means_cluster_centers = k_means.cluster_centers_
+
+    cart_kpts_df['labels'] = k_means.labels_
+
+    temp_label = cart_kpts_df['labels'].drop_duplicates().values
+    clustering = cart_kpts_df['labels'].values
+    for i0 in range(len(my_list)):
+        inds = clustering == temp_label[i0]
+        cart_kpts_df.loc[inds, 'labels'] = my_list[i0] + 1
+
+    cart_kpts_df['labels'] = cart_kpts_df['labels'].values.astype(int)
+
+    cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]','labels'], ascending=True).groupby(
+        ['ky [1/A]', 'kz [1/A]','labels']).ngroup()
 
     return cart_kpts_df
-
 
 def load_enq_data(dirname):
     """Dirname is the name of the directory where the .ENQ file is stored.
@@ -292,7 +256,6 @@ def load_enq_data(dirname):
 
     return enq_df
 
-
 def load_qpt_data(dirname):
     """Dirname is the name of the directory where the .QPT file is stored.
     The result of this function is a Pandas DataFrame containing the columns:
@@ -310,7 +273,6 @@ def load_qpt_data(dirname):
     qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
 
     return qpts_df
-
 
 def load_g_data(dirname):
     """Dirname is the name of the directory where the .eph_matrix file is stored.
@@ -331,9 +293,8 @@ def load_g_data(dirname):
     g_df = g_df.drop(["m_band", "n_band"], axis=1)
     return g_df
 
-
 # Now process the data to be in a more convenient form for calculations
-def fermi_distribution(g_df, mu, T):
+def fermi_distribution(g_df,mu,T):
     """This function is designed to take a Pandas DataFrame containing e-ph data and return
     the Fermi-Dirac distribution associated with both the pre- and post- collision states.
     The distribution is calculated with respect to a given chemical potential, mu"""
@@ -348,7 +309,7 @@ def fermi_distribution(g_df, mu, T):
     return g_df
 
 
-def bose_distribution(g_df, T):
+def bose_distribution(g_df,T):
     """This function is designed to take a Pandas DataFrame containing e-ph data and return
     the Bose-Einstein distribution associated with the mediating phonon mode."""
     # Physical constants
@@ -358,8 +319,7 @@ def bose_distribution(g_df, T):
     g_df['BE'] = (np.exp((g_df['q_en [eV]'].values*e)/(kb*T)) - 1)**(-1)
     return g_df
 
-
-def bosonic_processing(g_df, enq_df, T):
+def bosonic_processing(g_df,enq_df,T):
     """This function takes the e-ph DataFrame and assigns a phonon energy to each collision
     and calculates the Bose-Einstein distribution"""
     # Physical constants
@@ -386,8 +346,7 @@ def bosonic_processing(g_df, enq_df, T):
 
     return g_df
 
-
-def fermionic_processing(g_df, cart_kpts_df, mu, T):
+def fermionic_processing(g_df,cart_kpts_df,mu,T):
     """This function takes the e-ph DataFrame and assigns the relevant pre and post collision energies
     as well as the Fermi-Dirac distribution associated with both states."""
 
@@ -432,6 +391,7 @@ def fermionic_processing(g_df, cart_kpts_df, mu, T):
     g_df['k+q_id'] = g_df.sort_values(['k+q_inds'], ascending=True).groupby(['k+q_inds']).ngroup()
     g_df['k+q_en [eV]'] = modified_k_df['energy'].values[g_df['k+q_id'].values]
 
+
     g_df['kqx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k+q_id'].values]
     g_df['kqy [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k+q_id'].values]
     g_df['kqz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k+q_id'].values]
@@ -442,8 +402,7 @@ def fermionic_processing(g_df, cart_kpts_df, mu, T):
 
     return g_df
 
-
-def gaussian_weight(g_df, n):
+def gaussian_weight(g_df,n):
     """This function assigns the value of the delta function of the energy conservation
     approimated by a Gaussian with broadening n"""
 
@@ -455,8 +414,7 @@ def gaussian_weight(g_df, n):
 
     return g_df
 
-
-def populate_reciprocals(g_df, b):
+def populate_reciprocals(g_df,b):
     """The g^2 elements are invariant under substitution of the pre-and post- collision indices.
     Therefore, the original e-ph matrix DataFrame only contains half the set, since the other
     half is obtainable. This function populates the appropriate reciprocal elements."""
@@ -658,17 +616,62 @@ def relaxation_times(g_df,cart_kpts_df):
 
 
 def RTA_calculation(g_df,cart_kpts_df,E,cons):
-    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time approximation."""
+    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time
+    approximation."""
 
-    scattering_array = relaxation_times(g_df,cart_kpts_df) # in seconds
+    scattering_array = relaxation_times(g_df,cart_kpts_df) # in 1/seconds
 
     diagonal_arg = cons.h/(cons.e*E)*scattering_array
     matrix_exp = np.diag(np.exp(diagonal_arg))
-    inhomo = cons.h/(cons.kb*cons.T)*cart_kpts_df['vx [m/s]'].values*cart_kpts_df['FD'].values
-    factor = np.multiply(np.dot(matrix_exp,inhomo),cart_kpts_df['kx [1/A]'].values)*10**(10)
+    neg_matrix_exp = np.diag(np.exp(-diagonal_arg))
+    inhomo = cons.h/(cons.kb*cons.T)*np.multiply(cart_kpts_df['vx [m/s]'].values,cart_kpts_df['FD'].values)
+    factor = np.dot(matrix_exp,inhomo)
+    cart_kpts_df['inhomo'] = inhomo
     cart_kpts_df['factor'] = factor
+    kx_sorted_df = cart_kpts_df.copy(deep=True).sort_values(['kx [1/A]'], ascending=True)
+    kx_sorted_df['cumint'] = kx_sorted_df.groupby(['slice_inds']).apply(m)['cum_int']
+
+
+
+    cart_kpts_df = kx_sorted_df.copy(deep=True).sort_values(['k_inds'], ascending=True)
+
+    soln = np.dot(neg_matrix_exp,cart_kpts_df['cumint'])
 
     return cart_kpts_df
+
+
+def practice_calc(g_df, cart_kpts_df, E, cons):
+    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time approximation."""
+
+    scattering_array = relaxation_times(g_df, cart_kpts_df)  # in 1/seconds
+
+    cart_kpts_df['RT [s]'] = np.reciprocal(scattering_array)
+    cart_kpts_df['MFP [nm]'] = np.multiply(cart_kpts_df['RT [s]'],cart_kpts_df['v_mag [m/s]'])*10**(9)
+    kx_array = cart_kpts_df['kx [1/A]'].values*10**(10)
+
+    diagonal_arg = np.multiply(cons.h / (cons.e * E) * scattering_array,kx_array)
+    matrix_exp = np.diag(np.exp(-diagonal_arg))
+    neg_matrix_exp = np.diag(np.exp(diagonal_arg))
+    inhomo = cons.h* np.multiply(cart_kpts_df['vx [m/s]'].values, cart_kpts_df['FD_der [J]'].values)
+
+
+    factor = np.dot(matrix_exp, inhomo)
+    cart_kpts_df['inhomo'] = inhomo
+    cart_kpts_df['factor'] = factor
+    kx_sorted_df = cart_kpts_df.copy(deep=True).sort_values(['kx [1/A]'], ascending=True)
+    kx_sorted_df['cumint'] = kx_sorted_df.groupby(['slice_inds']).apply(m)['cum_int']
+
+    cart_kpts_df = kx_sorted_df.copy(deep=True).sort_values(['k_inds'], ascending=True)
+
+    soln = np.dot(neg_matrix_exp, cart_kpts_df['cumint'])
+
+    return cart_kpts_df
+
+
+def m(x):
+    y= integrate.cumtrapz(x['factor'].values,x['kx [1/A]'].values,initial = 0)
+    return pd.DataFrame({'cum_int':y,'factor':x['factor'],'kx [1/A]':x['kx [1/A]']})
+
 
 
 def main():
@@ -687,9 +690,17 @@ def main():
     print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
           % load_matrix_elements)
 
+    print('wut')
+    con = physical_constants()
+    enq_df = load_enq_data('gaas.enq')
+    print('Phonon energies loaded')
+    print('\n')
+    print('Phonon qpts loaded')
     cart_kpts_df = load_vel_data('gaas.vel', con)
     print('Electron kpts loaded')
     print('Electron energies loaded')
+    g_df = loadfromfile()
+    print('E-ph data loaded')
 
     # At this point, the processed data are:
     # e-ph matrix elements = g_df['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode']
@@ -751,50 +762,6 @@ def main():
             thisdf.to_hdf('full_g_{:04d}.h5'.format(k), key='df')
 
         print('Done chunking all of the data.')
-
-    # cart_kpts_df = RTA_calculation(full_g_df, cart_kpts_df, 1, con)
-    #
-    # cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]'], ascending=True).groupby(
-    #     ['ky [1/A]', 'kz [1/A]']).ngroup()
-    #
-    # print(cart_kpts_df.head())
-    #
-    # mod_cart_kpts_df = cart_kpts_df.loc[cart_kpts_df['slice_inds'] < 5].copy(deep=True)
-
-    # I would suggest putting plot code in a separate module otherwise will start to clutter. Currently putting plot
-    # codes in the plotting.py file.
-
-    # Once you have the plot code written, since we imported the plotting module at the start of this file, we can
-    # simply plot as follows
-    # plotting.bz_3dscatter(con, fbzcartqpts, enq_df, useplotly=True)
-
-    # import plotly.plotly as py
-    # import plotly.graph_objs as go
-    #
-    # trace1 = go.Scatter3d(
-    #     x=mod_cart_kpts_df['kx [1/A]'],
-    #     y=mod_cart_kpts_df['ky [1/A]'],
-    #     z=mod_cart_kpts_df['kz [1/A]'],
-    #     mode='markers',
-    #     marker=dict(
-    #         size=12,
-    #         color=mod_cart_kpts_df['slice_inds'],  # set color to an array/list of desired values
-    #         colorscale='Viridis',  # choose a colorscale
-    #         opacity=0.8
-    #     )
-    # )
-    #
-    # data = [trace1]
-    # layout = go.Layout(
-    #     margin=dict(
-    #         l=0,
-    #         r=0,
-    #         b=0,
-    #         t=0
-    #     )
-    # )
-    # fig = go.Figure(data=data, layout=layout)
-    # py.iplot(fig, filename='3d-scatter-colorscale')
 
 
 if __name__ == '__main__':
