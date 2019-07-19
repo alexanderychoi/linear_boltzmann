@@ -2,7 +2,7 @@
 """Data processing module for the electron-phonon collision matrix
 
 This is meant to be a frills-free calculation of the electron-phonon collision matrix utilizing the data from
-Jin Jian Zhou for GaAs.
+Jin Jian Zhou for GaAs. Updated 7/19/19.
 """
 
 import numpy as np
@@ -596,7 +596,10 @@ def shift_into_fbz(qpts_df,kvel_df, con):
 
 
 def relaxation_times(g_df,cart_kpts_df):
-    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127"""
+    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
+    Also returns the off-diagonal scattering term.
+
+    CHECK THE FORMULAS FROM MAHAN"""
     g_df['ems_weight'] = np.multiply(
         np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
         g_df['ems_gaussian']) / 13.6056980659
@@ -607,19 +610,33 @@ def relaxation_times(g_df,cart_kpts_df):
 
     sr = g_df.groupby(['k_inds'])['weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
         np.unique(g_df['q_id'].values))
-    scattering = sr.to_frame().reset_index()
 
+    scattering = sr.to_frame().reset_index()
     scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
     scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
 
-    return scattering_array
+    g_df['OD_abs_weight'] =  np.multiply(np.multiply(g_df['BE'].values +1 - g_df['k_FD'].values,
+                                                     g_df['abs_gaussian'].values),g_df['g_element'])/ 13.6056980659
+    g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
+                                                    g_df['ems_gaussian'].values),g_df['g_element'])/ 13.6056980659
+
+    g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
+    OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+        np.unique(g_df['q_id'].values))
+
+    OD_scattering = OD_sr.to_frame().reset_index()
+    OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
+
+
+    return scattering_array,OD_scattering_array
 
 
 def RTA_calculation(g_df,cart_kpts_df,E,cons):
     """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time
     approximation."""
 
-    scattering_array = relaxation_times(g_df,cart_kpts_df) # in 1/seconds
+    scattering_array,OD_scattering_array = relaxation_times(g_df,cart_kpts_df) # in 1/seconds
 
     diagonal_arg = cons.h/(cons.e*E)*scattering_array
     matrix_exp = np.diag(np.exp(diagonal_arg))
@@ -641,9 +658,10 @@ def RTA_calculation(g_df,cart_kpts_df,E,cons):
 
 
 def practice_calc(g_df, cart_kpts_df, E, cons):
-    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time approximation."""
+    """This function calculates the solution to the one-dimensional Boltzmann Equation under the relaxation time
+     approximation."""
 
-    scattering_array = relaxation_times(g_df, cart_kpts_df)  # in 1/seconds
+    scattering_array,OD_scattering_array = relaxation_times(g_df, cart_kpts_df)  # in 1/seconds
 
     cart_kpts_df['RT [s]'] = np.reciprocal(scattering_array)
     cart_kpts_df['MFP [nm]'] = np.multiply(cart_kpts_df['RT [s]'],cart_kpts_df['v_mag [m/s]'])*10**(9)
@@ -690,11 +708,9 @@ def main():
     print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
           % load_matrix_elements)
 
-    print('wut')
     con = physical_constants()
     enq_df = load_enq_data('gaas.enq')
     print('Phonon energies loaded')
-    print('\n')
     print('Phonon qpts loaded')
     cart_kpts_df = load_vel_data('gaas.vel', con)
     print('Electron kpts loaded')
