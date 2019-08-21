@@ -238,6 +238,7 @@ def load_vel_data(dirname,cons):
 
     return cart_kpts_df
 
+
 def load_enq_data(dirname):
     """Dirname is the name of the directory where the .ENQ file is stored.
     im_mode is the corresponding phonon polarization.
@@ -255,6 +256,7 @@ def load_enq_data(dirname):
     enq_df[['q_inds', 'im_mode']] = enq_df[['q_inds', 'im_mode']].apply(pd.to_numeric, downcast='integer')
 
     return enq_df
+
 
 def load_qpt_data(dirname):
     """Dirname is the name of the directory where the .QPT file is stored.
@@ -274,6 +276,7 @@ def load_qpt_data(dirname):
 
     return qpts_df
 
+
 def load_g_data(dirname):
     """Dirname is the name of the directory where the .eph_matrix file is stored.
     The result of this function is a Pandas DataFrame containing the columns:
@@ -292,6 +295,7 @@ def load_g_data(dirname):
 
     g_df = g_df.drop(["m_band", "n_band"], axis=1)
     return g_df
+
 
 # Now process the data to be in a more convenient form for calculations
 def fermi_distribution(g_df,mu,T):
@@ -319,6 +323,7 @@ def bose_distribution(g_df,T):
     g_df['BE'] = (np.exp((g_df['q_en [eV]'].values*e)/(kb*T)) - 1)**(-1)
     return g_df
 
+
 def bosonic_processing(g_df,enq_df,T):
     """This function takes the e-ph DataFrame and assigns a phonon energy to each collision
     and calculates the Bose-Einstein distribution"""
@@ -345,6 +350,7 @@ def bosonic_processing(g_df,enq_df,T):
     g_df = bose_distribution(g_df, T)
 
     return g_df
+
 
 def fermionic_processing(g_df,cart_kpts_df,mu,T):
     """This function takes the e-ph DataFrame and assigns the relevant pre and post collision energies
@@ -413,6 +419,7 @@ def gaussian_weight(g_df,n):
     g_df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / n * np.exp(-(energy_delta_ems / n) ** 2)
 
     return g_df
+
 
 def populate_reciprocals(g_df,b):
     """The g^2 elements are invariant under substitution of the pre-and post- collision indices.
@@ -687,9 +694,8 @@ def practice_calc(g_df, cart_kpts_df, E, cons):
 
 
 def m(x):
-    y= integrate.cumtrapz(x['factor'].values,x['kx [1/A]'].values,initial = 0)
+    y = integrate.cumtrapz(x['factor'].values,x['kx [1/A]'].values,initial = 0)
     return pd.DataFrame({'cum_int':y,'factor':x['factor'],'kx [1/A]':x['kx [1/A]']})
-
 
 
 def main():
