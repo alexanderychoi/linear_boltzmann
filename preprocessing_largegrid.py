@@ -285,64 +285,6 @@ def load_vel_data(dirname,cons):
     return cart_kpts_df
 
 
-def load_enq_data(dirname):
-    """Dirname is the name of the directory where the .ENQ file is stored.
-    im_mode is the corresponding phonon polarization.
-    The result of this function is a Pandas DataFrame containing the columns:
-    [q_inds][im_mode][energy (Ryd)]"""
-
-    enq = pd.read_csv(dirname, sep='\t', header=None)
-    enq.columns = ['0']
-    enq_array = enq['0'].values
-    new_enq_array = np.zeros((len(enq_array), 3))
-    for i1 in trange(len(enq_array)):
-        new_enq_array[i1, :] = enq_array[i1].split()
-
-    enq_df = pd.DataFrame(data=new_enq_array, columns=['q_inds', 'im_mode', 'energy [Ryd]'])
-    enq_df[['q_inds', 'im_mode']] = enq_df[['q_inds', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-
-    return enq_df
-
-
-def load_qpt_data(dirname):
-    """Dirname is the name of the directory where the .QPT file is stored.
-    The result of this function is a Pandas DataFrame containing the columns:
-    [q_inds][b1][b2][b3]"""
-
-    qpts = pd.read_csv(dirname, sep='\t', header=None)
-    qpts.columns = ['0']
-    qpts_array = qpts['0'].values
-    new_qpt_array = np.zeros((len(qpts_array), 4))
-
-    for i1 in trange(len(qpts_array)):
-        new_qpt_array[i1, :] = qpts_array[i1].split()
-
-    qpts_df = pd.DataFrame(data=new_qpt_array, columns=['q_inds', 'b1', 'b2', 'b3'])
-    qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
-
-    return qpts_df
-
-
-def load_g_data(dirname):
-    """Dirname is the name of the directory where the .eph_matrix file is stored.
-    The result of this function is a Pandas DataFrame containing the columns:
-    [k_inds][q_inds][k+q_inds][m_band][n_band][im_mode][g_element]"""
-    data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0, 1))
-    data.columns = ['0']
-    data_array = data['0'].values
-    new_array = np.zeros((len(data_array), 7))
-    for i1 in trange(len(data_array)):
-        new_array[i1, :] = data_array[i1].split()
-
-    g_df = pd.DataFrame(data=new_array,
-                        columns=['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode', 'g_element'])
-    g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[
-        ['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
-
-    g_df = g_df.drop(["m_band", "n_band"], axis=1)
-    return g_df
-
-
 def bosonic_processing(g_df, enq_key, nb, T):
     """This function takes the e-ph DataFrame and assigns a phonon energy to each collision
     and calculates the Bose-Einstein distribution"""
@@ -409,19 +351,6 @@ def memmap_par(kq, data):
     recip_line_key[kqi-1] += nlines
     if startind + nlines > 100000:
         print('There were more than 100000 k+q lines for kq={:d}'.format(kqi))
-
-
-def gaussian_weight(df, n):
-    """This function assigns the value of the delta function of the energy conservation
-    approimated by a Gaussian with broadening n"""
-
-    energy_delta_ems = df['k_en [eV]'].values - df['k+q_en [eV]'].values - df['q_en [eV]'].values
-    energy_delta_abs = df['k_en [eV]'].values - df['k+q_en [eV]'].values + df['q_en [eV]'].values
-
-    df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / n * np.exp(-(energy_delta_abs / n) ** 2)
-    df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / n * np.exp(-(energy_delta_ems / n) ** 2)
-
-    return df
 
 
 def gaussian_weight_inchunks(k_ind):
@@ -504,7 +433,6 @@ def chunk_linebyline(matrixel_path, chunkloc):
     Returns:
         None. Just a function call to load shit and process it into the right form
     """
-
     f = open(matrixel_path)
     nGB = 0
     nlines = 0
@@ -577,6 +505,7 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
 
 
 def creating_mmap():
+    """Creates the memory mapped numpy arrays which can be opened and have data added to them later"""
     os.chdir('/home/peishi/nvme/k200-0.4eV/recips')
     for k in range(42434):
         kmap = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(100000, 4))
@@ -634,7 +563,7 @@ if __name__ == '__main__':
 
         # recipt_line_key keeps track of where the next line should go for each memmap array, since appending is hard.
         recip_line_key = mp.Array('i', [0]*nkpts, lock=False)
-        nthreads = 7
+        nthreads = 6
         pool = mp.Pool(nthreads)
 
         creating_mmap()
