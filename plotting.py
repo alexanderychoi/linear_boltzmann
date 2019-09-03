@@ -1,28 +1,28 @@
 #!/usr/bin/env python
 
-import data_processing
+import preprocessing_largegrid
 
 import pandas as pd
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+import matplotlib
+import os
 
 import plotly.offline as py
 import plotly.graph_objs as go
 import plotly
-#plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
-plotly.tools.set_credentials_file(username='peishi', api_key='KQcCXB5wcgednHNjbNqd')
 
 
 def bz_3dscatter(con, points, energies, useplotly=True):
     if useplotly:
         trace1 = go.Scatter3d(
-            # x=kpts['kx [1/A]'].values / (2 * np.pi / con.a),
-            # y=kpts['ky [1/A]'].values / (2 * np.pi / con.a),
-            # z=kpts['kz [1/A]'].values / (2 * np.pi / con.a),
-            x=points[:, 0] / (2 * np.pi / con.a),
-            y=points[:, 1] / (2 * np.pi / con.a),
-            z=points[:, 2] / (2 * np.pi / con.a),
+            x=points['kx [1/A]'].values / (2 * np.pi / con.a),
+            y=points['ky [1/A]'].values / (2 * np.pi / con.a),
+            z=points['kz [1/A]'].values / (2 * np.pi / con.a),
+            # x=points[:, 0] / (2 * np.pi / con.a),
+            # y=points[:, 1] / (2 * np.pi / con.a),
+            # z=points[:, 2] / (2 * np.pi / con.a),
             mode='markers',
             marker=dict(size=2, color=energies['energy [Ryd]'], colorscale='Rainbow', showscale=True, opacity=1)
         )
@@ -68,76 +68,13 @@ def bz_3dscatter(con, points, energies, useplotly=True):
         fig = go.Figure(data=data, layout=layout)
         py.plot(fig, filename='bz_scatter.html')
     else:
-        x = kpts['kx [1/A]'].values / (2 * np.pi / con.a)
-        y = kpts['ky [1/A]'].values / (2 * np.pi / con.a)
-        z = kpts['kz [1/A]'].values / (2 * np.pi / con.a)
+        x = points['kx [1/A]'].values / (2 * np.pi / con.a)
+        y = points['ky [1/A]'].values / (2 * np.pi / con.a)
+        z = points['kz [1/A]'].values / (2 * np.pi / con.a)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(x, y, z)
         plt.show()
-
-    # trace1 = go.Scatter3d(
-    #     x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / (a)),
-    #     y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / (a)),
-    #     z=cart_kpts_df['kz [1/A]'].values / (2 * np.pi / (a)),
-    #     mode='markers',
-    #     marker=dict(
-    #         size=2,
-    #         color=cart_kpts_df['v_mag [m/s]'],
-    #         colorscale='Rainbow',
-    #         showscale=True,
-    #         opacity=1
-    #     )
-    # )
-    #
-    # trace1 = go.Scatter3d(
-    #     x=cart_kpts_df['kx [1/A]'].values / (2 * np.pi / a),
-    #     y=cart_kpts_df['ky [1/A]'].values / (2 * np.pi / a),
-    #     z=cart_kpts_df['kz [1/A]'].values / (2 * np.pi / a),
-    #     mode='markers',
-    #     marker=dict(
-    #         size=2,
-    #         color=cart_kpts_df['k_inds'],
-    #         colorscale='Rainbow',
-    #         showscale=True,
-    #         opacity=1
-    #     )
-    # )
-    #
-    # data = [trace1]
-    # layout = go.Layout(
-    #     scene=dict(
-    #         xaxis=dict(
-    #             title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
-    #         yaxis=dict(
-    #             title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
-    #         zaxis=dict(
-    #             title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
-    # fig = go.Figure(data=data, layout=layout)
-    # py.iplot(fig, filename='simple-3d-scatter')
-    #
-    # trace1 = go.Scatter3d(
-    #     x=edit_cart_qpts_df['kx [1/A]'].values,
-    #     y=edit_cart_qpts_df['ky [1/A]'].values,
-    #     z=edit_cart_qpts_df['kz [1/A]'].values,
-    #     mode='markers',
-    #     marker=dict(
-    #         size=2,
-    #         opacity=1
-    #     )
-    # )
-    #
-    # data = [trace1]
-    # layout = go.Layout(
-    #     scene=dict(
-    #         xaxis=dict(
-    #             title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
-    #         yaxis=dict(
-    #             title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
-    #         zaxis=dict(
-    #             title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
-    # fig = go.Figure(data=data, layout=layout)
-    # py.iplot(fig, filename='simple-3d-scatter')
 
 
 def plot_dispersion(kpts, enk):
@@ -333,7 +270,7 @@ def plot_bandstructure(kpts, enk):
         thiskmag = lkmag[i]
         if len(energies) > 1:
             veck = np.ones((len(energies), 1)) * thiskmag
-            plt.plot(veck, theseenergies, '.', color='C0')
+            # plt.plot(veck, theseenergies, '.', color='C0')
         else:
             plt.plot(thiskmag, energies, '.', color='C0')
 
@@ -350,13 +287,42 @@ def plot_bandstructure(kpts, enk):
     plt.ylabel('Energy in Ry')
 
 
+def plot_scattering_rates(data_dir, energies):
+    os.chdir(data_dir)
+    rates = np.load('scattering_rates.npy')
+
+    font = {'size': 14}
+    matplotlib.rc('font', **font)
+
+    plt.plot(energies, rates, '.', MarkerSize=3)
+    plt.xlabel('Energy [eV]')
+    plt.ylabel(r'Scattering rate [ps$^{-1}$]')
+    plt.savefig('plot_scattering_rates.png')
+
+
 def main():
-    g_df, kpts_df, enk_df, qpts_df, enq_df = data_processing.loadfromfile()
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
-    plot_dispersion(edit_cart_qpts_df, enq_df)
-    plot_bandstructure(cart_kpts_df, enk_df)
+    con = preprocessing_largegrid.PhysicalConstants()
+    reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
 
-    plt.show()
+    cart_kpts_df = preprocessing_largegrid.load_vel_data(data_loc, con)
+    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cart_kpts_df.to_numpy()[:, 2:5], reciplattvecs)
+    fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+
+    enk = cart_kpts_df.sort_values(by=['k_inds'])
+    enk = np.array(enk['energy'])
+    enk = enk - enk.min()
+
+    # plt.plot(enk, '.')
+    # bz_3dscatter(con, cart_kpts_df, enk_df)
+    # bz_3dscatter(con, fbzcartkpts, enk_df)
+    plot_scattering_rates(data_loc, enk)
+
+    # plt.show()
+
 
 if __name__ == '__main__':
     main()

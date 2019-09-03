@@ -43,9 +43,9 @@ class PhysicalConstants:
     # b3 = np.array([-1.1308095, +1.1308095, +1.1308095])
 
 
-def loadfromfile(data_loc, matrixel=True):
+def loadfromfile(data_dir, matrixel=True):
     """Takes the raw text files and converts them into useful dataframes."""
-    os.chdir(data_loc)
+    os.chdir(data_dir)
 
     if matrixel:  # maybe sometimes don't need matrix elements, just need the other data
         if os.path.isfile('matrix_el.h5'):
@@ -54,79 +54,52 @@ def loadfromfile(data_loc, matrixel=True):
         else:
             print('Reading in matrix elements from text file')
             data = np.loadtxt('gaas.eph_matrix', skiprows=1)
-            # data = pd.read_csv('gaas.eph_matrix', sep='\t', header=None, skiprows=(0,1))
-            # data.columns = ['0']
-            # data_array = data['0'].values
-            # new_array = np.zeros((len(data_array),7))
-            # for i1 in range(len(data_array)):
-            #    new_array[i1,:] = data_array[i1].split()
-            # del data_array
+
             g_df = pd.DataFrame(data=data, columns=['k_inds','q_inds','k+q_inds','m_band','n_band','im_mode','g_element'])
-            g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band','n_band', 'im_mode']].apply(pd.to_numeric, downcast='integer')
+            g_df[['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode']] = g_df[[
+                'k_inds', 'q_inds', 'k+q_inds','m_band','n_band', 'im_mode']].astype(int)
             g_df = g_df.drop(["m_band", "n_band"], axis=1)
-            #g_df.to_hdf('matrix_el.h5', key='df')
+            # g_df.to_hdf('matrix_el.h5', key='df')
     else:
         g_df = []
 
     # Importing electron k points
-    kpts = pd.read_csv('gaas.kpts', sep='\t', header=None)
-    kpts.columns = ['0']
-    kpts_array = kpts['0'].values
-    new_kpt_array = np.zeros((len(kpts_array), 4))
-    for i1 in range(len(kpts_array)):
-        new_kpt_array[i1, :] = kpts_array[i1].split()
-
-    kpts_df = pd.DataFrame(data=new_kpt_array, columns=['k_inds', 'b1', 'b2', 'b3'])
-    # kpts_df[['k_inds']] = kpts_df[['k_inds']].apply(pd.to_numeric, downcast='integer')
-    kpts_df['k_inds'] = kpts_df['k_inds'].astype(int)
+    if os.path.isfile('gaas.kpts.parquet'):
+        kpts = pd.read_parquet('gaas.kpts.parquet')
+    else:
+        kpts_array = np.loadtxt('gaas.kpts')
+        kpts = pd.DataFrame(data=kpts_array, columns=['k_inds', 'b1', 'b2', 'b3'])
+        kpts['k_inds'] = kpts['k_inds'].astype(int)
+        kpts.to_parquet('gaas.kpts.parquet')
 
     # Import electron energy library
-    enk = pd.read_csv('gaas.enk', sep='\t',header= None)
-    enk.columns = ['0']
-    enk_array = enk['0'].values
-    new_enk_array = np.zeros((len(enk_array),3))
-    for i1 in range(len(enk_array)):
-        new_enk_array[i1,:] = enk_array[i1].split()
-
-    enk_df = pd.DataFrame(data=new_enk_array, columns=['k_inds', 'band_inds', 'energy [Ryd]'])
-    # enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].apply(pd.to_numeric,downcast = 'integer')
-    enk_df[['k_inds','band_inds']] = enk_df[['k_inds','band_inds']].astype(int)
-
-    # Import phonon energy library
-    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
-    enq.columns = ['0']
-    enq_array = enq['0'].values
-    new_enq_array = np.zeros((len(enq_array),3))
-    for i1 in range(len(enq_array)):
-        new_enq_array[i1,:] = enq_array[i1].split()
-
-    enq_df = pd.DataFrame(data=new_enq_array, columns=['q_inds', 'im_mode', 'energy [Ryd]'])
-    # enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-    enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].astype(int)
+    if os.path.isfile('gaas.enk.parquet'):
+        enk = pd.read_parquet('gaas.enk.parquet')
+    else:
+        enk_array = np.loadtxt('gaas.enk')
+        enk = pd.DataFrame(data=enk_array, columns=['k_inds', 'band_inds', 'energy [Ryd]'])
+        enk[['k_inds', 'band_inds']] = enk[['k_inds', 'band_inds']].astype(int)
+        enk.to_parquet('gaas.enk.parquet')
 
     # Import phonon q-point index
-    qpts = pd.read_csv('gaas.qpts', sep='\t',header= None)
-    qpts.columns = ['0']
-    qpts_array = qpts['0'].values
-    new_qpt_array = np.zeros((len(qpts_array),4))
-    for i1 in range(len(qpts_array)):
-        new_qpt_array[i1,:] = qpts_array[i1].split()
+    if os.path.isfile('gaas.qpts.parquet'):
+        qpts = pd.read_parquet('gaas.qpts.parquet')
+    else:
+        qpts_array = np.loadtxt('gaas.qpts')
+        qpts = pd.DataFrame(data=qpts_array, columns=['q_inds', 'b1', 'b2', 'b3'])
+        qpts['q_inds'] = qpts['q_inds'].astype(int)
+        qpts.to_parquet('gaas.qpts.parquet')
 
-    qpts_df = pd.DataFrame(data=new_qpt_array, columns=['q_inds', 'b1', 'b2', 'b3'])
-    # qpts_df[['q_inds']] = qpts_df[['q_inds']].apply(pd.to_numeric, downcast='integer')
+    # Import phonon energy library
+    if os.path.isfile('gaas.enq.parquet'):
+        enq = pd.read_parquet('gaas.enq.parquet')
+    else:
+        enq_array = np.loadtxt('gaas.enq')
+        enq = pd.DataFrame(data=enq_array, columns=['q_inds', 'im_mode', 'energy [Ryd]'])
+        enq[['q_inds', 'im_mode']] = enq[['q_inds', 'im_mode']].astype(int)
+        enq.to_parquet('gaas.enq.parquet')
 
-    # Import phonon energies
-    enq = pd.read_csv('gaas.enq', sep='\t',header= None)
-    enq.columns = ['0']
-    enq_array = enq['0'].values
-    new_enq_array = np.zeros((len(enq_array),3))
-    for i1 in range(len(enq_array)):
-        new_enq_array[i1,:] = enq_array[i1].split()
-
-    enq_df = pd.DataFrame(data=new_enq_array,columns = ['q_inds','im_mode','energy [Ryd]'])
-    # enq_df[['q_inds','im_mode']] = enq_df[['q_inds','im_mode']].apply(pd.to_numeric,downcast = 'integer')
-
-    return g_df, kpts_df, enk_df, qpts_df, enq_df
+    return g_df, kpts, enk, qpts, enq
 
 
 def vectorbasis2cartesian(coords, vecs):
@@ -250,39 +223,40 @@ def translate_into_fbz(coords, rlv):
     return fbzcoords
 
 
-def load_vel_data(dirname,cons):
+def load_vel_data(data_dir, cons):
     """Dirname is the name of the directory where the .VEL file is stored.
     The k-points are given in Cartesian coordinates and are not yet shifted
     back into the first Brillouin Zone.
     The result of this function is a Pandas DataFrame containing the columns:
     [k_inds][bands][energy (eV)][kx (1/A)][ky (1/A)[kz (1/A)]"""
 
-    kvel = pd.read_csv(dirname, sep='\t', header=None, skiprows=[0, 1, 2])
-    kvel.columns = ['0']
-    kvel_array = kvel['0'].values
-    new_kvel_array = np.zeros((len(kvel_array), 10))
-    for i1 in range(len(kvel_array)):
-        new_kvel_array[i1, :] = kvel_array[i1].split()
-    kvel_df = pd.DataFrame(data=new_kvel_array,
-                           columns=['k_inds', 'bands', 'energy', 'kx [2pi/alat]', 'ky [2pi/alat]', 'kz [2pi/alat]',
-                                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
-    # kvel_df[['k_inds']] = kvel_df[['k_inds']].apply(pd.to_numeric, downcast='integer') # downcast indices to integer
-    kvel_df[['k_inds']] = kvel_df[['k_inds']].astype(int)
-    cart_kpts_df = kvel_df.copy(deep=True)
-    cart_kpts_df['kx [2pi/alat]'] = cart_kpts_df['kx [2pi/alat]'].values * 2 * np.pi / cons.a
-    cart_kpts_df['ky [2pi/alat]'] = cart_kpts_df['ky [2pi/alat]'].values * 2 * np.pi / cons.a
-    cart_kpts_df['kz [2pi/alat]'] = cart_kpts_df['kz [2pi/alat]'].values * 2 * np.pi / cons.a
-    cart_kpts_df.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
-                            'vz_dir', 'v_mag [m/s]']
+    os.chdir(data_dir)
 
-    cart_kpts_df['vx [m/s]'] = np.multiply(cart_kpts_df['vx_dir'].values,cart_kpts_df['v_mag [m/s]'])
+    if os.path.isfile('gaas.vel.parquet'):
+        cart_kpts = pd.read_parquet('gaas.vel.parquet')
+    else:
+        kvel = np.loadtxt('gaas.vel', skiprows=3)
+        kvel_df = pd.DataFrame(data=kvel,
+                               columns=['k_inds', 'bands', 'energy', 'kx [2pi/alat]', 'ky [2pi/alat]', 'kz [2pi/alat]',
+                                        'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
+        kvel_df[['k_inds']] = kvel_df[['k_inds']].astype(int)
+        cart_kpts = kvel_df.copy(deep=True)
+        cart_kpts['kx [2pi/alat]'] = cart_kpts['kx [2pi/alat]'].values * 2 * np.pi / cons.a
+        cart_kpts['ky [2pi/alat]'] = cart_kpts['ky [2pi/alat]'].values * 2 * np.pi / cons.a
+        cart_kpts['kz [2pi/alat]'] = cart_kpts['kz [2pi/alat]'].values * 2 * np.pi / cons.a
+        cart_kpts.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
+                             'vz_dir', 'v_mag [m/s]']
 
-    cart_kpts_df = cart_kpts_df.drop(['bands'], axis=1)
-    cart_kpts_df = cart_kpts_df.drop(['vx_dir','vy_dir','vz_dir','v_mag [m/s]'], axis=1)
+        cart_kpts['vx [m/s]'] = np.multiply(cart_kpts['vx_dir'].values, cart_kpts['v_mag [m/s]'])
 
-    cart_kpts_df['FD'] = (np.exp((cart_kpts_df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb * cons.T)) + 1) ** (-1)
+        cart_kpts = cart_kpts.drop(['bands'], axis=1)
+        cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'], axis=1)
 
-    return cart_kpts_df
+        cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * cons.e - cons.mu * cons.e)
+                                  / (cons.kb * cons.T)) + 1) ** (-1)
+        cart_kpts.to_parquet('gaas.vel.parquet')
+
+    return cart_kpts
 
 
 def bosonic_processing(g_df, enq_key, nb, T):
@@ -295,7 +269,7 @@ def bosonic_processing(g_df, enq_key, nb, T):
 
     qindex = ((np.array(g_df['q_inds']) - 1)*nb + np.array(g_df['im_mode'])).astype(int) - 1
 
-    g_df['q_en [eV]'] = enq_key[qindex] * 13.6056980659
+    g_df['q_en [eV]'] = enq_key[qindex]  # It's already in eV!!!
 
     def bose_distribution(df, temp):
         """This function is designed to take a Pandas DataFrame containing e-ph data and return
@@ -363,45 +337,11 @@ def gaussian_weight_inchunks(k_ind):
     energy_delta_ems = df['k_en [eV]'].values - df['k+q_en [eV]'].values - df['q_en [eV]'].values
     energy_delta_abs = df['k_en [eV]'].values - df['k+q_en [eV]'].values + df['q_en [eV]'].values
 
-    df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-(energy_delta_abs / b) ** 2)
-    df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-(energy_delta_ems / b) ** 2)
+    df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-1 * (energy_delta_abs / b) ** 2)
+    df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-1 * (energy_delta_ems / b) ** 2)
 
     df.to_parquet('k{:05d}.parquet'.format(k_ind))
     del df
-
-
-def relaxation_times(g_df,cart_kpts_df):
-    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127"""
-    g_df['ems_weight'] = np.multiply(
-        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-        g_df['ems_gaussian']) / 13.6056980659
-    g_df['abs_weight'] = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                                     g_df['abs_gaussian']) / 13.6056980659
-
-    g_df['weight'] = g_df['ems_weight'].values + g_df['abs_weight'].values
-
-    sr = g_df.groupby(['k_inds'])['weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
-        np.unique(g_df['q_id'].values))
-    scattering = sr.to_frame().reset_index()
-
-    scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
-
-    return scattering_array
-
-
-def RTA_calculation(g_df,cart_kpts_df,E,cons):
-    """Calculate the solution to the one-dimensional Boltzmann Equation under the relaxation time approximation."""
-
-    scattering_array = relaxation_times(g_df,cart_kpts_df)  # in seconds
-
-    diagonal_arg = cons.h/(cons.e*E)*scattering_array
-    matrix_exp = np.diag(np.exp(diagonal_arg))
-    inhomo = cons.h/(cons.kb*cons.T)*cart_kpts_df['vx [m/s]'].values*cart_kpts_df['FD'].values
-    factor = np.multiply(np.dot(matrix_exp,inhomo),cart_kpts_df['kx [1/A]'].values)*10**(10)
-    cart_kpts_df['factor'] = factor
-
-    return cart_kpts_df
 
 
 def chunkify(fname, size=512 * 1024 * 1024):
@@ -495,8 +435,8 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
     if not np.any(df_k.columns == 'k_inds'):
         df_k['k_inds'] = k_ind * np.ones(len(df_k.index))
 
-    if not np.any(df_k.columns == 'q_en [eV]'):
-        df_k = bosonic_processing(df_k, ph_energies, nb, con.T)
+    # if not np.any(df_k.columns == 'q_en [eV]'):
+    df_k = bosonic_processing(df_k, ph_energies, nb, con.T)
 
     if not np.any(df_k.columns == 'k_en [eV]'):
         df_k = fermionic_processing(df_k, el_energies, con.mu, con.T)
@@ -534,7 +474,7 @@ if __name__ == '__main__':
         print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
               % load_matrix_elements)
 
-        cart_kpts_df = load_vel_data('gaas.vel', con)
+        cart_kpts_df = load_vel_data(data_loc, con)
         print('Electron kpts and energies loaded')
 
         # At this point, the processed data are:
@@ -561,7 +501,7 @@ if __name__ == '__main__':
         print('Populating reciprocals by adding data into memmapped files')
         os.chdir(recip_loc)  # THIS IS REALLY IMPORTANT FOR SOME REASON
 
-        # recipt_line_key keeps track of where the next line should go for each memmap array, since appending is hard.
+        # recip_line_key keeps track of where the next line should go for each memmap array, since appending is hard.
         recip_line_key = mp.Array('i', [0]*nkpts, lock=False)
         nthreads = 6
         pool = mp.Pool(nthreads)

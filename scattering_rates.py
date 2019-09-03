@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 
-import data_processing
+import preprocessing_largegrid
 import numpy as np
+import multiprocessing as mp
+import os
+import pandas as pd
+import time
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -9,8 +13,6 @@ import matplotlib.pyplot as plt
 import plotly.offline as py
 import plotly.graph_objs as go
 import plotly
-#plotly.tools.set_credentials_file(username='AYChoi', api_key='ZacDa7fKo8hfiELPfs57')
-plotly.tools.set_credentials_file(username='AlexanderYChoi', api_key='VyLt05wzc89iXwSC82FO')
 
 
 def coupling_matrix_calc(g_df):
@@ -90,19 +92,104 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
 
-def main():
-    # Physical parameter definition
-    a = 5.556                        # Lattice constant for GaAs [A]
-    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    T = 300                          # Lattice temeprature [K]
-    e = 1.602*10**(-19)              # Fundamental electronic charge [C]
-    mu = 5.780                       # Chemical potential [eV]
-    b = 8/1000                       # Gaussian broadening [eV]
+def relaxation_times_parallel(k):
+    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
+    Also returns the off-diagonal scattering term.
 
-    g_df, kpts_df, enk_df, qpts_df, enq_df = data_processing.loadfromfile()
+    CHECK THE FORMULAS FROM MAHAN"""
+    nkpts = 42433
+    mbands = 6
 
-    check_symmetric(np.abs(collision_array))
+    g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
+    g_df['q_id'] = (g_df['q_inds'].values - 1) * mbands + g_df['im_mode']
+
+    ems_weight = np.multiply(
+        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+        g_df['ems_gaussian']) / 13.6056980659
+    abs_weight = np.multiply(
+        np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+        g_df['abs_gaussian']) / 13.6056980659
+
+    g_df['weight'] = ems_weight + abs_weight
+
+    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi * \
+         (2.418 * 10 ** 17) * (10 ** -12) / len(np.unique(g_df['q_id'].values))
+
+    print(r'For k={:d}, the scattering rate (1/ps) is {:f}'.format(k, sr))
+
+    scattering_rates[k-1] = sr
+
+    # scattering = sr.to_frame().reset_index()
+    # scattering_array = np.zeros(nkpts)
+    # scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
+    #
+    # offdiag_abs_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
+    #                                                 g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
+    # offdiag_ems_weight = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
+    #                                                 g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
+    #
+    # g_df['OD_weight'] = offdiag_abs_weight + offdiag_ems_weight
+    # offdiag_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * (2.418 * 10 ** 17) * (10 ** -12) / len(
+    #     np.unique(g_df['q_id'].values))
+    #
+    # OD_scattering = offdiag_sr.to_frame().reset_index()
+    # OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    # OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
+
+
+def relaxation_times(g_df, cart_kpts_df):
+    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
+    Also returns the off-diagonal scattering term.
+
+    CHECK THE FORMULAS FROM MAHAN"""
+    g_df['ems_weight'] = np.multiply(
+        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+        g_df['ems_gaussian']) / 13.6056980659
+    g_df['abs_weight'] = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+                                     g_df['abs_gaussian']) / 13.6056980659
+
+    g_df['weight'] = g_df['ems_weight'].values + g_df['abs_weight'].values
+
+    sr = g_df.groupby(['k_inds'])['weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+        np.unique(g_df['q_id'].values))
+
+    scattering = sr.to_frame().reset_index()
+    scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
+
+    g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
+                                                    g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
+    g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
+                                                    g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
+
+    g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
+    OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+        np.unique(g_df['q_id'].values))
+
+    OD_scattering = OD_sr.to_frame().reset_index()
+    OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
+
+    return scattering_array,OD_scattering_array
 
 
 if __name__ == '__main__':
-    main()
+    con = preprocessing_largegrid.PhysicalConstants()
+
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    os.chdir(chunk_loc)
+
+    nkpts = 42433
+    kinds = np.arange(1, nkpts + 1)
+
+    scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
+    nthreads = 6
+    pool = mp.Pool(nthreads)
+
+    start = time.time()
+    pool.map(relaxation_times_parallel, kinds)
+    end = time.time()
+    print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+
+    np.save('/home/peishi/nvme/k200-0.4eV/scattering_rates', np.array(scattering_rates))
