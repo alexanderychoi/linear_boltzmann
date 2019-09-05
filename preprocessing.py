@@ -214,27 +214,27 @@ def load_vel_data(dirname,cons):
 
     cart_kpts_df['FD_der [J]'] = -np.multiply(cart_kpts_df['FD'].values**2/(cons.kb*cons.T),np.exp((cart_kpts_df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb * cons.T)))
 
-    from sklearn.cluster import KMeans
-    num_clusters = 9
-
-    my_list = np.linspace(0, num_clusters - 1, num_clusters)
-    k_means = KMeans(n_clusters=num_clusters, n_init=10)
-    X = cart_kpts_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values
-    k_means.fit(X)
-    k_means_cluster_centers = k_means.cluster_centers_
-
-    cart_kpts_df['labels'] = k_means.labels_
-
-    temp_label = cart_kpts_df['labels'].drop_duplicates().values
-    clustering = cart_kpts_df['labels'].values
-    for i0 in range(len(my_list)):
-        inds = clustering == temp_label[i0]
-        cart_kpts_df.loc[inds, 'labels'] = my_list[i0] + 1
-
-    cart_kpts_df['labels'] = cart_kpts_df['labels'].values.astype(int)
-
-    cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]','labels'], ascending=True).groupby(
-        ['ky [1/A]', 'kz [1/A]','labels']).ngroup()
+    # from sklearn.cluster import KMeans
+    # num_clusters = 9
+    #
+    # my_list = np.linspace(0, num_clusters - 1, num_clusters)
+    # k_means = KMeans(n_clusters=num_clusters, n_init=10)
+    # X = cart_kpts_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values
+    # k_means.fit(X)
+    # k_means_cluster_centers = k_means.cluster_centers_
+    #
+    # cart_kpts_df['labels'] = k_means.labels_
+    #
+    # temp_label = cart_kpts_df['labels'].drop_duplicates().values
+    # clustering = cart_kpts_df['labels'].values
+    # for i0 in range(len(my_list)):
+    #     inds = clustering == temp_label[i0]
+    #     cart_kpts_df.loc[inds, 'labels'] = my_list[i0] + 1
+    #
+    # cart_kpts_df['labels'] = cart_kpts_df['labels'].values.astype(int)
+    #
+    # cart_kpts_df['slice_inds'] = cart_kpts_df.sort_values(['ky [1/A]', 'kz [1/A]','labels'], ascending=True).groupby(
+    #     ['ky [1/A]', 'kz [1/A]','labels']).ngroup()
 
     return cart_kpts_df
 
@@ -703,18 +703,9 @@ def main():
     con = PhysicalConstants()
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
 
-    files_loc = '/home/peishi/calculations/first-principles-fluctuations/linear_boltzmann'
+    files_loc = '/home/peishi/nvme/k100-0.3eV'
     os.chdir(files_loc)
 
-    # The loadfromfile just loads all the relevant stuff. If you want to save time and not load the matrix elements you
-    # can specify the boolean optional input as False (currently True). This will leave g_df empty.
-    load_matrix_elements = True
-    g_df, kpts_df, enk_df, qpts_df, enq_df = loadfromfile(matrixel=load_matrix_elements)
-
-    print('Matrix elements loaded (%s), electron kpoints and energies, phonon qpoints and energies loaded'
-          % load_matrix_elements)
-
-    con = physical_constants()
     enq_df = load_enq_data('gaas.enq')
     print('Phonon energies loaded')
     print('Phonon qpts loaded')
@@ -730,17 +721,6 @@ def main():
     # q-points = qpts_df['q_inds','b1','b2','b3']
     # k-energy = enk_df['k_inds','band_inds','energy [Ryd]']
     # q-energy = enq_df['q_inds','im_mode','energy [Ryd]']
-
-    kpts = np.array(kpts_df[['b1', 'b2', 'b3']])
-    qpts = np.array(qpts_df[['b1', 'b2', 'b3']])
-
-    cartkpts = vectorbasis2cartesian(kpts, reciplattvecs)
-    cartqpts = vectorbasis2cartesian(qpts, reciplattvecs)
-
-    # Translating kpoints works
-    fbzcartkpts = translate_into_fbz(cartkpts, reciplattvecs)
-    # Translating qpoints does not work for some reason...
-    fbzcartqpts = translate_into_fbz(cartqpts, reciplattvecs)
 
     # cartesian_df, cartesian_df_edit = cartesian_q_points(qpt_df, con)
 
@@ -767,23 +747,23 @@ def main():
         print('g_dataframe processed')
         full_g_df.to_hdf('full_g_df.h5', key='df')
 
-    print('Now chunking the full_g_df so each k_ind is in its own hdf5 file')
+    # print('Now chunking the full_g_df so each k_ind is in its own hdf5 file')
 
-    if not os.path.isdir('chunked'):
-        os.mkdir('chunked')
-    os.chdir('chunked')
-    nk = len(np.unique(full_g_df['k_inds']))
-    if len([name for name in os.listdir('.') if os.path.isfile(name)]) == nk:
-        print('Data already chunked (probably). Not running chunking code.')
-    else:
-        for k in np.nditer(np.unique(full_g_df['k_inds'])):
-            thisdf = full_g_df[full_g_df['k_inds'] == k]
-            # NOTE: The fill length may change depending on the number of kpoints you have. I am using 4 here because I
-            # know that there are 9999 or less unique k so that the max number for k_ind is only 4 digits. If you need
-            # to increase fill length, just change {:04d} to {:0xd} where x is the largest number of digits
-            thisdf.to_hdf('full_g_{:04d}.h5'.format(k), key='df')
-
-        print('Done chunking all of the data.')
+    # if not os.path.isdir('chunked'):
+    #     os.mkdir('chunked')
+    # os.chdir('chunked')
+    # nk = len(np.unique(full_g_df['k_inds']))
+    # if len([name for name in os.listdir('.') if os.path.isfile(name)]) == nk:
+    #     print('Data already chunked (probably). Not running chunking code.')
+    # else:
+    #     for k in np.nditer(np.unique(full_g_df['k_inds'])):
+    #         thisdf = full_g_df[full_g_df['k_inds'] == k]
+    #         # NOTE: The fill length may change depending on the number of kpoints you have. I am using 4 here because I
+    #         # know that there are 9999 or less unique k so that the max number for k_ind is only 4 digits. If you need
+    #         # to increase fill length, just change {:04d} to {:0xd} where x is the largest number of digits
+    #         thisdf.to_hdf('full_g_{:04d}.h5'.format(k), key='df')
+    #
+    #     print('Done chunking all of the data.')
 
 
 if __name__ == '__main__':

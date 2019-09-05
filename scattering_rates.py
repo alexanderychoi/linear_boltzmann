@@ -3,6 +3,7 @@
 import preprocessing_largegrid
 import numpy as np
 import multiprocessing as mp
+from functools import partial
 import os
 import pandas as pd
 import time
@@ -92,28 +93,26 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
 
-def relaxation_times_parallel(k):
+def relaxation_times_parallel(k, nlambda):
     """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
     Also returns the off-diagonal scattering term.
 
     CHECK THE FORMULAS FROM MAHAN"""
-    nkpts = 42433
     mbands = 6
+    # divisor = 121904  # number of unique q_ids for k100
+    # divisor = 3043002  # number of unique q_ids for k200
+    prefactor = 13.6056980659
 
     g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
-    g_df['q_id'] = (g_df['q_inds'].values - 1) * mbands + g_df['im_mode']
 
-    ems_weight = np.multiply(
-        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-        g_df['ems_gaussian']) / 13.6056980659
-    abs_weight = np.multiply(
-        np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-        g_df['abs_gaussian']) / 13.6056980659
+    ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+                             g_df['ems_gaussian'])
+    abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+                             g_df['abs_gaussian'])
 
     g_df['weight'] = ems_weight + abs_weight
 
-    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi * \
-         (2.418 * 10 ** 17) * (10 ** -12) / len(np.unique(g_df['q_id'].values))
+    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
 
     print(r'For k={:d}, the scattering rate (1/ps) is {:f}'.format(k, sr))
 
@@ -157,39 +156,51 @@ def relaxation_times(g_df, cart_kpts_df):
     scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
     scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
 
-    g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
-                                                    g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
-    g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
-                                                    g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
+    # g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
+    #                                                 g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
+    # g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
+    #                                                 g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
+    #
+    # g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
+    # OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+    #     np.unique(g_df['q_id'].values))
+    #
+    # OD_scattering = OD_sr.to_frame().reset_index()
+    # OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    # OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
 
-    g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
-    OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
-        np.unique(g_df['q_id'].values))
-
-    OD_scattering = OD_sr.to_frame().reset_index()
-    OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
-
-    return scattering_array,OD_scattering_array
+    return scattering_array
 
 
 if __name__ == '__main__':
     con = preprocessing_largegrid.PhysicalConstants()
 
+    # data_loc = '/home/peishi/nvme/k100-0.3eV/'
+    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-    os.chdir(chunk_loc)
 
-    nkpts = 42433
+    _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
+
+    nkpts = len(np.unique(kpts_df['k_inds']))
+    n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
+    os.chdir(chunk_loc)
     scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
     nthreads = 6
     pool = mp.Pool(nthreads)
 
     start = time.time()
-    pool.map(relaxation_times_parallel, kinds)
+    pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
     end = time.time()
     print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+    scattering_rates = np.array(scattering_rates)
 
-    np.save('/home/peishi/nvme/k200-0.4eV/scattering_rates', np.array(scattering_rates))
+    # # Scattering rate calculation when you have the whole dataframe
+    # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
+    # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
+    #
+    # scattering_rates = relaxation_times(full_g_df, kpts)
+
+    np.save(data_loc + 'scattering_rates', scattering_rates)

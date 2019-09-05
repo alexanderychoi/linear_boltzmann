@@ -297,10 +297,12 @@ def plot_scattering_rates(data_dir, energies):
     plt.plot(energies, rates, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
-    plt.savefig('plot_scattering_rates.png')
+    # plt.savefig('plot_scattering_rates.png')
 
 
 def main():
+    # data_loc = '/home/peishi/nvme/k100-0.3eV/'
+    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
@@ -309,6 +311,7 @@ def main():
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
 
     cart_kpts_df = preprocessing_largegrid.load_vel_data(data_loc, con)
+
     fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cart_kpts_df.to_numpy()[:, 2:5], reciplattvecs)
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
 
@@ -321,7 +324,7 @@ def main():
     # bz_3dscatter(con, fbzcartkpts, enk_df)
     plot_scattering_rates(data_loc, enk)
 
-    # plt.show()
+    plt.show()
 
 
 if __name__ == '__main__':

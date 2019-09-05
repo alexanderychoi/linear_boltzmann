@@ -331,14 +331,19 @@ def gaussian_weight_inchunks(k_ind):
     """Function that is easy to use with multiprocessing"""
     print('Doing k={:d}'.format(k_ind))
 
-    b = 8 / 1000  # Gaussian broadening [eV]
+    # If no contributions from energy diffs larger than 8 meV then that implies that the Gaussian function should be
+    # near zero across an 8 meV span. We know that integrating from -3*sigma to +3*sigma gives 99.7% of a Gaussian, so
+    # let's take the width of 6 sigma to be equal to 8 meV which implies sigma is 8/6 meV
+    # sigma = 8 / 4 / 1000
+    # eta = np.sqrt(2) * sigma  # Gaussian broadening parameter which is equal to sqrt(2) * sigma (the stddev) in [eV]
+    eta = 5
 
     df = pd.read_parquet('k{:05d}.parquet'.format(k_ind))
     energy_delta_ems = df['k_en [eV]'].values - df['k+q_en [eV]'].values - df['q_en [eV]'].values
     energy_delta_abs = df['k_en [eV]'].values - df['k+q_en [eV]'].values + df['q_en [eV]'].values
 
-    df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-1 * (energy_delta_abs / b) ** 2)
-    df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / b * np.exp(-1 * (energy_delta_ems / b) ** 2)
+    df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / eta * np.exp(-1 * (energy_delta_abs / eta) ** 2)
+    df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / eta * np.exp(-1 * (energy_delta_ems / eta) ** 2)
 
     df.to_parquet('k{:05d}.parquet'.format(k_ind))
     del df
@@ -444,11 +449,11 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
     df_k.to_parquet('k{:05d}.parquet'.format(int(k_ind)))
 
 
-def creating_mmap():
+def creating_mmap(dir, n, nl):
     """Creates the memory mapped numpy arrays which can be opened and have data added to them later"""
-    os.chdir('/home/peishi/nvme/k200-0.4eV/recips')
-    for k in range(42434):
-        kmap = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(100000, 4))
+    os.chdir(dir)
+    for k in range(1, n+1):
+        kmap = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(nl, 4))
         del kmap
 
 
@@ -456,12 +461,15 @@ if __name__ == '__main__':
     con = PhysicalConstants()
 
     # data_loc = '/home/peishi/nvme/k100-0.3eV/'
-    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/k100-chunked/'
+    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
+    # recip_loc = '/home/peishi/nvme/k100-0.3eV/recips/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     recip_loc = '/home/peishi/nvme/k200-0.4eV/recips/'
 
     nkpts = 42433
+    mmaplines = 100000
+    nthreads = 6
 
     # For the 200x200x200 kpoints will need to load and process line by line since file too large.
     # First load all the other stuff.
@@ -503,14 +511,13 @@ if __name__ == '__main__':
 
         # recip_line_key keeps track of where the next line should go for each memmap array, since appending is hard.
         recip_line_key = mp.Array('i', [0]*nkpts, lock=False)
-        nthreads = 6
         pool = mp.Pool(nthreads)
 
-        creating_mmap()
+        creating_mmap(recip_loc, nkpts, mmaplines)
 
         counter = 1
-        f = open('/home/peishi/nvme/k200-0.4eV/gaas.eph_matrix')
-        for chunkStart, chunkSize in chunkify('/home/peishi/nvme/k200-0.4eV/gaas.eph_matrix', size=512*(1024**2)):
+        f = open(data_loc + 'gaas.eph_matrix')
+        for chunkStart, chunkSize in chunkify(data_loc + 'gaas.eph_matrix', size=512*(1024**2)):
             f.seek(chunkStart)
             all_lines = np.array([float(i) for i in f.read(chunkSize).split()])
             print('Finished READ IN for {:d} chunks of 512 MB'.format(counter))
@@ -523,7 +530,7 @@ if __name__ == '__main__':
             start = time.time()
             pool.map(partial(memmap_par, data=chunkdata), kqinds)
             end = time.time()
-            print('Processing processing reciprocals took {:.2f} seconds'.format(end - start))
+            print('Processing reciprocals took {:.2f} seconds'.format(end - start))
             counter += 1
 
     # Now need to add the data from each memmap file into the corresponding kpoint
@@ -533,7 +540,7 @@ if __name__ == '__main__':
         os.chdir(chunk_loc)
         for i in range(nkpts):
             k = i + 1
-            kmap = np.memmap(recip_loc+'k{:05d}.mmap'.format(k), dtype='float64', mode='r+', shape=(100000, 4))
+            kmap = np.memmap(recip_loc+'k{:05d}.mmap'.format(k), dtype='float64', mode='r+', shape=(mmaplines, 4))
             kdf = pd.read_parquet(chunk_loc+'k{:05d}.parquet'.format(k))
             inds = kmap[:, 0] != 0
             recipdf = pd.DataFrame(data=kmap[inds, :], columns=kdf.columns)
@@ -549,7 +556,6 @@ if __name__ == '__main__':
         print('Processing auxillary information for each kpoint file')
         os.chdir(chunk_loc)
 
-        nthreads = 6
         pool = mp.Pool(nthreads)
 
         k_inds = [k0 + 1 for k0 in range(nkpts)]
@@ -559,11 +565,11 @@ if __name__ == '__main__':
         k_en_key = np.array(k_en_key['energy'])
         q_en_key, nphononbands = create_q_en_key(enq_df)  # need total number of bands
 
-        start = time.time()
-        pool.map(partial(chunked_bosonic_fermionic, ph_energies=q_en_key, nb=nphononbands, el_energies=k_en_key,
-                         constants=con), k_inds)
-        end = time.time()
-        print('Parallel fermionic and bosonic processing took {:.2f} seconds'.format(end - start))
+        # start = time.time()
+        # pool.map(partial(chunked_bosonic_fermionic, ph_energies=q_en_key, nb=nphononbands, el_energies=k_en_key,
+        #                  constants=con), k_inds)
+        # end = time.time()
+        # print('Parallel fermionic and bosonic processing took {:.2f} seconds'.format(end - start))
 
         start = time.time()
         pool.map(gaussian_weight_inchunks, k_inds)
