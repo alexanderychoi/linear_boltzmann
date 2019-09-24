@@ -294,9 +294,10 @@ def plot_scattering_rates(data_dir, energies):
     font = {'size': 14}
     matplotlib.rc('font', **font)
 
-    plt.plot(energies, rates, '.', MarkerSize=3)
+    plt.plot(energies, rates * 36.5, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
+    plt.xlim([0, 0.4])
     # plt.savefig('plot_scattering_rates.png')
 
 

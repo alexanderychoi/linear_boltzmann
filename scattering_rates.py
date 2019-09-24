@@ -3,6 +3,7 @@
 import preprocessing_largegrid
 import numpy as np
 import multiprocessing as mp
+import matplotlib as mpl
 from functools import partial
 import os
 import pandas as pd
@@ -172,6 +173,65 @@ def relaxation_times(g_df, cart_kpts_df):
     return scattering_array
 
 
+def rta_mobility(datadir, enk, vels):
+    """Calculate mobility using RTA and near equilibrium approximation"""
+    os.chdir(datadir)
+    rates = np.load('scattering_rates.npy') * 36.5  # arbitrary factor to test if I can get the mobility
+    taus = 1 / rates * 1E-12  # in seconds
+        
+    npts = 4000  # number of points in the KDE
+    ssigma = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    en_axis = np.linspace(enk.min(), enk.max(), npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+
+    vuc = 1E-30 * np.dot(np.cross(con.a1, con.a2), con.a3)  # volume of the unit cell in m^3
+    
+    e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
+    # kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    kb = 8.617333 * (10**-5)  # Boltzmann constant in eV / K
+    temperature = 300  # Kelvin
+    beta = 1 / (kb * temperature)
+    fermi = con.mu  # Fermi level
+    # fermi = con.mu + 0.3  # Fermi level
+    # fermi = enk.min() - (1.424 / 2)  # Fermi level
+    spread = 100*dx
+
+    def dfde(x):
+        # Approximate dF/dE using dF_0/dE
+        return (-1 * beta) * np.exp((x-fermi) * beta) * (np.exp((x-fermi) * beta) + 1)**(-2)
+
+    def gaussian(x, mu, sigma=spread):
+        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    # Calculating carrier concentration using Eqn 22 in W. Li PRB 92 (2015)
+    nc = 2E18  # the conc (m^-3) that makes the calculation work for a midgap fermi level
+    nc = (2 / len(enk) / vuc) * np.sum((np.exp((enk - fermi) * beta) + 1) ** -1)
+    print('The carrier concentration is {:.3E} in m^-3'.format(nc))
+
+    for k in range(len(enk)):
+        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (spread*4/dx), 0))
+        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (spread*4/dx), npts - 1))
+        ssigma[istart:iend] += vels[k]**2 * taus[k] * gaussian(en_axis[istart:iend], enk[k])
+
+    ssigma = ssigma * 2 / vuc
+    conductivity = (e**2) / e * np.trapz(np.multiply(ssigma, -1 * dfde(en_axis)), en_axis)  # divided by e for eV to J
+    print('Conductivity is {:.3E}'.format(conductivity))
+    print('dF/dE is {:.3E}'.format(np.sum(-1 * dfde(en_axis))))
+    mobility = conductivity / nc / e * 1E4 / len(enk) # 1E4 to get from m^2 to cm^2
+    print('Mobility is {:.3E}'.format(mobility))
+
+    font = {'size': 14}
+    mpl.rc('font', **font)
+    plt.plot(en_axis, np.multiply(ssigma, -1 * dfde(en_axis)), '.')
+    plt.xlabel('Energy (eV)')
+    plt.ylabel('TDF * dF/dE (a.u.)')
+    plt.show()
+
+    return mobility
+        
+
 if __name__ == '__main__':
     con = preprocessing_largegrid.PhysicalConstants()
 
@@ -181,21 +241,26 @@ if __name__ == '__main__':
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
+    cartkpts = preprocessing_largegrid.load_vel_data(data_loc, con)
+
+    k_en = (cartkpts.sort_values(by=['k_inds']))['energy'].values
+    kvel = cartkpts[['k_inds', 'vx [m/s]']]
+    kvel = (kvel.sort_values(by=['k_inds']))['vx [m/s]'].values
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    os.chdir(chunk_loc)
-    scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
-    nthreads = 6
-    pool = mp.Pool(nthreads)
+    # os.chdir(chunk_loc)
+    # scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
+    # nthreads = 6
+    # pool = mp.Pool(nthreads)
 
-    start = time.time()
-    pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
-    end = time.time()
-    print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
-    scattering_rates = np.array(scattering_rates)
+    # start = time.time()
+    # pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
+    # end = time.time()
+    # print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+    # scattering_rates = np.array(scattering_rates)
 
     # # Scattering rate calculation when you have the whole dataframe
     # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
@@ -203,4 +268,8 @@ if __name__ == '__main__':
     #
     # scattering_rates = relaxation_times(full_g_df, kpts)
 
-    np.save(data_loc + 'scattering_rates', scattering_rates)
+    # np.save(data_loc + 'scattering_rates', scattering_rates)
+
+    rta_mobility(data_loc, k_en, kvel)
+
+

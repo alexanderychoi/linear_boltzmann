@@ -286,6 +286,8 @@ def bosonic_processing(g_df, enq_key, nb, T):
 def fermionic_processing(g_df, enk_key, mu, T):
     """This function takes the e-ph DataFrame and assigns the relevant pre and post collision energies
     as well as the Fermi-Dirac distribution associated with both states."""
+    k = (g_df['k_inds'].values)[0]
+    print('k={:d} at T={:.0f}'.format(int(k), T))
 
     # Pre-collision
     g_df['k_en [eV]'] = enk_key[np.array(g_df['k_inds']).astype(int) - 1]
@@ -434,7 +436,7 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
             one band, the length of the vector is the same as number of kpts
         constants (object): Instance of PhysicalConstants class
     """
-    print('doing k={:d}'.format(k_ind))
+    # print('doing k={:d}'.format(k_ind))
     df_k = pd.read_parquet('k{:05d}.parquet'.format(int(k_ind)))
 
     if not np.any(df_k.columns == 'k_inds'):
@@ -443,8 +445,8 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
     # if not np.any(df_k.columns == 'q_en [eV]'):
     df_k = bosonic_processing(df_k, ph_energies, nb, con.T)
 
-    if not np.any(df_k.columns == 'k_en [eV]'):
-        df_k = fermionic_processing(df_k, el_energies, con.mu, con.T)
+    # if not np.any(df_k.columns == 'k_en [eV]'):
+    df_k = fermionic_processing(df_k, el_energies, con.mu, con.T)
 
     df_k.to_parquet('k{:05d}.parquet'.format(int(k_ind)))
 
@@ -565,16 +567,16 @@ if __name__ == '__main__':
         k_en_key = np.array(k_en_key['energy'])
         q_en_key, nphononbands = create_q_en_key(enq_df)  # need total number of bands
 
-        # start = time.time()
-        # pool.map(partial(chunked_bosonic_fermionic, ph_energies=q_en_key, nb=nphononbands, el_energies=k_en_key,
-        #                  constants=con), k_inds)
-        # end = time.time()
-        # print('Parallel fermionic and bosonic processing took {:.2f} seconds'.format(end - start))
-
         start = time.time()
-        pool.map(gaussian_weight_inchunks, k_inds)
+        pool.map(partial(chunked_bosonic_fermionic, ph_energies=q_en_key, nb=nphononbands, el_energies=k_en_key,
+                         constants=con), k_inds)
         end = time.time()
-        print('Parallel gaussian weights took {:.2f} seconds'.format(end - start))
+        print('Parallel fermionic and bosonic processing took {:.2f} seconds'.format(end - start))
+
+        # start = time.time()
+        # pool.map(gaussian_weight_inchunks, k_inds)
+        # end = time.time()
+        # print('Parallel gaussian weights took {:.2f} seconds'.format(end - start))
 
 
 
