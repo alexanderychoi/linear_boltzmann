@@ -157,18 +157,18 @@ def relaxation_times(g_df, cart_kpts_df):
     scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
     scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
 
-    # g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
-    #                                                 g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
-    # g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
-    #                                                 g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
-    #
-    # g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
-    # OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
-    #     np.unique(g_df['q_id'].values))
-    #
-    # OD_scattering = OD_sr.to_frame().reset_index()
-    # OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    # OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
+    g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
+                                                    g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
+    g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
+                                                    g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
+
+    g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
+    OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
+        np.unique(g_df['q_id'].values))
+
+    OD_scattering = OD_sr.to_frame().reset_index()
+    OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
+    OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
 
     return scattering_array
 
@@ -211,15 +211,15 @@ def rta_mobility(datadir, enk, vels):
     print('The carrier concentration is {:.3E} in m^-3'.format(nc))
 
     for k in range(len(enk)):
-        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (spread*4/dx), 0))
-        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (spread*4/dx), npts - 1))
+        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
+        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
         ssigma[istart:iend] += vels[k]**2 * taus[k] * gaussian(en_axis[istart:iend], enk[k])
 
     ssigma = ssigma * 2 / vuc
     conductivity = (e**2) / e * np.trapz(np.multiply(ssigma, -1 * dfde(en_axis)), en_axis)  # divided by e for eV to J
     print('Conductivity is {:.3E}'.format(conductivity))
     print('dF/dE is {:.3E}'.format(np.sum(-1 * dfde(en_axis))))
-    mobility = conductivity / nc / e * 1E4 / len(enk) # 1E4 to get from m^2 to cm^2
+    mobility = conductivity / nc / e * 1E4 / len(enk)  # 1E4 to get from m^2 to cm^2
     print('Mobility is {:.3E}'.format(mobility))
 
     font = {'size': 14}
@@ -230,6 +230,21 @@ def rta_mobility(datadir, enk, vels):
     plt.show()
 
     return mobility
+
+
+def construct_scattering_matrix(datadir, nk, nlambda):
+    os.chdir(datadir)
+    if not os.path.isfile('scattering_matrix.mmap'):
+        w = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nk, nk))
+        del w
+
+    # for kind in range(nk):
+    for kind in range(1):
+        k = kind + 1
+        g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
+
+
+
         
 
 if __name__ == '__main__':
@@ -251,25 +266,28 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    # os.chdir(chunk_loc)
-    # scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
-    # nthreads = 6
-    # pool = mp.Pool(nthreads)
+    calc_scattering_rates = False
+    if calc_scattering_rates:
+        os.chdir(chunk_loc)
+        scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
+        nthreads = 6
+        pool = mp.Pool(nthreads)
 
-    # start = time.time()
-    # pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
-    # end = time.time()
-    # print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
-    # scattering_rates = np.array(scattering_rates)
+        start = time.time()
+        pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
+        end = time.time()
+        print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+        scattering_rates = np.array(scattering_rates)
 
-    # # Scattering rate calculation when you have the whole dataframe
-    # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
-    # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
-    #
-    # scattering_rates = relaxation_times(full_g_df, kpts)
+        # # Scattering rate calculation when you have the whole dataframe
+        # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
+        # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
+        # scattering_rates = relaxation_times(full_g_df, kpts)
 
-    # np.save(data_loc + 'scattering_rates', scattering_rates)
+        np.save(data_loc + 'scattering_rates', scattering_rates)
 
-    rta_mobility(data_loc, k_en, kvel)
+    # rta_mobility(data_loc, k_en, kvel)
+
+    construct_scattering_matrix(data_loc, nkpts, n_ph_modes)
 
 
