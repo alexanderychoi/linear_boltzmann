@@ -374,7 +374,6 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T):
     g_df['k_id'] = g_df.sort_values(['k_inds'], ascending=True).groupby(['k_inds']).ngroup()
     g_df['k_en [eV]'] = modified_k_df['energy'].values[g_df['k_id'].values]
 
-
     g_df['kx [1/A]'] = modified_k_df['kx [1/A]'].values[g_df['k_id'].values]
     g_df['ky [1/A]'] = modified_k_df['ky [1/A]'].values[g_df['k_id'].values]
     g_df['kz [1/A]'] = modified_k_df['kz [1/A]'].values[g_df['k_id'].values]
@@ -408,7 +407,8 @@ def fermionic_processing(g_df,cart_kpts_df,mu,T):
 
     return g_df
 
-def gaussian_weight(g_df,n):
+
+def gaussian_weight(g_df, n):
     """This function assigns the value of the delta function of the energy conservation
     approimated by a Gaussian with broadening n"""
 

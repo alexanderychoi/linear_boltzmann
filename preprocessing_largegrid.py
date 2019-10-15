@@ -26,7 +26,8 @@ class PhysicalConstants:
     kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
     T = 300                          # Lattice temperature [K]
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
-    mu = 5.780                       # Chemical potential [eV]
+    # mu = 5.780                       # Chemical potential [eV] old 10/8/2019
+    mu = 6.03                        # Chemical potential [eV] based on carrier density cited in JJ Zhou paper
     b = 8/1000                       # Gaussian broadening [eV]
     h = 1.054*10**(-34)              # Reduced Planck's constant [J/s]
 
@@ -560,7 +561,8 @@ if __name__ == '__main__':
 
         pool = mp.Pool(nthreads)
 
-        k_inds = [k0 + 1 for k0 in range(nkpts)]
+        # k_inds = [k0 + 1 for k0 in range(nkpts)]
+        k_inds = [1]
 
         # Don't need a separate key for k energies since only one band. I checked for both datasets
         k_en_key = cart_kpts_df.sort_values(by=['k_inds'])

@@ -8,6 +8,7 @@ from functools import partial
 import os
 import pandas as pd
 import time
+import numba
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -113,28 +114,18 @@ def relaxation_times_parallel(k, nlambda):
 
     g_df['weight'] = ems_weight + abs_weight
 
-    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
+    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda * prefactor**2
 
-    print(r'For k={:d}, the scattering rate (1/ps) is {:f}'.format(k, sr))
+    print(r'For k={:d}, the scattering rate (1/ps) is {:.14E}'.format(k, sr))
 
-    scattering_rates[k-1] = sr
+    # scattering_rates[k-1] = sr
 
-    # scattering = sr.to_frame().reset_index()
-    # scattering_array = np.zeros(nkpts)
-    # scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
-    #
-    # offdiag_abs_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
-    #                                                 g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
-    # offdiag_ems_weight = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
-    #                                                 g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
-    #
-    # g_df['OD_weight'] = offdiag_abs_weight + offdiag_ems_weight
-    # offdiag_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * (2.418 * 10 ** 17) * (10 ** -12) / len(
-    #     np.unique(g_df['q_id'].values))
-    #
-    # OD_scattering = offdiag_sr.to_frame().reset_index()
-    # OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    # OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
+
+def parse_scatteringrates():
+    f = open('rates.out')
+    f.read().split()
+
+    return rates
 
 
 def relaxation_times(g_df, cart_kpts_df):
@@ -232,20 +223,66 @@ def rta_mobility(datadir, enk, vels):
     return mobility
 
 
-def construct_scattering_matrix(datadir, nk, nlambda):
-    os.chdir(datadir)
-    if not os.path.isfile('scattering_matrix.mmap'):
-        w = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nk, nk))
-        del w
-
-    # for kind in range(nk):
-    for kind in range(1):
-        k = kind + 1
-        g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
+def assemble_full_matrix():
+    """Once all of the rows have been created, can put them all together."""
+    if os.path.isfile('scattering_matrix.mmap'):
+        matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    else:
+        matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
 
 
+# @numba.jit(parallel=True, nopython=True)
+def numba_matrixrows(nk, nlambda, kra):
+    thisrow = np.zeros(nkpts)
+    for i in numba.prange(len(nkprime)):
+        kpi = int(nkprime[i])
+        kpinds = kra[:, 1].astype(int)
+        kp_rows = kra[kpinds == kpi, :]
+        abs_weight = np.multiply(np.multiply((kp_rows[:, 6] + 1 - kp_rows[:, 9]),
+                                             kp_rows[:, 3]), kp_rows[:, -2])
+        ems_weight = np.multiply(np.multiply(kp_rows[:, 6] + kp_rows[:, 9],
+                                             kp_rows[:, 3]), kp_rows[:, -1])
+        tot_weight = abs_weight + ems_weight
+        thisrow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
 
-        
+    return thisrow
+
+
+def matrixrows_par(k, nlambda):
+    """Calculate the full scattering matrix row by row and in parallel
+    
+    We do this because the data is chunked by kpoint, so the most efficient way to do this is by calculating each row
+    of the scattering matrix since the information required for each row is contained in each kpoint chunk. This allows 
+    the calculation to be done in parallel. For each kpoint, will input the row data into a memmap. Afterwards, the 
+    full matrix can be assembled quickly in serial.
+    """
+    # Create memmap of the row
+    istart = time.time()
+    if os.path.isfile('k{:05d}.mmap'.format(k)):
+        krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='r+', shape=nkpts)
+    else:
+        krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nkpts)
+
+    # Diagonal term
+    krow[k-1] = scattering_rates[k-1]
+
+    # Calculating nondiagonal terms
+    g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
+    nkprime = np.unique(g_df['k+q_inds'])
+    for kp in np.nditer(nkprime):
+        kpi = int(kp)
+        kp_rows = g_df[g_df['k+q_inds'] == kpi]
+        abs_weight = np.multiply(np.multiply((kp_rows['BE'].values + 1 - kp_rows['k_FD'].values),
+                                             kp_rows['g_element'].values), kp_rows['abs_gaussian'])
+        ems_weight = np.multiply(np.multiply(kp_rows['BE'].values + kp_rows['k_FD'].values,
+                                             kp_rows['g_element'].values), kp_rows['ems_gaussian'])
+        tot_weight = abs_weight + ems_weight
+        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
+
+    del krow
+    iend = time.time()
+    print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
+
 
 if __name__ == '__main__':
     con = preprocessing_largegrid.PhysicalConstants()
@@ -254,6 +291,8 @@ if __name__ == '__main__':
     # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+
+    # mp.set_start_method('spawn')
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
     cartkpts = preprocessing_largegrid.load_vel_data(data_loc, con)
@@ -266,10 +305,10 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    calc_scattering_rates = False
+    calc_scattering_rates = True
     if calc_scattering_rates:
         os.chdir(chunk_loc)
-        scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
+        # scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
         nthreads = 6
         pool = mp.Pool(nthreads)
 
@@ -277,17 +316,48 @@ if __name__ == '__main__':
         pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
         end = time.time()
         print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
-        scattering_rates = np.array(scattering_rates)
+        # scattering_rates = np.array(scattering_rates)
 
         # # Scattering rate calculation when you have the whole dataframe
         # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
         # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
         # scattering_rates = relaxation_times(full_g_df, kpts)
 
-        np.save(data_loc + 'scattering_rates', scattering_rates)
+        sr = parse_scatteringrates()
+        np.save(data_loc + 'scattering_rates', sr)
+
+    calc_matrix_rows = False
+    if calc_matrix_rows:
+        os.chdir(data_loc)
+        rta_rates = np.load('scattering_rates.npy')
+
+        # Multiprocessing version
+        # Need to create a directory called mat_rows inside the data_loc directory to store rows
+        os.chdir(data_loc + 'mat_rows')
+        scattering_rates = mp.Array('d', rta_rates, lock=False)
+        nthreads = 6
+        pool = mp.Pool(nthreads)
+
+        start = time.time()
+        pool.map(partial(matrixrows_par, nlambda=n_ph_modes), np.arange(1, 20))
+        end = time.time()
+        print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
+
+        # # Numba version
+        # os.chdir(data_loc + 'mat_rows')
+        # for k in range(nkpts):
+        #     kind = k+1
+        #     istart = time.time()
+        #     krow = np.memmap('k{:05d}.mmap'.format(kind), dtype='float64', mode='w+', shape=nkpts)
+        #     kind = k + 1
+        #     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(kind))
+        #     nkprime = np.unique(g_df['k+q_inds'])
+        #     kra = g_df.values
+        #     krow = numba_matrixrows(nkpts, n_ph_modes, kra)
+        #     del krow
+        #     iend = time.time()
+        #     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
 
     # rta_mobility(data_loc, k_en, kvel)
-
-    construct_scattering_matrix(data_loc, nkpts, n_ph_modes)
 
 
