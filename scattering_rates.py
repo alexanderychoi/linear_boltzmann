@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import time
 import numba
+import re
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -123,7 +124,15 @@ def relaxation_times_parallel(k, nlambda):
 
 def parse_scatteringrates():
     f = open('rates.out')
-    f.read().split()
+    alltext = f.read()
+
+    matches = re.findall(r'For k=(\d+), the scattering rate \(1\/ps\) is (\d+\.\d+E.\d+)', alltext)
+
+    rates = np.zeros(nkpts)
+    for match in matches:
+        thisk = np.int(match[0])
+        thisrate = np.float(match[1])
+        rates[thisk-1] = thisrate
 
     return rates
 
@@ -305,7 +314,7 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    calc_scattering_rates = True
+    calc_scattering_rates = False
     if calc_scattering_rates:
         os.chdir(chunk_loc)
         # scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
@@ -323,8 +332,8 @@ if __name__ == '__main__':
         # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
         # scattering_rates = relaxation_times(full_g_df, kpts)
 
-        sr = parse_scatteringrates()
-        np.save(data_loc + 'scattering_rates', sr)
+    sr = parse_scatteringrates()
+    np.save(data_loc + 'scattering_rates_test', sr)
 
     calc_matrix_rows = False
     if calc_matrix_rows:
