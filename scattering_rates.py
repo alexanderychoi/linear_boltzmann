@@ -232,12 +232,20 @@ def rta_mobility(datadir, enk, vels):
     return mobility
 
 
-def assemble_full_matrix():
+def assemble_full_matrix(mat_row_dir):
     """Once all of the rows have been created, can put them all together."""
     if os.path.isfile('scattering_matrix.mmap'):
         matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
     else:
         matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+    for k in range(nkpts):
+        kind = k + 1
+        krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), mode='r', shape=nkpts)
+        matrix[k, :] = krow
+        if kind % 100 == 0:
+            print('Finished k={:d}'.format(kind))
+            del matrix
+            matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
 
 
 # @numba.jit(parallel=True, nopython=True)
@@ -366,7 +374,8 @@ if __name__ == '__main__':
         #     del krow
         #     iend = time.time()
         #     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
+   
+    os.chdir(data_loc) 
+    assemble_full_matrix(data_loc + 'mat_rows/')
 
     # rta_mobility(data_loc, k_en, kvel)
-
-
