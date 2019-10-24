@@ -96,6 +96,16 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
 
+def calc_sparsity():
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
+    nelperrow = np.zeros(nkpts)
+    for ik in range(nkpts):
+        nelperrow[ik] = np.count_nonzero(matrix[ik, :])
+        print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
+    return sparsity, nelperrow
+
+
 def relaxation_times_parallel(k, nlambda):
     """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
     Also returns the off-diagonal scattering term.
@@ -117,7 +127,7 @@ def relaxation_times_parallel(k, nlambda):
 
     sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda * prefactor**2
 
-    print(r'For k={:d}, the scattering rate (1/ps) is {:.14E}'.format(k, sr))
+    print(r'For k={:d}, the scattering rate (1/ps) is {:.24E}'.format(k, sr))
 
     # scattering_rates[k-1] = sr
 
@@ -240,16 +250,21 @@ def assemble_full_matrix(mat_row_dir):
         matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
     for k in range(nkpts):
         kind = k + 1
-        krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), mode='r', shape=nkpts)
+        krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), dtype='float64', mode='r', shape=nkpts)
+        # BEWARE THIS IS HARDCODE TO MAKE THE OFF DIAGONAL TERMS NEGATIVE. SHOULD BE CHANGED IN matrixrows_par
+        krow = -1 * krow
+        krow[k] = -1 * krow[k]
+        if krow[k] - rta_rates[k] != 0:
+            print('diagonal element is not same as rta for k={:d}'.format(k))
         matrix[k, :] = krow
         if kind % 100 == 0:
             print('Finished k={:d}'.format(kind))
-            del matrix
-            matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+            # del matrix
+            # matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
 
 
-# @numba.jit(parallel=True, nopython=True)
-def numba_matrixrows(nk, nlambda, kra):
+@numba.jit(parallel=True, nopython=True)
+def numba_matrixrows(nk, nlambda, kra, nkprime):
     thisrow = np.zeros(nkpts)
     for i in numba.prange(len(nkprime)):
         kpi = int(nkprime[i])
@@ -283,6 +298,7 @@ def matrixrows_par(k, nlambda):
     # Diagonal term
     krow[k-1] = scattering_rates[k-1]
 
+    prefactor = 13.6056980659
     # Calculating nondiagonal terms
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
     nkprime = np.unique(g_df['k+q_inds'])
@@ -294,11 +310,24 @@ def matrixrows_par(k, nlambda):
         ems_weight = np.multiply(np.multiply(kp_rows['BE'].values + kp_rows['k_FD'].values,
                                              kp_rows['g_element'].values), kp_rows['ems_gaussian'])
         tot_weight = abs_weight + ems_weight
-        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
+        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda * prefactor**2
 
+    print('average value for this row is {:f}'.format(np.average(krow)))
     del krow
     iend = time.time()
     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
+
+
+def matrix_check_colsum():
+    matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+
+    colsum = np.zeros(nkpts)
+    for k in range(nkpts):
+        colsum[k] = np.sum(matrix[:, k])
+        print('Finished k={:d}'.format(k+1))
+
+    print('The average column sum is {:E}'.format(np.average(colsum)))
+    print('The largest column sum is {:E}'.format(colsum.max()))
 
 
 if __name__ == '__main__':
@@ -340,8 +369,8 @@ if __name__ == '__main__':
         # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
         # scattering_rates = relaxation_times(full_g_df, kpts)
 
-    sr = parse_scatteringrates()
-    np.save(data_loc + 'scattering_rates_test', sr)
+    # sr = parse_scatteringrates()
+    # np.save(data_loc + 'scattering_rates_test', sr)
 
     calc_matrix_rows = False
     if calc_matrix_rows:
@@ -370,12 +399,19 @@ if __name__ == '__main__':
         #     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(kind))
         #     nkprime = np.unique(g_df['k+q_inds'])
         #     kra = g_df.values
-        #     krow = numba_matrixrows(nkpts, n_ph_modes, kra)
+        #     krow = numba_matrixrows(nkpts, n_ph_modes, kra, nkprime)
         #     del krow
         #     iend = time.time()
         #     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
-   
-    os.chdir(data_loc) 
-    assemble_full_matrix(data_loc + 'mat_rows/')
+
+    # rta_rates = np.load('scattering_rates.npy')
+    # os.chdir(data_loc)
+    # assemble_full_matrix(data_loc + 'mat_rows/')
+
+    # s, nlpr = calc_sparsity()
+    # print('Sparsity is {:.8f}'.format(s))
+    # print('Average number of elements per row is {:.2f}'.format(np.average(nlpr)))
+
+    matrix_check_colsum()
 
     # rta_mobility(data_loc, k_en, kvel)

@@ -127,7 +127,7 @@ def plot_dispersion(kpts, enk):
     xpoint = 0.5 * (b2 + b3)
 
     # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors.
-    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies
+    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their frequencies
     deg2rad = 2 * np.pi / 360
     ang_tol = 1 * deg2rad  # 1 degree in radians
 
@@ -184,7 +184,7 @@ def plot_dispersion(kpts, enk):
 
 
 def plot_bandstructure(kpts, enk):
-    '''Plots electron bandstructure.
+    """Plots electron bandstructure.
 
     Path is hardcoded for FCC unit cell. Currently just plotting Gamma-L and Gamma-X
 
@@ -215,8 +215,7 @@ def plot_bandstructure(kpts, enk):
 
     Returns:
     ---------
-    No variable returns. Just plots the dispersion
-    '''
+    No variable returns. Just plots the dispersion"""
 
     # Lattice constant and reciprocal lattice vectors
     # b1 = 2 pi/a (kx - ky + kz)
@@ -233,7 +232,7 @@ def plot_bandstructure(kpts, enk):
     xpoint = 0.5 * (b2 + b3)
 
     # We can find kpoints along a path just by considering a dot product with lpoint and xpoint vectors.
-    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their corresponding frequencies
+    # Any kpoints with angle smaller than some tolerance are considered on the path and we can plot their energies
     deg2rad = 2 * np.pi / 360
     ang_tol = 1 * deg2rad  # 1 degree in radians
 
@@ -320,7 +319,6 @@ def main():
     enk = np.array(enk['energy'])
     enk = enk - enk.min()
 
-    # plt.plot(enk, '.')
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # bz_3dscatter(con, fbzcartkpts, enk_df)
     plot_scattering_rates(data_loc, enk)
