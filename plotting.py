@@ -288,7 +288,7 @@ def plot_bandstructure(kpts, enk):
 
 def plot_scattering_rates(data_dir, energies):
     os.chdir(data_dir)
-    rates = np.load('scattering_rates.npy')
+    rates = np.load('scattering_rates_test.npy')
 
     font = {'size': 14}
     matplotlib.rc('font', **font)
@@ -320,8 +320,8 @@ def main():
     enk = enk - enk.min()
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
-    bz_3dscatter(con, fbzcartkpts, enk_df)
-    # plot_scattering_rates(data_loc, enk)
+    # bz_3dscatter(con, fbzcartkpts, enk_df)
+    plot_scattering_rates(data_loc, enk)
 
     plt.show()
 

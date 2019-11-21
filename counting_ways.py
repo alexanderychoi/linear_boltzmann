@@ -33,31 +33,34 @@ def way_counter(k, valley_inds):
 
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
     print(r'Loaded k={:d}'.format(k))
-    ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-                             g_df['ems_gaussian'])
-    abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                             g_df['abs_gaussian'])
+    # ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+    #                          g_df['ems_gaussian'])
+    # abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+    #                          g_df['abs_gaussian'])
+    #
+    # totweight = ems_weight + abs_weight
+    totweight = g_df['ems_gaussian'] + g_df['abs_gaussian']
 
-    totweight = ems_weight + abs_weight
+    # if np.sum(totweight) > 0:
+    intervalleys = np.isin(g_df['k+q_inds'].values, valley_inds)
+    ivweight = np.sum(totweight[intervalleys])
+    thistotweight = np.sum(totweight)
+    istart = int(np.maximum(np.floor((enk[k-1] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    iend = int(np.minimum(np.floor((enk[k-1] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    intervalley_weight[istart:iend] += ivweight * gaussian(en_axis[istart:iend], enk[k-1])
+    total_delta_weight[istart:iend] += thistotweight * gaussian(en_axis[istart:iend], enk[k-1])
 
-    if np.sum(totweight) > 0:
-        intervalleys = np.isin(g_df['k+q_inds'].values, valley_inds)
-        ivweight = np.sum(totweight[intervalleys])
-        istart = int(np.maximum(np.floor((enk[k-1] - en_axis[0]) / dx) - (4 * spread / dx), 0))
-        iend = int(np.minimum(np.floor((enk[k-1] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
-        intervalley_weight[istart:iend] += ivweight * gaussian(en_axis[istart:iend], enk[k-1])
-
-        # binind = int(np.floor((enk[k-1] - en_axis[0]) / dx))
-        # intervalley_weight[binind] += ivweight
-        numratio = len(g_df.loc[np.in1d(g_df['k+q_inds'], valley_inds)])/len(g_df)
-        print(r'For k={:d}, the L valley momentum coupling weight is {:.14E}'.format(k, num))
-    else:
-        ivweights = 0
-        numratio = 0
+    # binind = int(np.floor((enk[k-1] - en_axis[0]) / dx))
+    # intervalley_weight[binind] += ivweight
+    # numratio = len(g_df.loc[np.in1d(g_df['k+q_inds'], valley_inds)])/len(g_df)
+    # print(r'For k={:d}, the L valley momentum coupling weight is {:.14E}'.format(k, num))
+    # else:
+    #     ivweights = 0
+    #     numratio = 0
     # print(r'For k={:d}, the L valley energy+momentum coupling weight is {:.14E}'.format(k, ratio))
 
     # return ivweights, numratio
-    return ivweight
+    # return ivweight
 
 
 if __name__ == '__main__':
@@ -99,51 +102,67 @@ if __name__ == '__main__':
         gamma_kinds = np.array(cart_kpts_df.loc[inverse_key,'k_inds'])
         # plotting.bz_3dscatter(con,cart_kpts_df[inverse_key],enk_df[inverse_key])
 
+    # I think the proper way to do the counting is a kernel density estimate since you have to sum the contributions for
+    # a given energy range for intervalleys, so I added that to the way_counter code.
+
+    enk = cart_kpts_df['energy'].values
+
+    npts = 200  # number of bins
+    intervalley_weight = np.zeros(npts)
+    total_delta_weight = np.zeros(npts)
+    en_axis = np.linspace(enk.min(), enk.max() + 0.1, npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+
     count_intervalleys = True
     if count_intervalleys:
-        # I think the proper way to do this is a kernel density estimate since you have to sum the contributions for a
-        # given energy range for intervalleys, so I added that to the way_counter code.
-
-        enk = cart_kpts_df['energy'].values
-
-        npts = 200  # number of bins
-        intervalley_weight = np.zeros(npts)
-        en_axis = np.linspace(enk.min(), enk.max() + 0.1, npts)
-        dx = (en_axis.max() - en_axis.min()) / npts
-
         # gamma_ratio = np.zeros((np.count_nonzero(inverse_key), 1))
         # number = np.zeros((np.count_nonzero(inverse_key), 1))
         # print('The number of kpoints in the Gamma valley is {:d}'.format(np.count_nonzero(inverse_key)))
 
+        start = time.time()
+        for i1 in range(len(gamma_kinds)):
+            way_counter(gamma_kinds[i1], valley_inds)
+            point_end = time.time()
+            print('Way step number={:d} at {:.2f} seconds'.format(i1, point_end - start))
+        end = time.time()
+        print('Way counting took {:.2f} seconds'.format(end - start))
+        fractioniv = np.divide(intervalley_weight, total_delta_weight)
+        np.save(data_loc + 'intervalley_fraction', fractioniv)
+    else:
         if os.path.isfile(data_loc + 'intervalley_weight_by_en.npy'):
             intervalley_weight = np.load('intervalley_weight_by_en.npy')
+        elif os.path.isfile(data_loc + 'intervalley_fraction.npy'):
+            fractioniv = np.load('intervalley_fraction.npy')
         else:
-            start = time.time()
-            for i1 in range(len(gamma_kinds)):
-                way_counter(gamma_kinds[i1], valley_inds)
-                point_end = time.time()
-                print('Way step number={:d} at {:.2f} seconds'.format(i1, point_end - start))
-            end = time.time()
-            print('Way counting took {:.2f} seconds'.format(end - start))
-            np.save(data_loc + 'intervalley_weight_by_en', intervalley_weight)
+            exit('Couldn''t find intervalley kernel density data')
 
     # Plotting
     font = {'size': 14}
     mpl.rc('font', **font)
 
-    ivw200k = np.load('intervalley_weight_by_en_200K.npy')
+    # ivw200k = np.load('intervalley_weight_by_en_200K.npy')
 
     fig = plt.figure(figsize=(6, 5))
     plt.axes([0.2, 0.14, 0.7, 0.7])
-    plt.plot(en_axis, intervalley_weight, linewidth=2.5, color='darkred', label='300 K')
-    plt.plot(en_axis, ivw200k, linewidth=2.5, color='red', label='200 K')
+    plt.plot(en_axis, fractioniv, linewidth=2.5, color='darkred', label='300 K')
+    # plt.plot(en_axis, ivw200k, linewidth=2.5, color='red', label='200 K')
     plt.xlim([enk.min(), enk.min() + 0.4])
     plt.xlabel('Energy (eV)')
-    plt.ylabel('Strength of intervalley scattering (arb.)')
+    plt.ylabel('Fraction of scattering intervalley')
     plt.legend()
 
     saveloc = '/home/peishi/calculations/first-principles-fluctuations/'
-    plt.savefig(saveloc+'intervalleystr.png', dpi=400)
+    plt.savefig(saveloc+'fraction_intervalley.png', dpi=400)
+
+    plt.figure(figsize=(6, 5))
+    plt.semilogy(en_axis, intervalley_weight, label='Intervalley', linewidth=2)
+    plt.semilogy(en_axis, total_delta_weight, label='Total', linewidth=2)
+    plt.ylim([1E5, 1.6E9])
+    plt.xlim([enk.min(), enk.min() + 0.4])
+    plt.xlabel('Energy (eV)')
+    plt.ylabel('Phase space volume (arb.)')
+    plt.legend()
+    plt.savefig(saveloc + 'phasespace.png', dpi=400)
 
     plt.show()
 
