@@ -14,7 +14,7 @@ import plotly.graph_objs as go
 import plotly
 
 
-def bz_3dscatter(con, points, energies, useplotly=False):
+def bz_3dscatter(con, points, energies, useplotly=True):
     if useplotly:
         trace1 = go.Scatter3d(
             x=points['kx [1/A]'].values / (2 * np.pi / con.a),
@@ -320,8 +320,8 @@ def main():
     enk = enk - enk.min()
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
-    # bz_3dscatter(con, fbzcartkpts, enk_df)
-    plot_scattering_rates(data_loc, enk)
+    bz_3dscatter(con, fbzcartkpts, enk_df)
+    # plot_scattering_rates(data_loc, enk)
 
     plt.show()
 

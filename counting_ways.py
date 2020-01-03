@@ -130,9 +130,9 @@ if __name__ == '__main__':
         np.save(data_loc + 'intervalley_fraction', fractioniv)
     else:
         if os.path.isfile(data_loc + 'intervalley_weight_by_en.npy'):
-            intervalley_weight = np.load('intervalley_weight_by_en.npy')
+            intervalley_weight = np.load(data_loc + 'intervalley_weight_by_en.npy')
         elif os.path.isfile(data_loc + 'intervalley_fraction.npy'):
-            fractioniv = np.load('intervalley_fraction.npy')
+            fractioniv = np.load(data_loc + 'intervalley_fraction.npy')
         else:
             exit('Couldn''t find intervalley kernel density data')
 
