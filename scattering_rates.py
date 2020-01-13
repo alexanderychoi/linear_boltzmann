@@ -118,13 +118,22 @@ def relaxation_times_parallel(k, nlambda):
 
     g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
 
-    ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-                             g_df['ems_gaussian'])
-    abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                             g_df['abs_gaussian'])
+    # ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
+    #                          g_df['ems_gaussian'])
+    # abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
+    #                          g_df['abs_gaussian'])
+    abs_weight = np.multiply(np.multiply(np.multiply(np.multiply(g_df['g_element'].values, g_df['abs_gaussian']),
+                                                     g_df['k_FD']), (1 - g_df['k+q_FD'].values)), g_df['BE'].values)
+    ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(g_df['g_element'].values, g_df['ems_gaussian']),
+                                                     (1 - g_df['k_FD'])), g_df['k+q_FD'].values), g_df['BE'].values)
     g_df['weight'] = ems_weight + abs_weight
 
     sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda * prefactor**2
+    # sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
+
+    linfactor = g_df['k_FD'].values[0] * (1 - g_df['k_FD'].values[0])
+
+    sr = sr / linfactor * (180/np.pi)
 
     print(r'For k={:d}, the scattering rate (1/ps) is {:.24E}'.format(k, sr))
     scattering_rates[k-1] = sr
@@ -391,7 +400,7 @@ if __name__ == '__main__':
         # scattering_rates = relaxation_times(full_g_df, kpts)
 
     sr = parse_scatteringrates()
-    np.save(data_loc + 'scattering_rates_test', sr)
+    np.save(data_loc + 'scattering_rates_fromfile', sr)
 
     # rta_mobility(data_loc, k_en, kvel)
 
