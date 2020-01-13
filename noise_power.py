@@ -50,9 +50,38 @@ def steady_state_solns(kindices, numkpts, fullkpts_df, field):
     print('Solve successful. Took {:.2f}s'.format(end-start))
 
 
+def calc_sparsity():
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
+    nelperrow = np.zeros(nkpts)
+    for ik in range(nkpts):
+        nelperrow[ik] = np.count_nonzero(matrix[ik, :])
+        print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
+    return sparsity, nelperrow
+
+def centraldiff_matrix():
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    # Get the first and last rows since these are different because of the IC
+    matrix[0,1] = matrix[0,1]-1/2
+    matrix[nkpts-2,nkpts-2] = matrix[nkpts-2,nkpts-2] + 1/2
+    # Subtract the tridiagonal from the original scattering matrix
+    for k in range(1,nkpts-1):
+        kind = k + 1
+        istart = time.time()
+        matrix[k,k-1] = matrix[k,k-1]+1/2
+        matrix[k,k+1] = matrix[k,k+1]-1/2
+        if kind % 100 == 0:
+            print('Finished k={:d}'.format(kind))
+    print('Scattering matrix modified to incorporate central difference contribution.')
+
+
+
 if __name__ == '__main__':
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     con = preprocessing_largegrid.PhysicalConstants()
 
@@ -62,7 +91,11 @@ if __name__ == '__main__':
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
+    print('bumdiddly')
+
+
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+
+    centraldiff_matrix()
 
     # steady_state_solns(kinds, nkpts, cartkpts, 1)
-
-
