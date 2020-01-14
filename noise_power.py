@@ -10,7 +10,7 @@ import numba
 import re
 
 
-def steady_state_solns(kindices, numkpts, fullkpts_df, field):
+def steady_state_solns(matrix, numkpts, fullkpts_df, field):
     """Get steady state solutions"""
     e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
     kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
@@ -24,22 +24,7 @@ def steady_state_solns(kindices, numkpts, fullkpts_df, field):
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
     fermi_distribution(kptdata)
 
-    # Create a lookup table (whichintegrands) where the index corresponds to the kpoint, and the entry is the row number
-    # in the (integrands) array, so for given a kpoint we can easily find its corresponding integrand, since there are
-    # fewer unique integrands than there kpoints.
-    uniq_yz = np.unique(kptdata[['ky [1/A]', 'kz [1/A]']].values, axis=0)
-    uniq_x = np.sort(np.unique(kptdata[['kx [1/A]']]))
-    integrands = np.zeros((uniq_yz.shape[0], len(uniq_x)))
-    whichintegrands = np.zeros(numkpts)
-
     prefactor = e * field / kb / con.T
-    loopstart = time.time()
-    # ky, kz = uniq_yz[i, 0], uniq_yz[i, 1]
-    # whichkpts = np.array(np.logical_and(kptdata[['ky [1/A]']] == ky, kptdata[['kz [1/A]']] == kz))
-    # subset = kptdata[whichkpts].sort_values(by=['kx [1/A]'])
-    # kx_pts = np.isin(uniq_x, subset[['kx [1/A]']].values)
-    # integrands[i, kx_pts] = thisintegrand[:, 0]
-    # whichintegrands[kptdata[['k_inds']][whichkpts] - 1] = i)
 
     b = prefactor * kptdata[['vx [m/s]']].values * kptdata[['k_FD']].values * \
         (1 - kptdata['k_FD'])[:, np.newaxis]
@@ -47,7 +32,13 @@ def steady_state_solns(kindices, numkpts, fullkpts_df, field):
     start = time.time()
     x = np.linalg.solve(matrix, b)
     end = time.time()
-    print('Solve successful. Took {:.2f}s'.format(end-start))
+    print('Direct inversion solve successful. Took {:.2f}s'.format(end - start))
+    start = time.time()
+    x_star = np.linalg.lstsq(matrix, b)
+    end = time.time()
+    print('Least squares solve successful. Took {:.2f}s'.format(end - start))
+
+    return x, x_star
 
 
 def calc_sparsity():
@@ -60,9 +51,9 @@ def calc_sparsity():
     return sparsity, nelperrow
 
 
-def centraldiff_matrix(fullkpts_df,step_size):
-    # Do not  flush the memmap it will overwrite consecutively. 
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
+    # Do not  flush the memmap it will overwrite consecutively.
+
     # Get the first and last rows since these are different because of the IC. Go through each.
 
     # Get the unique ky and kz values from the array for looping.
@@ -72,7 +63,7 @@ def centraldiff_matrix(fullkpts_df,step_size):
 
     # If there are too few points in a slice < 5, we want to keep track of those points
     shortslice_inds = []
-    lastslice_inds =[]
+    lastslice_inds = []
 
     # Loop through the unique ky and kz values
     for i in range(len(uniq_yz)):
@@ -89,15 +80,15 @@ def centraldiff_matrix(fullkpts_df,step_size):
 
         if len(slice_inds) > 4:
             # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
-            subset = slice_df.sort_values(by=['kx [1/A]'],ascending=True)
+            subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
             ordered_slice_inds = subset.index
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_slice_inds[0], ordered_slice_inds[1]] = matrix[ordered_slice_inds[0],ordered_slice_inds[1]] - \
-                                                                  1/(2*step_size)
-            matrix[ordered_slice_inds[1], ordered_slice_inds[2]] = matrix[ordered_slice_inds[1],ordered_slice_inds[2]] - \
-                                                                  1/(2*step_size)
+            matrix[ordered_slice_inds[0], ordered_slice_inds[1]] = matrix[ordered_slice_inds[0], ordered_slice_inds[1]]\
+                                                                   - 1/(2*step_size)
+            matrix[ordered_slice_inds[1], ordered_slice_inds[2]] = matrix[ordered_slice_inds[1], ordered_slice_inds[2]]\
+                                                                   - 1/(2*step_size)
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
@@ -133,8 +124,7 @@ def centraldiff_matrix(fullkpts_df,step_size):
             print('Finished {:d} out of {:d} slices in {:.3f}s'.format(kind, len(uniq_yz),end-start))
     print('Scattering matrix modified to incorporate central difference contribution.')
     print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
-    return shortslice_inds
-
+    return shortslice_inds, matrix
 
 
 if __name__ == '__main__':
@@ -152,11 +142,11 @@ if __name__ == '__main__':
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
-    print('bumdiddly')
-
+    # print('bumdiddly')
 
     # matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
 
-    centraldiff_matrix(cartkpts,1)
+    scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    _, modified_matrix = apply_centraldiff_matrix(scm, cartkpts)
 
-    # steady_state_solns(kinds, nkpts, cartkpts, 1)
+    steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
