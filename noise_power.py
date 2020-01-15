@@ -51,7 +51,7 @@ def calc_sparsity():
     return sparsity, nelperrow
 
 
-def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
+def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size, cons):
     # Do not  flush the memmap it will overwrite consecutively.
 
     # Get the first and last rows since these are different because of the IC. Go through each.
@@ -63,7 +63,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
 
     # If there are too few points in a slice < 5, we want to keep track of those points
     shortslice_inds = []
-    lastslice_inds = []
+    icinds = []
 
     # Loop through the unique ky and kz values
     for i in range(len(uniq_yz)):
@@ -82,22 +82,23 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
             # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
             subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
             ordered_slice_inds = subset.index
+            icinds.append(ordered_slice_inds[0])
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
             matrix[ordered_slice_inds[0], ordered_slice_inds[1]] = matrix[ordered_slice_inds[0], ordered_slice_inds[1]]\
-                                                                   - 1/(2*step_size)
+                                                                   - 1/(2*step_size)*cons.e*E/cons.h
             matrix[ordered_slice_inds[1], ordered_slice_inds[2]] = matrix[ordered_slice_inds[1], ordered_slice_inds[2]]\
-                                                                   - 1/(2*step_size)
+                                                                   - 1/(2*step_size)*cons.e*E/cons.h
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
             last = len(ordered_slice_inds) - 1
             slast = len(ordered_slice_inds) - 2
             matrix[ordered_slice_inds[last], ordered_slice_inds[slast]] = \
-                matrix[ordered_slice_inds[last], ordered_slice_inds[slast]] + 1/(2*step_size)
+                matrix[ordered_slice_inds[last], ordered_slice_inds[slast]] + 1/(2*step_size)*cons.e*E/cons.h
             matrix[ordered_slice_inds[slast], ordered_slice_inds[slast-1]] = \
-                matrix[ordered_slice_inds[slast], ordered_slice_inds[slast-1]] + 1/(2*step_size)
+                matrix[ordered_slice_inds[slast], ordered_slice_inds[slast-1]] + 1/(2*step_size)*cons.e*E/cons.h
 
             # Set the value of all other points in the slice
             inter_inds = ordered_slice_inds[2:slast]
@@ -113,8 +114,8 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
             # print('inter_inds_down')
             # print(*inter_inds_down)
 
-            matrix[inter_inds, inter_inds_up] = matrix[inter_inds, inter_inds_up] - 1/(2*step_size)
-            matrix[inter_inds, inter_inds_down] = matrix[inter_inds, inter_inds_down] + 1/(2*step_size)
+            matrix[inter_inds, inter_inds_up] = matrix[inter_inds, inter_inds_up] - 1/(2*step_size)*cons.e*E/cons.h
+            matrix[inter_inds, inter_inds_down] = matrix[inter_inds, inter_inds_down] + 1/(2*step_size)*cons.e*E/cons.h
 
         else:
             shortslice_inds.append(slice_inds)
@@ -124,7 +125,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, step_size):
             print('Finished {:d} out of {:d} slices in {:.3f}s'.format(kind, len(uniq_yz),end-start))
     print('Scattering matrix modified to incorporate central difference contribution.')
     print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
-    return shortslice_inds, matrix
+    return shortslice_inds, icinds, matrix
 
 
 if __name__ == '__main__':
