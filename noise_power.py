@@ -1,4 +1,5 @@
 import preprocessing_largegrid
+import plotting
 import numpy as np
 import multiprocessing as mp
 import matplotlib as mpl
@@ -51,7 +52,7 @@ def calc_sparsity():
     return sparsity, nelperrow
 
 
-def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size, cons):
+def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     # Do not  flush the memmap it will overwrite consecutively.
 
     # Get the first and last rows since these are different because of the IC. Go through each.
@@ -129,16 +130,21 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size, cons):
 
 
 if __name__ == '__main__':
-    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
 
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     con = preprocessing_largegrid.PhysicalConstants()
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
     cartkpts = preprocessing_largegrid.load_vel_data(data_loc, con)
+
+    reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
+    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cartkpts.to_numpy()[:, 2:5], reciplattvecs)
+    fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+    fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
@@ -147,7 +153,13 @@ if __name__ == '__main__':
 
     # matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
 
+    field = 1  # V/m ??? Just making up a number here
     scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
-    _, modified_matrix = apply_centraldiff_matrix(scm, cartkpts)
+    _, edgepoints, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
-    steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
+    edgepoints = fbzcartkpts[np.isin(cartkpts['k_inds'], np.array(edgepoints))]
+
+    fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
+    plotting.highlighted_points(fo, edgepoints, con)
+
+    # f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)

@@ -14,8 +14,24 @@ import plotly.graph_objs as go
 import plotly
 
 
-def bz_3dscatter(con, points, energies, useplotly=True):
+def highlighted_points(fig, points, con):
+    fig.add_trace(go.Scatter3d(
+                    x=points['kx [1/A]'].values / (2 * np.pi / con.a),
+                    y=points['ky [1/A]'].values / (2 * np.pi / con.a),
+                    z=points['kz [1/A]'].values / (2 * np.pi / con.a),
+                    mode='markers',
+                    marker=dict(size=3, color='black', opacity=1)
+                )
+    )
+    py.plot(fig, filename='bz_scatter_highlights.html')
+
+
+def bz_3dscatter(con, points, energies=pd.DataFrame([]), useplotly=True):
     if useplotly:
+        if np.any(energies['energy [Ryd]']):
+            colors = energies['energy [Ryd]']
+        else:
+            colors = 'k'
         trace1 = go.Scatter3d(
             x=points['kx [1/A]'].values / (2 * np.pi / con.a),
             y=points['ky [1/A]'].values / (2 * np.pi / con.a),
@@ -24,7 +40,7 @@ def bz_3dscatter(con, points, energies, useplotly=True):
             # y=points[:, 1] / (2 * np.pi / con.a),
             # z=points[:, 2] / (2 * np.pi / con.a),
             mode='markers',
-            marker=dict(size=2, color=energies['energy [Ryd]'], colorscale='Rainbow', showscale=True, opacity=1)
+            marker=dict(size=2, color=colors, colorscale='Rainbow', showscale=True, opacity=1)
         )
 
         b1edge = 0.5 * con.b1 / (2 * np.pi / con.a)
@@ -67,6 +83,7 @@ def bz_3dscatter(con, points, energies, useplotly=True):
                     title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
         fig = go.Figure(data=data, layout=layout)
         py.plot(fig, filename='bz_scatter.html')
+        return fig
     else:
         x = points['kx [1/A]'].values / (2 * np.pi / con.a)
         y = points['ky [1/A]'].values / (2 * np.pi / con.a)
@@ -74,7 +91,7 @@ def bz_3dscatter(con, points, energies, useplotly=True):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(x, y, z)
-        plt.show()
+        return ax
 
 
 def plot_dispersion(kpts, enk):
@@ -320,8 +337,8 @@ def main():
     enk = enk - enk.min()
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
-    # bz_3dscatter(con, fbzcartkpts, enk_df)
-    plot_scattering_rates(data_loc, enk)
+    fo = bz_3dscatter(con, fbzcartkpts, enk_df)
+    # plot_scattering_rates(data_loc, enk)
 
     plt.show()
 
