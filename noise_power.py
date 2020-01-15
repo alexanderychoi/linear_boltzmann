@@ -60,12 +60,12 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     # Get the unique ky and kz values from the array for looping.
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     uniq_yz = np.unique(kptdata[['ky [1/A]', 'kz [1/A]']].values, axis=0)
-    start = time.time()
 
     # If there are too few points in a slice < 5, we want to keep track of those points
     shortslice_inds = []
     icinds = []
 
+    start = time.time()
     # Loop through the unique ky and kz values
     for i in range(len(uniq_yz)):
         kind = i + 1
@@ -82,32 +82,28 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
         if len(slice_inds) > 4:
             # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
             subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
-            ordered_slice_inds = subset.index
-            icinds.append(ordered_slice_inds[0])
+            ordered_inds = subset['k_inds'].values - 1  # indices of matrix
+            icinds.append(ordered_inds[0] + 1)  # +1 to get the k_inds values
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_slice_inds[0], ordered_slice_inds[1]] = matrix[ordered_slice_inds[0], ordered_slice_inds[1]]\
-                                                                   - 1/(2*step_size)*cons.e*E/cons.h
-            matrix[ordered_slice_inds[1], ordered_slice_inds[2]] = matrix[ordered_slice_inds[1], ordered_slice_inds[2]]\
-                                                                   - 1/(2*step_size)*cons.e*E/cons.h
+            matrix[ordered_inds[0], ordered_inds[1]] += - 1/(2*step_size)*cons.e*E/cons.h
+            matrix[ordered_inds[1], ordered_inds[2]] += - 1/(2*step_size)*cons.e*E/cons.h
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
-            last = len(ordered_slice_inds) - 1
-            slast = len(ordered_slice_inds) - 2
-            matrix[ordered_slice_inds[last], ordered_slice_inds[slast]] = \
-                matrix[ordered_slice_inds[last], ordered_slice_inds[slast]] + 1/(2*step_size)*cons.e*E/cons.h
-            matrix[ordered_slice_inds[slast], ordered_slice_inds[slast-1]] = \
-                matrix[ordered_slice_inds[slast], ordered_slice_inds[slast-1]] + 1/(2*step_size)*cons.e*E/cons.h
+            last = len(ordered_inds) - 1
+            slast = len(ordered_inds) - 2
+            matrix[ordered_inds[last], ordered_inds[slast]] += 1/(2*step_size)*cons.e*E/cons.h
+            matrix[ordered_inds[slast], ordered_inds[slast-1]] += 1/(2*step_size)*cons.e*E/cons.h
 
             # Set the value of all other points in the slice
-            inter_inds = ordered_slice_inds[2:slast]
-            inter_inds_up = ordered_slice_inds[3:last]
-            inter_inds_down = ordered_slice_inds[1:slast-1]
+            inter_inds = ordered_inds[2:slast]
+            inter_inds_up = ordered_inds[3:last]
+            inter_inds_down = ordered_inds[1:slast-1]
 
-            # print('Ordered_slice_inds')
-            # print(*ordered_slice_inds)
+            # print('ordered_inds')
+            # print(*ordered_inds)
             # print('inter_inds')
             # print(*inter_inds)
             # print('inter_inds_up')
@@ -149,15 +145,12 @@ if __name__ == '__main__':
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
-    # print('bumdiddly')
-
-    # matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
 
     field = 1  # V/m ??? Just making up a number here
     scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
     _, edgepoints, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
-    edgepoints = fbzcartkpts[np.isin(cartkpts['k_inds'], np.array(edgepoints))]
+    edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
 
     fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
     plotting.highlighted_points(fo, edgepoints, con)
