@@ -1,14 +1,23 @@
 import preprocessing_largegrid
 import plotting
 import numpy as np
+import scipy.sparse.linalg
 import multiprocessing as mp
-import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib
 from functools import partial
 import os
 import pandas as pd
 import time
 import numba
 import re
+
+
+def fermi_distribution(df, fermilevel=6.03, temp=300):
+    e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
+    kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    df['k_FD'] = (np.exp((df['energy'].values * e - fermilevel * e) / (kb * temp)) + 1) ** (-1)
+    return df
 
 
 def steady_state_solns(matrix, numkpts, fullkpts_df, field):
@@ -18,9 +27,7 @@ def steady_state_solns(matrix, numkpts, fullkpts_df, field):
 
     # Calculate fermi distribution function for all the kpoints. Currently only in chunked dataframes.
     # Want them all in one place here
-    def fermi_distribution(df, fermilevel=con.mu, temp=con.T):
-        df['k_FD'] = (np.exp((df['energy'].values * e - fermilevel * e) / (kb * temp)) + 1) ** (-1)
-        return df
+
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
     fermi_distribution(kptdata)
@@ -125,6 +132,42 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     return shortslice_inds, icinds, matrix
 
 
+def iterative_solver(kptdf, matrix):
+    sr = np.load(data_loc + 'scattering_rates_direct.npy')
+    tau = 1 / sr
+    prefactor = np.multiply(tau, 1/(np.squeeze(kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])))
+    f_0 = (-1) * kptdf['vx [m/s]'] * tau
+    # f_0 = kptdf['vx [m/s]'] * tau
+    # matrix -= np.diag(np.diag(matrix))
+
+    errpercent = 1
+    counter = 0
+    f_prev = f_0
+    while errpercent > 1E-3:
+        s1 = time.time()
+        mvp = matrix @ f_prev
+        e1 = time.time()
+        print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
+        f_next = f_0 + np.multiply(prefactor, mvp)
+        errvecnorm = np.linalg.norm(f_next - f_prev)
+        errpercent = errvecnorm / np.linalg.norm(f_prev)
+        f_prev = f_next
+        counter += 1
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}'
+              .format(counter, errpercent, errvecnorm))
+    return f_next, f_0
+
+
+def conj_grad_soln(kptdf, matrix):
+    b = np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
+
+    ts = time.time()
+    x = scipy.sparse.linalg.cg(matrix, b)
+    te = time.time()
+    print('Conjugate gradient solve successful. Took {:.2f}s'.format(te - ts))
+    return x
+
+
 if __name__ == '__main__':
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
@@ -142,17 +185,60 @@ if __name__ == '__main__':
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
     fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
 
+    # fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
+    fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
+
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
     field = 1  # V/m ??? Just making up a number here
-    scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
-    _, edgepoints, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
-    edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
+    approach = 'iterative'
+    if approach is 'matrix':
+        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+        _, edgepoints, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
-    fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
-    plotting.highlighted_points(fo, edgepoints, con)
+        edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
+        fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
+        plotting.highlighted_points(fo, edgepoints, con)
 
-    # f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
+        f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
+    elif approach is 'iterative':
+        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+        itsoln = True
+        if itsoln:
+            start = time.time()
+            f_iter, f_rta = iterative_solver(cartkpts, scm)
+            # f_iter = (-1) * f_iter
+            # f_rta = (-1) * f_rta
+            end = time.time()
+            print('Iterative solver took {:.2f} seconds'.format(end - start))
+            np.save('f_iterative', f_iter)
+            np.save('f_rta', f_rta)
+        else:
+            try:
+                f_iter = np.load('f_iterative.npy')
+            except:
+                exit('Iterative solution not calculated and not stored on file.')
+
+        cgcalc = False
+        if cgcalc:
+            f_cg = conj_grad_soln(cartkpts, scm)
+        else:
+            try:
+                f_cg = np.load('f_conjgrad.npy')
+            except:
+                exit('Conjugate gradient solution not calculated and not stored on file.')
+
+        print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
+        print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
+        font = {'size': 14}
+        matplotlib.rc('font', **font)
+        plt.plot(f_cg, linewidth=2, label='CG')
+        plt.plot(f_iter, linewidth=2, label='Iterative')
+        plt.plot(f_rta, linewidth=2, label='RTA')
+        plt.xlabel('kpoint index')
+        plt.ylabel('deviational occupation')
+        plt.legend()
+        plt.show()

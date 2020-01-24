@@ -337,8 +337,8 @@ def main():
     enk = enk - enk.min()
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
-    fo = bz_3dscatter(con, fbzcartkpts, enk_df)
-    # plot_scattering_rates(data_loc, enk)
+    # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
+    plot_scattering_rates(data_loc, enk)
 
     plt.show()
 
