@@ -76,6 +76,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     # If there are too few points in a slice < 5, we want to keep track of those points
     shortslice_inds = []
     icinds = []
+    lvalley_inds = []
 
     start = time.time()
     # Loop through the unique ky and kz values
@@ -91,8 +92,9 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
         #     lastslice_inds.append(slice_inds)
         #     continue
 
-        # Skip all slices that intersect an L valley
+        # Skip all slices that intersect an L valley. Save the L valley indices
         if np.any(slice_df['valley'] == 0):
+            lvalley_inds.append(slice_inds)
             continue
 
         if len(slice_inds) > 4:
@@ -130,11 +132,11 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     print('Scattering matrix modified to incorporate central difference contribution.')
     print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
     print('Finite difference not applied to L valleys. Derivative treated as zero for these points.')
-    return shortslice_inds, icinds, matrix
+    return shortslice_inds, icinds, lvalley_inds, matrix
 
 
 def iterative_solver(kptdf, matrix):
-    sr = np.load(data_loc + 'scattering_rates_direct.npy')
+    sr = np.load(data_loc + 'scattering_rates.npy')
     tau = 1 / sr
     prefactor = np.multiply(tau, 1/(np.squeeze(kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])))
     f_0 = (-1) * kptdf['vx [m/s]'] * tau
@@ -168,6 +170,17 @@ def conj_grad_soln(kptdf, matrix):
     print('Conjugate gradient solve successful. Took {:.2f}s'.format(te - ts))
     return x
 
+def calc_mobility(F,fullkpts_df,cons):
+    """Calculate mobility as per Wu Li PRB 92, 2015"""
+    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
+    fermi_distribution(kptdata)
+    V = np.dot(np.cross(cons.b1,cons.b2),cons.b3)
+    prefactor = cons.e**2/(V*cons.kb*cons.T*len(kptdata))*10**30
+
+    mobility =  prefactor*np.sum(np.multiply(np.multiply(np.multiply(kptdata['k_FD'].values,1-kptdata['k_FD'].values)
+                                                         ,kptdata['vx [m/s']),F))
+    return mobility
+
 
 if __name__ == '__main__':
     # data_loc = '/home/peishi/nvme/k200-0.4eV/'
@@ -198,7 +211,7 @@ if __name__ == '__main__':
     approach = 'iterative'
     if approach is 'matrix':
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
-        _, edgepoints, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
+        _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
         edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
         fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
