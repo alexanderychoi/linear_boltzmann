@@ -162,10 +162,26 @@ def iterative_solver(kptdf, matrix):
               .format(counter, errpercent, errvecnorm))
     return f_next, f_0
 
+def drift_velocity(f,cons):
+    """Assuming that f is in the form of chi/(eE/kbT)"""
+    vd = np.sum(f)*cons.e*cons.E/(cons.kb*cons.T)/len(f)
+    return vd
+
 
 def conj_grad_soln(kptdf, matrix):
     b = np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
 
+    ts = time.time()
+    x, status = scipy.sparse.linalg.cg(matrix, b)
+    te = time.time()
+    print('Conjugate gradient solve successful. Took {:.2f}s'.format(te - ts))
+    return x
+
+
+def g_conj_grad_soln(kptdf, matrix, f, cons):
+    """Assuming that f is in the form of chi/(eE/kbT)"""
+    vd = drift_velocity(f, cons)
+    b = (vd-kptdf[['vx [m/s]']].values)/(cons.e*cons.E)*cons.kb*cons.T
     ts = time.time()
     x, status = scipy.sparse.linalg.cg(matrix, b)
     te = time.time()
@@ -179,8 +195,8 @@ def calc_mobility(F,fullkpts_df,cons):
     V = np.dot(np.cross(cons.b1,cons.b2),cons.b3)
     prefactor = cons.e**2/(V*cons.kb*cons.T*len(kptdata))*10**30
 
-    mobility =  prefactor*np.sum(np.multiply(np.multiply(np.multiply(kptdata['k_FD'].values,1-kptdata['k_FD'].values)
-                                                         ,kptdata['vx [m/s']),F))
+    mobility = prefactor*np.sum(np.multiply(np.multiply(np.multiply(kptdata['k_FD'].values,1-kptdata['k_FD'].values)
+                                                         ,kptdata['vx [m/s']), F))
     return mobility
 
 
@@ -249,12 +265,6 @@ if __name__ == '__main__':
 
         print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
-        font = {'size': 14}
-        matplotlib.rc('font', **font)
-        plt.plot(f_cg, linewidth=1, label='CG')
-        plt.plot(f_iter, linewidth=1, label='Iterative')
-        plt.plot(f_rta, linewidth=1, label='RTA')
-        plt.xlabel('kpoint index')
-        plt.ylabel('deviational occupation')
-        plt.legend()
-        plt.show()
+
+        plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
+        plotting.plot_1dim_steady_soln(f_iter, cartkpts)
