@@ -316,6 +316,28 @@ def plot_scattering_rates(data_dir, energies):
     plt.xlim([0, 0.4])
     # plt.savefig('plot_scattering_rates.png')
 
+def plot_cg_iter_rta(f_cg,f_iter,f_rta):
+    font = {'size': 14}
+    matplotlib.rc('font', **font)
+    plt.plot(f_cg, linewidth=1, label='CG')
+    plt.plot(f_iter, linewidth=1, label='Iterative')
+    plt.plot(f_rta, linewidth=1, label='RTA')
+    plt.xlabel('kpoint index')
+    plt.ylabel('deviational occupation')
+    plt.legend()
+    plt.show()
+
+def plot_1dim_steady_soln(f,fullkpts_df):
+    font = {'size': 14}
+    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    kpt_data = kptdata.sort_values(by=['kx', 'ky', 'kz'],ascending=True)
+    ascending_inds = kpt_data.index
+    plt.plot(f_cg[ascending_inds], linewidth=1, label='CG')
+    plt.xlabel('kx')
+    plt.ylabel('deviational occupation')
+    plt.legend()
+    plt.show()
+
 
 def occupation_v_energy(f, enk, kptsdf, c):
     npts = 4000  # number of points in the KDE
