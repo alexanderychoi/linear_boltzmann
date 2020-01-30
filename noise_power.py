@@ -133,22 +133,24 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
 
 def iterative_solver(kptdf, matrix):
-    sr = np.load(data_loc + 'scattering_rates_direct.npy')
-    tau = 1 / sr
-    prefactor = np.multiply(tau, 1/(np.squeeze(kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])))
-    f_0 = (-1) * kptdf['vx [m/s]'] * tau
+    # sr = np.load(data_loc + 'scattering_rates_direct.npy')
+    # tau = 1 / sr
+    prefactor = (np.diag(matrix))**(-1)
+    f_0 = np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     # f_0 = kptdf['vx [m/s]'] * tau
     # matrix -= np.diag(np.diag(matrix))
 
     errpercent = 1
     counter = 0
     f_prev = f_0
-    while errpercent > 1E-3:
+    while errpercent > 1E-6 and counter < 20:
         s1 = time.time()
-        mvp = matrix @ f_prev
+        mvp = np.matmul(matrix, f_prev)
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
-        f_next = f_0 + np.multiply(prefactor, mvp)
+        # Remove the part of the vector from the diagonal multiplication
+        offdiagsum = mvp - (np.diag(matrix) * f_prev)
+        f_next = f_0 - (prefactor * offdiagsum)
         errvecnorm = np.linalg.norm(f_next - f_prev)
         errpercent = errvecnorm / np.linalg.norm(f_prev)
         f_prev = f_next
@@ -162,7 +164,7 @@ def conj_grad_soln(kptdf, matrix):
     b = np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
 
     ts = time.time()
-    x = scipy.sparse.linalg.cg(matrix, b)
+    x, status = scipy.sparse.linalg.cg(matrix, b)
     te = time.time()
     print('Conjugate gradient solve successful. Took {:.2f}s'.format(te - ts))
     return x
@@ -206,12 +208,10 @@ if __name__ == '__main__':
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
     elif approach is 'iterative':
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        itsoln = True
+        itsoln = False
         if itsoln:
             start = time.time()
             f_iter, f_rta = iterative_solver(cartkpts, scm)
-            # f_iter = (-1) * f_iter
-            # f_rta = (-1) * f_rta
             end = time.time()
             print('Iterative solver took {:.2f} seconds'.format(end - start))
             np.save('f_iterative', f_iter)
@@ -219,12 +219,14 @@ if __name__ == '__main__':
         else:
             try:
                 f_iter = np.load('f_iterative.npy')
+                f_rta = np.load('f_rta.npy')
             except:
                 exit('Iterative solution not calculated and not stored on file.')
 
         cgcalc = False
         if cgcalc:
             f_cg = conj_grad_soln(cartkpts, scm)
+            np.save('f_conjgrad', f_cg)
         else:
             try:
                 f_cg = np.load('f_conjgrad.npy')
@@ -235,9 +237,9 @@ if __name__ == '__main__':
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
         font = {'size': 14}
         matplotlib.rc('font', **font)
-        plt.plot(f_cg, linewidth=2, label='CG')
-        plt.plot(f_iter, linewidth=2, label='Iterative')
-        plt.plot(f_rta, linewidth=2, label='RTA')
+        plt.plot(f_cg, linewidth=1, label='CG')
+        plt.plot(f_iter, linewidth=1, label='Iterative')
+        plt.plot(f_rta, linewidth=1, label='RTA')
         plt.xlabel('kpoint index')
         plt.ylabel('deviational occupation')
         plt.legend()

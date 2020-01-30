@@ -3,12 +3,10 @@
 import preprocessing_largegrid
 import numpy as np
 import multiprocessing as mp
-import matplotlib as mpl
 from functools import partial
 import os
 import pandas as pd
 import time
-import numba
 import re
 
 from mpl_toolkits.mplot3d import Axes3D
@@ -97,7 +95,7 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 
 def calc_sparsity():
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
     nelperrow = np.zeros(nkpts)
     for ik in range(nkpts):
@@ -283,7 +281,8 @@ def matrixrows_par(k, nlambda):
         krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nkpts)
 
     prefactor = 13.6056980659
-    # Diagonal term
+    # # Diagonal term
+    # # In canonical scattering matrix, the diagonal element is not the scattering rate
     # krow[k-1] = scattering_rates[k-1]
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
 
@@ -293,11 +292,10 @@ def matrixrows_par(k, nlambda):
     diag_ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
         1 - g_df['k_FD'].values, g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['ems_gaussian'])
 
-    sr = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / (6.582119 * 10**-16)*(10**-12) / nlambda*prefactor**2
-    krow[k-1] = (-1) * sr
+    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi/(6.582119 * 10**-16)*(10**-12)/nlambda*prefactor**2
+    krow[k-1] = (-1) * diagterm
 
     # Calculating nondiagonal terms
-    # g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
     nkprime = np.unique(g_df['k+q_inds'])
     for kp in np.nditer(nkprime):
         kpi = int(kp)
@@ -322,7 +320,6 @@ def matrixrows_par(k, nlambda):
     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
 
 
-@numba.jit(parallel=True, nopython=True)
 def matrix_check_colsum(sm):
     # matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
 
@@ -338,12 +335,11 @@ def matrix_check_colsum(sm):
 if __name__ == '__main__':
     con = preprocessing_largegrid.PhysicalConstants()
 
-    # data_loc = '/home/peishi/nvme/k100-0.3eV/'
-    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
 
-    # mp.set_start_method('spawn')
+    # data_loc = '/home/peishi/storage/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/k200-0.4eV/chunked/'
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
     cartkpts = preprocessing_largegrid.load_vel_data(data_loc, con)
@@ -357,7 +353,7 @@ if __name__ == '__main__':
     kinds = np.arange(1, nkpts + 1)
 
     operatingsystem = 'windows'  # NOTE: Change this to windows if you need
-    calc_scattering_rates = True
+    calc_scattering_rates = False
     if calc_scattering_rates:
         os.chdir(chunk_loc)
         scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
@@ -367,14 +363,14 @@ if __name__ == '__main__':
         start = time.time()
         if operatingsystem is 'windows':
             # NOTE: You also have to manually comment out the last line in relaxation_times_parallel because there's
-            # some weird bug I don't know how to fix.
+            # some weird bug I don't know how to fix yet.
             pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
             sr = parse_scatteringrates()
-            np.save(data_loc + 'scattering_rates_fromfile', sr)
+            np.save(data_loc + 'scattering_rates', sr)
         elif operatingsystem is 'linux':
             pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes, opsys='linux'), kinds)
             scattering_rates = np.array(scattering_rates)
-            np.save(data_loc + 'scattering_rates_direct', scattering_rates)
+            np.save(data_loc + 'scattering_rates', scattering_rates)
         else:
             exit('No operating system specified. Don''t know how to aggregate scattering rates.')
         end = time.time()
@@ -387,7 +383,7 @@ if __name__ == '__main__':
 
     # rta_mobility(data_loc, k_en, kvel)
 
-    calc_matrix_rows = False
+    calc_matrix_rows = True
     if calc_matrix_rows:
         os.chdir(data_loc)
         rta_rates = np.load('scattering_rates.npy')
@@ -395,18 +391,19 @@ if __name__ == '__main__':
         # Multiprocessing version
         # Need to create a directory called mat_rows inside the data_loc directory to store rows
         os.chdir(data_loc + 'mat_rows')
-        scattering_rates = mp.Array('d', rta_rates, lock=False)
+        # scattering_rates = mp.Array('d', rta_rates, lock=False)
         nthreads = 6
         pool = mp.Pool(nthreads)
 
         start = time.time()
-        pool.map(partial(matrixrows_par, nlambda=n_ph_modes), np.arange(1, 10))
+        pool.map(partial(matrixrows_par, nlambda=n_ph_modes), kinds)
         end = time.time()
         print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
 
     # rta_rates = np.load('scattering_rates.npy')
     # os.chdir(data_loc)
-    # assemble_full_matrix(data_loc + 'mat_rows/')
+    # NOTE: The assemble_full_matrix function will overwrite previous matrix. Be careful
+    assemble_full_matrix(data_loc + 'mat_rows/')
 
     # s, nlpr = calc_sparsity()
     # print('Sparsity is {:.8f}'.format(s))
@@ -417,5 +414,5 @@ if __name__ == '__main__':
     print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
     print('The largest column sum is {:E}'.format(cs.max()))
 
-    # a = check_symmetric(matrix)
-    # print('Result of check symmetric is ' + a)
+    a = check_symmetric(matrix)
+    print('Result of check symmetric is ' + str(a))
