@@ -172,24 +172,28 @@ def conj_grad_soln(kptdf, matrix):
     print('Conjugate gradient solve successful. Took {:.2f}s'.format(te - ts))
     return x
 
-def calc_mobility(F,fullkpts_df,cons):
+
+def calc_mobility(F, fullkpts_df, cons):
     """Calculate mobility as per Wu Li PRB 92, 2015"""
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
     fermi_distribution(kptdata)
-    V = np.dot(np.cross(cons.b1,cons.b2),cons.b3)
-    prefactor = cons.e**2/(V*cons.kb*cons.T*len(kptdata))*10**30
+    V = np.dot(np.cross(cons.b1, cons.b2), cons.b3)
+    Nuc = len(kptdata)
+    prefactor = 2 * cons.e**2 / (V*cons.kb*cons.T*Nuc)*10**30
 
-    mobility =  prefactor*np.sum(np.multiply(np.multiply(np.multiply(kptdata['k_FD'].values,1-kptdata['k_FD'].values)
-                                                         ,kptdata['vx [m/s']),F))
+    conductivity = prefactor*np.sum(kptdata['k_FD'].values * (1 - kptdata['k_FD'].values) * kptdata['vx [m/s'] * F)
+    carrier_dens = 2 / Nuc / V * np.sum(kptdata['k_FD'])
+    mobility = conductivity / cons.e / carrier_dens
+    print('Mobility is {:.3E}'.format(mobility))
     return mobility
 
 
 if __name__ == '__main__':
-    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
 
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     con = preprocessing_largegrid.PhysicalConstants()
 
