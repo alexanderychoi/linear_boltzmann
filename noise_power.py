@@ -15,8 +15,8 @@ import re
 
 def fermi_distribution(df, fermilevel=6.03, temp=300):
     e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
-    kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    df['k_FD'] = (np.exp((df['energy'].values * e - fermilevel * e) / (kb * temp)) + 1) ** (-1)
+    kb_joule = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    df['k_FD'] = (np.exp((df['energy'].values * e - fermilevel * e) / (kb_joule * temp)) + 1) ** (-1)
     return df
 
 
@@ -135,10 +135,46 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     return shortslice_inds, icinds, lvalley_inds, matrix
 
 
-def iterative_solver(kptdf, matrix):
+def iterative_solver_simple(b, matrix, convergence=1E-4):
+    """An iterative solver that just takes a b vector (RHS of Ax=b) and a matrix (A in Ax=b) and solves for x with an
+    iterative method. Start by finding an x0 which has components x0_i = b_i / A_ii and then add off diagonal components
+    until convergence criteria.
+    :parameter b: The RHS of Ax=b
+    :parameter matrix: The matrix in Ax=b
+    :parameter convergence: Convergence criteria given as |x_i+1 - x_i| / |x_i|
+
+    :returns x_next: The converged solution
+    :returns x_0: The starting vector for comparison"""
+
+    # The prefactor is just the inverse of the diagonal of the matrix
+    prefactor = (np.diag(matrix)) ** (-1)
+    x_0 = b * prefactor
+
+    errpercent = 1
+    counter = 0
+    x_prev = x_0
+    while errpercent > convergence and counter < 20:
+        s1 = time.time()
+        mvp = np.matmul(matrix, x_prev)
+        e1 = time.time()
+        print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
+        # Remove diagonal terms from the matrix multiplication (prevent double counting of diagonal term)
+        offdiagsum = mvp - (np.diag(matrix) * x_prev)
+        x_next = x_0 + (prefactor * offdiagsum)
+        errvecnorm = np.linalg.norm(x_next - x_prev)
+        errpercent = errvecnorm / np.linalg.norm(x_prev)
+        x_prev = x_next
+        counter += 1
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}'
+              .format(counter, errpercent, errvecnorm))
+    return x_next, x_0
+
+
+def iterative_solver_lowfield(kptdf, matrix):
+    """Iterative solver hard coded for solving the BTE in low field approximation"""
     # sr = np.load(data_loc + 'scattering_rates_direct.npy')
     # tau = 1 / sr
-    prefactor = (np.diag(matrix))**(-1)
+    prefactor = (-1) * (np.diag(matrix))**(-1)
     f_0 = np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     # f_0 = kptdf['vx [m/s]'] * tau
     # matrix -= np.diag(np.diag(matrix))
@@ -146,14 +182,14 @@ def iterative_solver(kptdf, matrix):
     errpercent = 1
     counter = 0
     f_prev = f_0
-    while errpercent > 1E-6 and counter < 20:
+    while errpercent > 1E-4 and counter < 20:
         s1 = time.time()
         mvp = np.matmul(matrix, f_prev)
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
         offdiagsum = mvp - (np.diag(matrix) * f_prev)
-        f_next = f_0 - (prefactor * offdiagsum)
+        f_next = f_0 + (prefactor * offdiagsum)
         errvecnorm = np.linalg.norm(f_next - f_prev)
         errpercent = errvecnorm / np.linalg.norm(f_prev)
         f_prev = f_next
@@ -163,14 +199,14 @@ def iterative_solver(kptdf, matrix):
     return f_next, f_0
 
 
-def drift_velocity(f,cons):
+def drift_velocity(f, cons):
     """Assuming that f is in the form of chi/(eE/kbT)"""
-    vd = np.sum(f)*cons.e*cons.E/(cons.kb*cons.T)/len(f)
+    vd = np.sum(f)*cons.e*cons.E/(cons.kb_ev*cons.T)/len(f)
     return vd
 
 
 def conj_grad_soln(kptdf, matrix):
-    b = np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
+    b = (-1) * np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
 
     ts = time.time()
     x, status = scipy.sparse.linalg.cg(matrix, b)
@@ -179,18 +215,18 @@ def conj_grad_soln(kptdf, matrix):
     return x
 
 
-def calc_mobility(F, fullkpts_df, cons):
+def calc_mobility(F, kptdata, cons):
     """Calculate mobility as per Wu Li PRB 92, 2015"""
-    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
-    fermi_distribution(kptdata)
-    V = np.dot(np.cross(cons.b1, cons.b2), cons.b3)
+    # kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
+    # fermi_distribution(kptdata)
+    V = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     Nuc = len(kptdata)
-    prefactor = 2 * cons.e**2 / (V*cons.kb*cons.T*Nuc)*10**30
+    prefactor = 2 * cons.e**2 / (V*cons.kb_ev*cons.T*Nuc)
 
-    conductivity = prefactor * np.sum(kptdata['k_FD'].values * (1 - kptdata['k_FD'].values) * kptdata['vx [m/s'] * F)
-    carrier_dens = 2 / Nuc / V * np.sum(kptdata['k_FD'])
+    conductivity = prefactor * np.sum(kptdata['FD'] * (1 - kptdata['FD']) * kptdata['vx [m/s]'] * F)
+    carrier_dens = 2 / Nuc / V * np.sum(kptdata['FD'])
     mobility = conductivity / cons.e / carrier_dens
-    print('Mobility is {:.3E}'.format(mobility))
+    print('Mobility is {:.10E}'.format(mobility))
 
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
@@ -222,7 +258,7 @@ if __name__ == '__main__':
     fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
 
     # fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
-    fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
+    cartkpts = fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
@@ -245,7 +281,7 @@ if __name__ == '__main__':
         itsoln = False
         if itsoln:
             start = time.time()
-            f_iter, f_rta = iterative_solver(cartkpts, scm)
+            f_iter, f_rta = iterative_solver_lowfield(cartkpts, scm)
             end = time.time()
             print('Iterative solver took {:.2f} seconds'.format(end - start))
             np.save('f_iterative', f_iter)
@@ -270,5 +306,12 @@ if __name__ == '__main__':
         print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-        plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
-        plotting.plot_1dim_steady_soln(f_iter, cartkpts)
+        # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
+        # plotting.plot_1dim_steady_soln(f_iter, cartkpts)
+
+        # print('RTA mobility')
+        # calc_mobility(f_rta, cartkpts, con)
+        # print('Iterative mobility')
+        # calc_mobility(f_iter, cartkpts, con)
+        # print('CG mobility')
+        # calc_mobility(f_cg, cartkpts, con)

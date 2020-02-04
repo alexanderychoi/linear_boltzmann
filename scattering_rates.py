@@ -377,14 +377,9 @@ if __name__ == '__main__':
         end = time.time()
         print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
 
-        # # Scattering rate calculation when you have the whole dataframe
-        # full_g_df = pd.read_hdf('full_g_df.h5', key='df')
-        # kpts = preprocessing_largegrid.load_vel_data(data_loc, con)
-        # scattering_rates = relaxation_times(full_g_df, kpts)
+    rta_mobility(data_loc, k_en, kvel)
 
-    # rta_mobility(data_loc, k_en, kvel)
-
-    calc_matrix_rows = True
+    calc_matrix_rows = False
     if calc_matrix_rows:
         os.chdir(data_loc)
         rta_rates = np.load('scattering_rates.npy')
@@ -404,16 +399,11 @@ if __name__ == '__main__':
     # rta_rates = np.load('scattering_rates.npy')
     # os.chdir(data_loc)
     # NOTE: The assemble_full_matrix function will overwrite previous matrix. Be careful
-    assemble_full_matrix(data_loc + 'mat_rows/')
+    # assemble_full_matrix(data_loc + 'mat_rows/')
 
-    # s, nlpr = calc_sparsity()
-    # print('Sparsity is {:.8f}'.format(s))
-    # print('Average number of elements per row is {:.2f}'.format(np.average(nlpr)))
-
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-    cs = matrix_check_colsum(matrix)
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest column sum is {:E}'.format(cs.max()))
-
-    a = check_symmetric(matrix)
-    print('Result of check symmetric is ' + str(a))
+    # matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    # cs = matrix_check_colsum(matrix)
+    # print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
+    # print('The largest column sum is {:E}'.format(cs.max()))
+    # a = check_symmetric(matrix)
+    # print('Result of check symmetric is ' + str(a))

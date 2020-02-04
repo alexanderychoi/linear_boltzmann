@@ -343,6 +343,7 @@ def occupation_v_energy(f, enk, kptsdf, c):
     npts = 4000  # number of points in the KDE
     chi = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     ftot = np.zeros(npts)
+    f0en = np.zeros(npts)
     # Need to define the energy range that I'm doing integration over
     # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
     en_axis = np.linspace(enk.min(), enk.max(), npts)
@@ -350,14 +351,14 @@ def occupation_v_energy(f, enk, kptsdf, c):
     f0 = np.squeeze(kptsdf['FD'].values)
 
     # Making up a number for field here
-    arbfield = 1E15
+    arbfield = 1
 
     # Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
     # then we need to bring these factors back in to get the right units
     prefactor = arbfield * c.e / (8.617333262145 * 1E-5) / c.T * f0 * (1 - f0)
     # prefactor = [1] * len(f0)
 
-    spread = 100 * dx
+    spread = 85 * dx
 
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
@@ -366,9 +367,10 @@ def occupation_v_energy(f, enk, kptsdf, c):
         istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
         iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
         ftot[istart:iend] += ((f[k]*prefactor[k]) + f0[k]) * gaussian(en_axis[istart:iend], enk[k])
+        f0en[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k])
         chi[istart:iend] += f[k] * gaussian(en_axis[istart:iend], enk[k])
 
-    return en_axis, ftot, chi
+    return en_axis, ftot, chi, f0en
 
 
 def main():
@@ -395,16 +397,22 @@ def main():
 
     f_iter = np.load(data_loc + 'f_iterative.npy')
     f_cg = np.load(data_loc + 'f_conjgrad.npy')
-    enax1, ftot_iter_enax, f_iter_en = occupation_v_energy(f_iter, enk, cart_kpts_df, con)
-    enax2, ftot_cg_enax, f_cg_en = occupation_v_energy(f_cg, enk, cart_kpts_df, con)
+    enax1, ftot_iter_enax, f_iter_en, f0 = occupation_v_energy(f_iter, enk, cart_kpts_df, con)
+    enax2, ftot_cg_enax, f_cg_en, _ = occupation_v_energy(f_cg, enk, cart_kpts_df, con)
 
-    # plt.plot(enax1, ftot_iter_enax, label='iterative')
-    plt.plot(enax1, f_iter_en, label='iterative')
+    plt.figure()
+    plt.plot(enax1, f0, label='Equilibrium (FD)')
+    plt.plot(enax1, ftot_iter_enax, label='iterative')
     # plt.plot(enax2, ftot_cg_enax, label='CG')
+    plt.xlabel('Energy (ev)')
+    plt.ylabel('Total occupation (f0 + delta f)')
+    plt.legend()
+
+    plt.figure()
+    plt.plot(enax1, f_iter_en, label='iterative')
     plt.plot(enax2, f_cg_en, label='CG')
     plt.xlabel('Energy (ev)')
-    # plt.ylabel('Total occupation (f0 + delta f)')
-    plt.ylabel(r'Deviational occupation ($\delta$ f)')
+    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
     plt.legend()
 
     plt.show()
