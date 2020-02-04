@@ -23,7 +23,8 @@ class PhysicalConstants:
     """
     # Physical parameters
     a = 5.5563606                    # Lattice constant for GaAs [Angstrom]
-    kb = 1.38064852*10**(-23)        # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    kb_joule = 1.38064852*10**(-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    kb_ev = 8.617333 * (10 ** -5)    # Boltzmann constant in eV/K
     T = 300                          # Lattice temperature [K]
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
     # mu = 5.780                       # Chemical potential [eV] old 10/8/2019
@@ -233,7 +234,8 @@ def load_vel_data(data_dir, cons):
 
     os.chdir(data_dir)
 
-    if os.path.isfile('gaas.vel.parquet'):
+    if False:
+    # if os.path.isfile('gaas.vel.parquet'):
         cart_kpts = pd.read_parquet('gaas.vel.parquet')
     else:
         kvel = np.loadtxt('gaas.vel', skiprows=3)
@@ -254,7 +256,7 @@ def load_vel_data(data_dir, cons):
         cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'], axis=1)
 
         cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * cons.e - cons.mu * cons.e)
-                                  / (cons.kb * cons.T)) + 1) ** (-1)
+                                  / (cons.kb_joule * cons.T)) + 1) ** (-1)
         cart_kpts.to_parquet('gaas.vel.parquet')
 
     return cart_kpts
