@@ -292,17 +292,18 @@ if __name__ == '__main__':
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
     fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cartkpts.values[:, 2:5], reciplattvecs)
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
-    fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
+    fbzcartkpts = pd.concat([cartkpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
 
-    # fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
+    fbzcartkpts = fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
     cartkpts = fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
+    trythis = False
     approach = 'iterative'
-    if approach is 'matrix':
+    if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
         # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
@@ -311,7 +312,7 @@ if __name__ == '__main__':
         plotting.highlighted_points(fo, edgepoints, con)
 
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
-    elif approach is 'iterative':
+    elif approach is 'iterative' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         itsoln = False
         if itsoln:
@@ -338,8 +339,8 @@ if __name__ == '__main__':
             except:
                 exit('Conjugate gradient solution not calculated and not stored on file.')
 
-        print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
-        print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
+        # print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
+        # print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
         # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
         # plotting.plot_1dim_steady_soln(f_iter, cartkpts)

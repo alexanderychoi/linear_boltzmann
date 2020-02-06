@@ -235,8 +235,8 @@ def load_vel_data(data_dir, cons):
 
     os.chdir(data_dir)
 
-    if False:
     # if os.path.isfile('gaas.vel.parquet'):
+    if False:
         cart_kpts = pd.read_parquet('gaas.vel.parquet')
     else:
         kvel = np.loadtxt('gaas.vel', skiprows=3)
