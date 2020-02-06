@@ -26,8 +26,7 @@ def steady_state_solns(matrix, numkpts, fullkpts_df, field):
     kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
 
     # Calculate fermi distribution function for all the kpoints. Currently only in chunked dataframes.
-    # Want them all in one place here
-
+    # Want them all in one place her
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
     fermi_distribution(kptdata)
@@ -61,15 +60,14 @@ def calc_sparsity():
 
 def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     # Do not  flush the memmap it will overwrite consecutively.
-
     # Get the first and last rows since these are different because of the IC. Go through each.
-
     # Get the unique ky and kz values from the array for looping.
+    step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m
+
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-    kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdta['ky [1/A]'].values**2 +
+    kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
                                  kptdata['kz [1/A]'].values**2)
-    kptdata.loc['valley',kptdata['kpt_mag'] < 0.3] = 1  # corresponds to Gamma valley
-    kptdata.loc['valley',kptdata['kpt_mag'] > 0.3] = 0  # corresponds to L valley
+    kptdata['ingamma'] = kptdata['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
 
     uniq_yz = np.unique(kptdata[['ky [1/A]', 'kz [1/A]']].values, axis=0)
 
@@ -93,7 +91,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
         #     continue
 
         # Skip all slices that intersect an L valley. Save the L valley indices
-        if np.any(slice_df['valley'] == 0):
+        if np.any(slice_df['ingamma'] == 0):
             lvalley_inds.append(slice_inds)
             continue
 
@@ -105,23 +103,23 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_inds[0], ordered_inds[1]] += - 1/(2*step_size)*cons.e*E/cons.h
-            matrix[ordered_inds[1], ordered_inds[2]] += - 1/(2*step_size)*cons.e*E/cons.h
+            matrix[ordered_inds[0], ordered_inds[1]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[1], ordered_inds[2]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
             last = len(ordered_inds) - 1
             slast = len(ordered_inds) - 2
-            matrix[ordered_inds[last], ordered_inds[slast]] += 1/(2*step_size)*cons.e*E/cons.h
-            matrix[ordered_inds[slast], ordered_inds[slast-1]] += 1/(2*step_size)*cons.e*E/cons.h
+            matrix[ordered_inds[last], ordered_inds[slast]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[slast], ordered_inds[slast-1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the value of all other points in the slice
             inter_inds = ordered_inds[2:slast]
             inter_inds_up = ordered_inds[3:last]
             inter_inds_down = ordered_inds[1:slast-1]
 
-            matrix[inter_inds, inter_inds_up] = matrix[inter_inds, inter_inds_up] - 1/(2*step_size)*cons.e*E/cons.h
-            matrix[inter_inds, inter_inds_down] = matrix[inter_inds, inter_inds_down] + 1/(2*step_size)*cons.e*E/cons.h
+            matrix[inter_inds, inter_inds_up] += (-1) * 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_down] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
         else:
             shortslice_inds.append(slice_inds)
@@ -240,10 +238,48 @@ def g_conj_grad_soln(kptdf, matrix, f, cons):
     return x
 
 
+def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, convergence=1E-4):
+    field = 1E4  # in Volts/meter
+
+    _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+
+    b = (-1)*c.e*field/c.kb_joule/c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
+    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
+    chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
+    invdiag = (np.diag(matrix_sc)) ** (-1)
+    x_0 = b * invdiag
+
+    errpercent = 1
+    counter = 0
+    x_prev = x_0
+    while errpercent > convergence and counter < 20:
+        s1 = time.time()
+        mvp_sc = np.matmul(matrix_sc, x_prev)
+        # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
+        # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
+        offdiag_sc = (mvp_sc - (np.diag(matrix_sc) * x_prev)) * (2 * np.pi)**2
+        # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
+        offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
+        e1 = time.time()
+        print('Two matrix vector multiplications took {:.2f}s'.format(e1 - s1))
+        x_next = x_0 + (invdiag * (offdiag_fd - offdiag_sc))
+
+        errvecnorm = np.linalg.norm(x_next - x_prev)
+        errpercent = errvecnorm / np.linalg.norm(x_prev)
+        x_prev = x_next
+        counter += 1
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}'
+              .format(counter, errpercent, errvecnorm))
+    return x_next, x_0
+
+
 if __name__ == '__main__':
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-
+    # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
+    # chunk_loc = '/home/peishi/storage/chunked/'
+    # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
+    # chunk_loc = '/p/work3/peishi/chunked/'
     # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
     # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
@@ -253,7 +289,7 @@ if __name__ == '__main__':
     cartkpts = preprocessing_largegrid.load_vel_data(data_loc, con)
 
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
-    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cartkpts.to_numpy()[:, 2:5], reciplattvecs)
+    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cartkpts.values[:, 2:5], reciplattvecs)
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
     fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
 
@@ -264,12 +300,10 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    field = 1  # V/m ??? Just making up a number here
-
     approach = 'iterative'
     if approach is 'matrix':
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
-        _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
+        # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
         edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
         fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
@@ -315,3 +349,9 @@ if __name__ == '__main__':
         # calc_mobility(f_iter, cartkpts, con)
         # print('CG mobility')
         # calc_mobility(f_cg, cartkpts, con)
+
+    solve_full_steadystatebte = True
+    if solve_full_steadystatebte:
+        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+        fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+        steady_state_full_drift_iterative_solver(scm, fdm, cartkpts, con)

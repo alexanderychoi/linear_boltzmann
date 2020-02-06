@@ -30,7 +30,8 @@ class PhysicalConstants:
     # mu = 5.780                       # Chemical potential [eV] old 10/8/2019
     mu = 6.03                        # Chemical potential [eV] based on carrier density cited in JJ Zhou paper
     b = 8/1000                       # Gaussian broadening [eV]
-    h = 1.054*10**(-34)              # Reduced Planck's constant [J/s]
+    hbar_joule = 1.054571817*10**(-34)  # Reduced Planck's constant [J/s]
+    hbar_ev = 6.582119569*10**(-16)  # Reduced Planck's constant [eV/s]
 
     # Lattice vectors
     a1 = np.array([-2.7781803, 0.0000000, 2.7781803])
