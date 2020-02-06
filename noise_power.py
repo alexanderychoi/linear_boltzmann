@@ -93,6 +93,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
         # Skip all slices that intersect an L valley. Save the L valley indices
         if np.any(slice_df['ingamma'] == 0):
             lvalley_inds.append(slice_inds)
+            print('Not applied to {:d} slice because skip L valley'.format(kind))
             continue
 
         if len(slice_inds) > 4:
