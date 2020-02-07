@@ -1,15 +1,12 @@
-import preprocessing_largegrid
 import plotting
+import preprocessing_largegrid
 import numpy as np
 import scipy.sparse.linalg
 import multiprocessing as mp
-import matplotlib.pyplot as plt
-import matplotlib
 from functools import partial
 import os
 import pandas as pd
 import time
-import numba
 import re
 
 
@@ -93,7 +90,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
         # Skip all slices that intersect an L valley. Save the L valley indices
         if np.any(slice_df['ingamma'] == 0):
             lvalley_inds.append(slice_inds)
-            print('Not applied to {:d} slice because skip L valley'.format(kind))
+            # print('Not applied to {:d} slice because skip L valley'.format(kind))
             continue
 
         if len(slice_inds) > 4:
@@ -127,7 +124,8 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
         end = time.time()
         if kind % 10 == 0:
-            print('Finished {:d} out of {:d} slices in {:.3f}s'.format(kind, len(uniq_yz),end-start))
+            pass
+            # print('Finished {:d} out of {:d} slices in {:.3f}s'.format(kind, len(uniq_yz),end-start))
     print('Scattering matrix modified to incorporate central difference contribution.')
     print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
     print('Finite difference not applied to L valleys. Derivative treated as zero for these points.')
@@ -170,25 +168,26 @@ def iterative_solver_simple(b, matrix, convergence=1E-4):
 
 
 def iterative_solver_lowfield(kptdf, matrix):
-    """Iterative solver hard coded for solving the BTE in low field approximation"""
+    """Iterative solver hard coded for solving the BTE in low field approximation. Sign convention by Wu Li"""
     # sr = np.load(data_loc + 'scattering_rates_direct.npy')
     # tau = 1 / sr
-    prefactor = (-1) * (np.diag(matrix))**(-1)
+    prefactor = (-1) * (np.diag(matrix) * (2 * np.pi)**2)**(-1)
     f_0 = np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
+    print('The avg abs val of f_0 is {:.3E}'.format(np.average(np.abs(f_0))))
     # f_0 = kptdf['vx [m/s]'] * tau
-    # matrix -= np.diag(np.diag(matrix))
 
     errpercent = 1
     counter = 0
     f_prev = f_0
     while errpercent > 1E-4 and counter < 20:
         s1 = time.time()
-        mvp = np.matmul(matrix, f_prev)
+        mvp = np.matmul(matrix * (2 * np.pi)**2, f_prev)
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
-        offdiagsum = mvp - (np.diag(matrix) * f_prev)
+        offdiagsum = mvp - (np.diag(matrix) * (2 * np.pi)**2 * f_prev)
         f_next = f_0 + (prefactor * offdiagsum)
+        print('The avg abs val of offdiag part is {:.3E}'.format(np.average(np.abs(prefactor * offdiagsum))))
         errvecnorm = np.linalg.norm(f_next - f_prev)
         errpercent = errvecnorm / np.linalg.norm(f_prev)
         f_prev = f_next
@@ -239,39 +238,77 @@ def g_conj_grad_soln(kptdf, matrix, f, cons):
     return x
 
 
-def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, convergence=1E-4):
-    field = 1E4  # in Volts/meter
+def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+    # field input should be in Volts/meter
 
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
 
     b = (-1)*c.e*field/c.kb_joule/c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
-    invdiag = (np.diag(matrix_sc)) ** (-1)
+    invdiag = (np.diag(matrix_sc) * 1E12 * (2 * np.pi)**2) ** (-1)
     x_0 = b * invdiag
 
     errpercent = 1
     counter = 0
     x_prev = x_0
-    while errpercent > convergence and counter < 20:
+    loopstart = time.time()
+    while errpercent > convergence and counter < 500:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc, x_prev)
+        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi)**2, x_prev)
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
         # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
-        offdiag_sc = (mvp_sc - (np.diag(matrix_sc) * x_prev)) * (2 * np.pi)**2
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi)**2 * x_prev)
         # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
         offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
         e1 = time.time()
-        print('Two matrix vector multiplications took {:.2f}s'.format(e1 - s1))
+        print('Matrix vector multiplications took {:.2f}s'.format(e1 - s1))
         x_next = x_0 + (invdiag * (offdiag_fd - offdiag_sc))
 
         errvecnorm = np.linalg.norm(x_next - x_prev)
         errpercent = errvecnorm / np.linalg.norm(x_prev)
         x_prev = x_next
         counter += 1
-        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}'
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}\n'
               .format(counter, errpercent, errvecnorm))
+    loopend = time.time()
+    print('Convergence took {:.2f}s'.format(loopend - loopstart))
     return x_next, x_0
+
+
+def eff_distr_g_iterative_solver(sss, matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+    _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+
+    b = (-1) * c.e * field / c.kb_joule / c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
+    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
+    chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
+    invdiag = (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2) ** (-1)
+    g_0 = b * invdiag
+
+    errpercent = 1
+    counter = 0
+    g_prev = g_0
+    loopstart = time.time()
+    while errpercent > convergence and counter < 500:
+        s1 = time.time()
+        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi) ** 2, g_prev)
+        # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
+        # Also include  2pi^2 factor that we believe is the conversion between 1/radians and 1/seconds
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2 * g_prev)
+        offdiag_fd = np.matmul(matrix_fd, chi2psi * g_prev)
+        e1 = time.time()
+        print('Matrix vector multiplication (x2) took {:.2f}s'.format(e1 - s1))
+        g_next = g_0 + (invdiag * (offdiag_fd - offdiag_sc))
+
+        errvecnorm = np.linalg.norm(g_next - g_prev)
+        errpercent = errvecnorm / np.linalg.norm(g_prev)
+        g_prev = g_next
+        counter += 1
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}\n'
+              .format(counter, errpercent, errvecnorm))
+    loopend = time.time()
+    print('Convergence took {:.2f}s'.format(loopend - loopstart))
+    return g_next, g_0
 
 
 if __name__ == '__main__':
@@ -292,17 +329,18 @@ if __name__ == '__main__':
     reciplattvecs = np.concatenate((con.b1[np.newaxis, :], con.b2[np.newaxis, :], con.b3[np.newaxis, :]), axis=0)
     fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cartkpts.values[:, 2:5], reciplattvecs)
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
-    fbzcartkpts = pd.concat([cartkpts['k_inds'], fbzcartkpts], axis=1)
+    fbzcartkpts = pd.concat([cartkpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
 
-    # fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
+    fbzcartkpts = fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
     cartkpts = fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
+    trythis = False
     approach = 'iterative'
-    if approach is 'matrix':
+    if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
         # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
@@ -311,9 +349,9 @@ if __name__ == '__main__':
         plotting.highlighted_points(fo, edgepoints, con)
 
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
-    elif approach is 'iterative':
+    elif approach is 'iterative' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        itsoln = False
+        itsoln = True
         if itsoln:
             start = time.time()
             f_iter, f_rta = iterative_solver_lowfield(cartkpts, scm)
@@ -337,7 +375,6 @@ if __name__ == '__main__':
                 f_cg = np.load('f_conjgrad.npy')
             except:
                 exit('Conjugate gradient solution not calculated and not stored on file.')
-
         print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
@@ -353,6 +390,9 @@ if __name__ == '__main__':
 
     solve_full_steadystatebte = True
     if solve_full_steadystatebte:
+        field = 1E2
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-        steady_state_full_drift_iterative_solver(scm, fdm, cartkpts, con)
+        psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
+        np.save('psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
+        np.save('psi_rta_{:.1E}_field'.format(field), psi_rta)
