@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import preprocessing_largegrid
+import noise_power
 
 import pandas as pd
 import numpy as np
@@ -339,25 +340,34 @@ def plot_1dim_steady_soln(f,fullkpts_df):
     plt.show()
 
 
-def occupation_v_energy(f, enk, kptsdf, c):
+def f2chi(f, kptsdf, c, arbfield=1):
+    """Convert F_k from low field approximation iterative scheme into chi which is easy to plot"""
+    # Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
+    # then we need to bring these factors back in to get the right units
+    f0 = np.squeeze(kptsdf['k_FD'].values)
+    prefactor = arbfield * c.e / c.kb_joule / c.T * f0 * (1 - f0)
+    chi = np.squeeze(f) * np.squeeze(prefactor)
+    return chi
+
+
+def psi2chi(psi, kptsdf):
+    """Convert Psi_k from full drift iterative scheme into chi"""
+    f0 = np.squeeze(kptsdf['k_FD'].values)
+    prefactor = f0 * (1 - f0)
+    chi = np.squeeze(psi) * np.squeeze(prefactor)
+    return chi
+
+
+def occupation_v_energy(chi, enk, kptsdf, c):
     npts = 4000  # number of points in the KDE
-    chi = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     ftot = np.zeros(npts)
-    f0en = np.zeros(npts)
+    f0ax = np.zeros(npts)
     # Need to define the energy range that I'm doing integration over
     # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
     en_axis = np.linspace(enk.min(), enk.max(), npts)
     dx = (en_axis.max() - en_axis.min()) / npts
-    f0 = np.squeeze(kptsdf['FD'].values)
-
-    # Making up a number for field here
-    arbfield = 1
-
-    # Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
-    # then we need to bring these factors back in to get the right units
-    prefactor = arbfield * c.e / (8.617333262145 * 1E-5) / c.T * f0 * (1 - f0)
-    # prefactor = [1] * len(f0)
-
+    f0 = np.squeeze(kptsdf['k_FD'].values)
     spread = 85 * dx
 
     def gaussian(x, mu, sigma=spread):
@@ -366,11 +376,11 @@ def occupation_v_energy(f, enk, kptsdf, c):
     for k in range(len(enk)):
         istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
         iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
-        ftot[istart:iend] += ((f[k]*prefactor[k]) + f0[k]) * gaussian(en_axis[istart:iend], enk[k])
-        f0en[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k])
-        chi[istart:iend] += f[k] * gaussian(en_axis[istart:iend], enk[k])
+        ftot[istart:iend] += (chi[k] + f0[k]) * gaussian(en_axis[istart:iend], enk[k])
+        f0ax[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k])
+        chiax[istart:iend] += chi[k] * gaussian(en_axis[istart:iend], enk[k])
 
-    return en_axis, ftot, chi, f0en
+    return en_axis, ftot, chiax, f0ax
 
 
 def main():
@@ -391,26 +401,37 @@ def main():
     enk = np.array(enk['energy'])
     enk = enk - enk.min()
 
+    cartkpts = noise_power.fermi_distribution(cart_kpts_df, fermilevel=con.mu, temp=con.T)
+
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
     # plot_scattering_rates(data_loc, enk)
 
-    f_iter = np.load(data_loc + 'f_iterative.npy')
-    f_cg = np.load(data_loc + 'f_conjgrad.npy')
-    enax1, ftot_iter_enax, f_iter_en, f0 = occupation_v_energy(f_iter, enk, cart_kpts_df, con)
-    enax2, ftot_cg_enax, f_cg_en, _ = occupation_v_energy(f_cg, enk, cart_kpts_df, con)
+    # f_iter = np.load(data_loc + 'f_iterative.npy')
+    # f_cg = np.load(data_loc + 'f_conjgrad.npy')
+    psi1e2 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E2))
+    psi1e3 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E3))
+    psi1e4 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E4))
+    chi1e2 = psi2chi(psi1e2, cartkpts)
+    chi1e3 = psi2chi(psi1e3, cartkpts)
+    chi1e4 = psi2chi(psi1e4, cartkpts)
+    enax1, ftot_1e2_enax, chi1e2ax, f0ax = occupation_v_energy(chi1e2, enk, cartkpts, con)
+    enax2, ftot_1e3_enax, chi1e3ax, f0ax = occupation_v_energy(chi1e3, enk, cartkpts, con)
+    enax2, ftot_1e4_enax, chi1e4ax, f0ax = occupation_v_energy(chi1e4, enk, cartkpts, con)
 
     plt.figure()
-    plt.plot(enax1, f0, label='Equilibrium (FD)')
-    plt.plot(enax1, ftot_iter_enax, label='iterative')
-    # plt.plot(enax2, ftot_cg_enax, label='CG')
+    plt.plot(enax1, f0ax, label='Equilibrium (FD)')
+    plt.plot(enax1, ftot_1e2_enax, label='1E2 V/m')
+    plt.plot(enax1, ftot_1e3_enax, label='1E3 V/m')
+    plt.plot(enax1, ftot_1e4_enax, label='1E4 V/m')
     plt.xlabel('Energy (ev)')
     plt.ylabel('Total occupation (f0 + delta f)')
     plt.legend()
 
     plt.figure()
-    plt.plot(enax1, f_iter_en, label='iterative')
-    plt.plot(enax2, f_cg_en, label='CG')
+    plt.plot(enax1, chi1e2ax, label='1E2 V/m')
+    plt.plot(enax2, chi1e3ax, label='1E3 V/m')
+    plt.plot(enax2, chi1e4ax, label='1E4 V/m')
     plt.xlabel('Energy (ev)')
     plt.ylabel(r'Deviational occupation ($\Delta$ f)')
     plt.legend()
