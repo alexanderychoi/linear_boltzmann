@@ -197,9 +197,9 @@ def iterative_solver_lowfield(kptdf, matrix):
     return f_next, f_0
 
 
-def drift_velocity(f, cons):
+def drift_velocity(f,kpt_df, cons):
     """Assuming that f is in the form of chi/(eE/kbT)"""
-    vd = np.sum(f)*cons.e*cons.E/(cons.kb_ev*cons.T)/len(f)
+    vd = np.sum(f*kpt_df['vx [m/s]'])*cons.e*cons.E/(cons.kb_ev*cons.T)/len(f)
     return vd
 
 
@@ -276,10 +276,11 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     return x_next, x_0
 
 
-def eff_distr_g_iterative_solver(sss, matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
-
-    b = (-1) * c.e * field / c.kb_joule / c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
+    chi = plotting.psi2chi(psi,kptdf)
+    vd = drift_velocity(psi,kptdf,cons)
+    b = (-1) * ((kptdf['vx [m/s']-vd) * (chi+kptdf['k_FD']))
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2) ** (-1)
@@ -318,8 +319,8 @@ if __name__ == '__main__':
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     con = preprocessing_largegrid.PhysicalConstants()
 
@@ -338,7 +339,7 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    trythis = False
+    trythis = True
     approach = 'iterative'
     if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
@@ -351,7 +352,7 @@ if __name__ == '__main__':
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
     elif approach is 'iterative' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        itsoln = True
+        itsoln = False
         if itsoln:
             start = time.time()
             f_iter, f_rta = iterative_solver_lowfield(cartkpts, scm)
@@ -374,12 +375,13 @@ if __name__ == '__main__':
             try:
                 f_cg = np.load('f_conjgrad.npy')
             except:
-                exit('Conjugate gradient solution not calculated and not stored on file.')
+                print('Cg solution not calculated and not stored on file.')
+                # exit('Conjugate gradient solution not calculated and not stored on file.')
         print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-        # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
-        # plotting.plot_1dim_steady_soln(f_iter, cartkpts)
+        plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
+        plotting.plot_1dim_steady_soln(f_iter, cartkpts)
 
         # print('RTA mobility')
         # calc_mobility(f_rta, cartkpts, con)
