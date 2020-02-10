@@ -10,10 +10,16 @@ import time
 import re
 
 
-def fermi_distribution(df, fermilevel=6.03, temp=300):
+def fermi_distribution(df, fermilevel=6.03, temp=300, testboltzmann=False):
     e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
     kb_joule = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    kb_ev = 8.617333 * (10 ** -5)  # Boltzmann constant in eV/K
     df['k_FD'] = (np.exp((df['energy'].values * e - fermilevel * e) / (kb_joule * temp)) + 1) ** (-1)
+
+    if testboltzmann:
+        boltzdist = (np.exp((df['energy'].values * e - fermilevel * e) / (kb_joule * temp))) ** (-1)
+        partfunc = np.sum(boltzdist)
+        df['k_MB'] = boltzdist/partfunc
     return df
 
 
@@ -171,7 +177,7 @@ def iterative_solver_lowfield(kptdf, matrix):
     """Iterative solver hard coded for solving the BTE in low field approximation. Sign convention by Wu Li"""
     # sr = np.load(data_loc + 'scattering_rates_direct.npy')
     # tau = 1 / sr
-    prefactor = (-1) * (np.diag(matrix) * (2 * np.pi)**2)**(-1)
+    prefactor = (-1) * (np.diag(matrix) * 1E12 * (2 * np.pi)**2)**(-1)
     f_0 = np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     print('The avg abs val of f_0 is {:.3E}'.format(np.average(np.abs(f_0))))
     # f_0 = kptdf['vx [m/s]'] * tau
@@ -181,11 +187,11 @@ def iterative_solver_lowfield(kptdf, matrix):
     f_prev = f_0
     while errpercent > 1E-4 and counter < 20:
         s1 = time.time()
-        mvp = np.matmul(matrix * (2 * np.pi)**2, f_prev)
+        mvp = np.matmul(matrix, f_prev) * 1E12 * (2 * np.pi)**2
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
-        offdiagsum = mvp - (np.diag(matrix) * (2 * np.pi)**2 * f_prev)
+        offdiagsum = mvp - (np.diag(matrix) * 1E12 * (2 * np.pi)**2 * f_prev)
         f_next = f_0 + (prefactor * offdiagsum)
         print('The avg abs val of offdiag part is {:.3E}'.format(np.average(np.abs(prefactor * offdiagsum))))
         errvecnorm = np.linalg.norm(f_next - f_prev)
@@ -338,7 +344,7 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    trythis = False
+    trythis = True
     approach = 'iterative'
     if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
@@ -388,7 +394,7 @@ if __name__ == '__main__':
         # print('CG mobility')
         # calc_mobility(f_cg, cartkpts, con)
 
-    solve_full_steadystatebte = True
+    solve_full_steadystatebte = False
     if solve_full_steadystatebte:
         field = 1E2
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
