@@ -293,7 +293,7 @@ def matrixrows_par(k, nlambda):
     diag_ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
         1 - g_df['k_FD'].values, g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['ems_gaussian'])
 
-    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi/(6.582119 * 10**-16)*(10**-12)/nlambda*prefactor**2
+    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi/(6.582119 * 10**-16) /nlambda*prefactor**2
     krow[k-1] = (-1) * diagterm
 
     # Calculating nondiagonal terms
@@ -314,7 +314,7 @@ def matrixrows_par(k, nlambda):
             1 - kp_rows['k_FD'].values, kp_rows['k+q_FD'].values), kp_rows['BE'].values), kp_rows['g_element']),
             kp_rows['ems_gaussian'])
         tot_weight = abs_weight + ems_weight
-        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119*10**-16)*(10**-12) / nlambda*prefactor**2
+        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / (6.582119*10**-16) / nlambda*prefactor**2
 
     del krow
     iend = time.time()
@@ -322,15 +322,35 @@ def matrixrows_par(k, nlambda):
 
 
 def matrix_check_colsum(sm):
-    # matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
         print(k)
         # print('Finished k={:d}'.format(k+1))
-
     return colsum
+
+
+def renormalize_matrix(matrix):
+    nk = matrix.shape[0]
+    prevcolsum = np.ones(nk)
+    normcolsum = np.ones(nk)
+    for i in range(nk):
+        col = matrix[:, i]
+        diag = col[i]
+        offdiaginds = [j != i for j in range(nk)]
+        normalized_offd = col[offdiaginds] / np.sum(col[offdiaginds]) * -1 * diag
+        normcolsum[i] = np.sum(normalized_offd) + diag
+        prevcolsum[i] = np.sum(col)
+        print('For k={:d}:'.format(i+1))
+        print('The previous column sum was {:.6E}'.format(prevcolsum[i]))
+        print('The normalized column sum is now {:.6E}\n'.format(normcolsum[i]))
+    if np.any(prevcolsum == 1) or np.any(normcolsum == 1):
+        exit('Some columns did not get fixed?')
+    else:
+        print('The norm of the vector of OLD column sums is {:.6E}'.format(np.linalg.norm(prevcolsum)))
+        print('The norm of the vector of NEW column sums is {:.6E}'.format(np.linalg.norm(normcolsum)))
+        print('The max old colsum is {:.6E}'.format(prevcolsum.max()))
+        print('The max new colsum is {:.6E}'.format(normcolsum.max()))
 
 
 if __name__ == '__main__':
@@ -377,7 +397,7 @@ if __name__ == '__main__':
         end = time.time()
         print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
 
-    rta_mobility(data_loc, k_en, kvel)
+    # rta_mobility(data_loc, k_en, kvel)
 
     calc_matrix_rows = False
     if calc_matrix_rows:
@@ -407,3 +427,6 @@ if __name__ == '__main__':
     # print('The largest column sum is {:E}'.format(cs.max()))
     # a = check_symmetric(matrix)
     # print('Result of check symmetric is ' + str(a))
+
+    # scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    # renormalize_matrix(scm)
