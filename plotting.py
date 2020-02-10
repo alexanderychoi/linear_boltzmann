@@ -317,6 +317,7 @@ def plot_scattering_rates(data_dir, energies):
     plt.xlim([0, 0.4])
     # plt.savefig('plot_scattering_rates.png')
 
+
 def plot_cg_iter_rta(f_cg,f_iter,f_rta):
     font = {'size': 14}
     matplotlib.rc('font', **font)
@@ -328,12 +329,29 @@ def plot_cg_iter_rta(f_cg,f_iter,f_rta):
     plt.legend()
     plt.show()
 
-def plot_1dim_steady_soln(f,fullkpts_df):
+
+def highlight_L(kpt_df,L_inds):
+    print(L_inds)
+    plotvec = np.sqrt(kpt_df['kx [1/A]'].values**2 + kpt_df['ky [1/A]'].values**2 + kpt_df['kz [1/A]'].values**2)
+    font = {'size': 14}
+    matplotlib.rc('font', **font)
+    plt.plot(plotvec, linewidth=1, label='All')
+    plt.plot(plotvec[L_inds], linewidth=1, label='L Energy')
+    plt.xlabel('kpoint index')
+    plt.ylabel('kpt mag [1/A]')
+    plt.legend()
+    plt.show()
+
+
+def plot_1dim_steady_soln(f,f_rta, f_low, fullkpts_df):
     font = {'size': 14}
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-    kpt_data = kptdata.sort_values(by=['kx', 'ky', 'kz'],ascending=True)
+    kpt_data = kptdata.sort_values(by=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'],ascending=True)
     ascending_inds = kpt_data.index
-    plt.plot(f_cg[ascending_inds], linewidth=1, label='CG')
+    plt.plot(f[ascending_inds], linewidth=1,label='iterative w/Gamma der')
+    plt.plot(f_rta[ascending_inds], linewidth=1, label='rta')
+    plt.plot(f_low[ascending_inds], linewidth=1, label='low-field')
+
     plt.xlabel('kx')
     plt.ylabel('deviational occupation')
     plt.legend()
