@@ -405,6 +405,53 @@ def occupation_v_energy(chi, enk, kptsdf, c):
     return en_axis, ftot, chiax, f0ax
 
 
+def occupation_v_energy_sep(chi, enk, kptsdf, c):
+    kptsdf['kpt_mag'] = np.sqrt(kptsdf['kx [1/A]'].values**2 + kptsdf['ky [1/A]'].values**2 +
+                                 kptsdf['kz [1/A]'].values**2)
+    kptsdf['ingamma'] = kptsdf['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
+
+    npts = 4000  # number of points in the KDE
+    g_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    g_ftot = np.zeros(npts)
+    g_f0ax = np.zeros(npts)
+
+    l_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    l_ftot = np.zeros(npts)
+    l_f0ax = np.zeros(npts)
+
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    g_en_axis = np.linspace(enk.min(), enk.max(), npts)
+    l_en_axis = np.linspace(enk.min(), enk.max(), npts)
+
+    g_inds = kptsdf.loc[kptsdf['ingamma']==1].index - 1
+    l_inds = kptsdf.loc[kptsdf['ingamma']==0].index - 1
+
+    g_chi = chi[g_inds]
+    l_chi = chi[l_inds]
+
+
+    dx = (en_axis.max() - en_axis.min()) / npts
+    g_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma']==1,'k_FD'].values)
+    l_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma']==0,'k_FD'].values)
+    spread = 85 * dx
+
+    def gaussian(x, mu, sigma=spread):
+        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    for k in range(len(enk)):
+        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
+        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
+        g_ftot[istart:iend] += (g_chi[k] + g_f0[k]) * gaussian(en_axis[istart:iend], enk[k])
+        g_f0ax[istart:iend] += g_f0[k] * gaussian(en_axis[istart:iend], enk[k])
+        g_chiax[istart:iend] += g_chi[k] * gaussian(en_axis[istart:iend], enk[k])
+        l_ftot[istart:iend] += (l_chi[k] + l_f0[k]) * gaussian(en_axis[istart:iend], enk[k])
+        l_f0ax[istart:iend] += l_f0[k] * gaussian(en_axis[istart:iend], enk[k])
+        l_chiax[istart:iend] += l_chi[k] * gaussian(en_axis[istart:iend], enk[k])
+
+    return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax
+
+
 def main():
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
@@ -453,6 +500,9 @@ def main():
 
     plot_1dim_steady_soln(chi_1e0, chi_rta, chi_iter, fbzcartkpts)
 
+    g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(chi_iter, enk,
+                                                                                                     cartkpts, con)
+
     # plt.figure()
     # plt.plot(enax1, f0ax, label='Equilibrium (FD)')
     # plt.plot(enax1, ftot_1e2_enax, label='1E2 V/m')
@@ -471,6 +521,16 @@ def main():
     plt.xlabel('Energy (eV)')
     plt.ylabel(r'Deviational occupation ($\Delta$ f)')
     plt.legend()
+
+
+    plt.figure()
+    plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
+    plt.plot(l_en_axis, l_chiax, label='L Valley')
+
+    plt.xlabel('Energy (ev)')
+    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+    plt.legend()
+
 
     plt.show()
 
