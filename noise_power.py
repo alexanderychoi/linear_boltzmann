@@ -107,23 +107,23 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_inds[0], ordered_inds[1]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[ordered_inds[1], ordered_inds[2]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[0], ordered_inds[1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[1], ordered_inds[2]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
             last = len(ordered_inds) - 1
             slast = len(ordered_inds) - 2
-            matrix[ordered_inds[last], ordered_inds[slast]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[ordered_inds[slast], ordered_inds[slast-1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[last], ordered_inds[slast]] += -1* 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[slast], ordered_inds[slast-1]] +=-1* 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the value of all other points in the slice
             inter_inds = ordered_inds[2:slast]
             inter_inds_up = ordered_inds[3:last]
             inter_inds_down = ordered_inds[1:slast-1]
 
-            matrix[inter_inds, inter_inds_up] += (-1) * 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[inter_inds, inter_inds_down] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_down] += -1*1/(2*step_size)*cons.e*E/cons.hbar_joule
 
         else:
             shortslice_inds.append(slice_inds)
@@ -261,10 +261,10 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     loopstart = time.time()
     while errpercent > convergence and counter < 500:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi)**2, x_prev)
+        mvp_sc = np.matmul(matrix_sc , x_prev) * 1E12 * (2 * np.pi)**2
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
         # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
-        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi)**2 * x_prev)
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * x_prev) * 1E12 * (2 * np.pi)**2
         # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
         offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
         e1 = time.time()
@@ -345,7 +345,7 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    trythis = True
+    trythis = False
     approach = 'iterative'
     if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
@@ -396,9 +396,9 @@ if __name__ == '__main__':
         # print('CG mobility')
         # calc_mobility(f_cg, cartkpts, con)
 
-    solve_full_steadystatebte = False
+    solve_full_steadystatebte = True
     if solve_full_steadystatebte:
-        field = 1E2
+        field = 1E-2
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
