@@ -107,23 +107,23 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_inds[0], ordered_inds[1]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[ordered_inds[1], ordered_inds[2]] += - 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[0], ordered_inds[1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[1], ordered_inds[2]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
             last = len(ordered_inds) - 1
             slast = len(ordered_inds) - 2
-            matrix[ordered_inds[last], ordered_inds[slast]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[ordered_inds[slast], ordered_inds[slast-1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[last], ordered_inds[slast]] += -1* 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[slast], ordered_inds[slast-1]] +=-1* 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the value of all other points in the slice
             inter_inds = ordered_inds[2:slast]
             inter_inds_up = ordered_inds[3:last]
             inter_inds_down = ordered_inds[1:slast-1]
 
-            matrix[inter_inds, inter_inds_up] += (-1) * 1/(2*step_size)*cons.e*E/cons.hbar_joule
-            matrix[inter_inds, inter_inds_down] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_down] += -1*1/(2*step_size)*cons.e*E/cons.hbar_joule
 
         else:
             shortslice_inds.append(slice_inds)
