@@ -177,28 +177,27 @@ def iterative_solver_lowfield(kptdf, matrix):
     """Iterative solver hard coded for solving the BTE in low field approximation. Sign convention by Wu Li"""
     # sr = np.load(data_loc + 'scattering_rates_direct.npy')
     # tau = 1 / sr
-    prefactor = (-1) * (np.diag(matrix) * 1E12 * (2 * np.pi)**2)**(-1)
-    f_0 = np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
+    prefactor = (np.diag(matrix) * 1E12 * (2 * np.pi)**2)**(-1)
+    f_0 = (-1) * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     print('The avg abs val of f_0 is {:.3E}'.format(np.average(np.abs(f_0))))
-    # f_0 = kptdf['vx [m/s]'] * tau
 
     errpercent = 1
     counter = 0
     f_prev = f_0
-    while errpercent > 1E-4 and counter < 20:
+    while errpercent > 5E-4 and counter < 20:
         s1 = time.time()
         mvp = np.matmul(matrix, f_prev) * 1E12 * (2 * np.pi)**2
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
         offdiagsum = mvp - (np.diag(matrix) * 1E12 * (2 * np.pi)**2 * f_prev)
-        f_next = f_0 + (prefactor * offdiagsum)
+        f_next = f_0 - (prefactor * offdiagsum)
         print('The avg abs val of offdiag part is {:.3E}'.format(np.average(np.abs(prefactor * offdiagsum))))
         errvecnorm = np.linalg.norm(f_next - f_prev)
         errpercent = errvecnorm / np.linalg.norm(f_prev)
         f_prev = f_next
         counter += 1
-        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}'
+        print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}\n'
               .format(counter, errpercent, errvecnorm))
     return f_next, f_0
 
@@ -259,12 +258,12 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     counter = 0
     x_prev = x_0
     loopstart = time.time()
-    while errpercent > convergence and counter < 500:
+    while errpercent > convergence and counter < 25:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi)**2, x_prev)
+        mvp_sc = np.matmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
         # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
-        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi)**2 * x_prev)
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * x_prev) * 1E12 * (2 * np.pi)**2
         # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
         offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
         e1 = time.time()
@@ -285,7 +284,7 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
 def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
     chi = plotting.psi2chi(psi,kptdf)
-    vd = drift_velocity(psi,kptdf,cons)
+    vd = drift_velocity(psi, kptdf, cons)
     b = (-1) * ((kptdf['vx [m/s']-vd) * (chi+kptdf['k_FD']))
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
@@ -325,8 +324,8 @@ if __name__ == '__main__':
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     con = preprocessing_largegrid.PhysicalConstants()
 
@@ -340,12 +339,13 @@ if __name__ == '__main__':
 
     fbzcartkpts = fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T)
     cartkpts = fermi_distribution(cartkpts, fermilevel=con.mu, temp=con.T)
+    print('Fermi level is {:.2f} eV'.format(con.mu))
 
     nkpts = len(np.unique(kpts_df['k_inds']))
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    trythis = True
+    trythis = False
     approach = 'iterative'
     if approach is 'matrix' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
@@ -358,10 +358,10 @@ if __name__ == '__main__':
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
     elif approach is 'iterative' and trythis:
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        itsoln = False
+        itsoln = True
         if itsoln:
             start = time.time()
-            f_iter, f_rta = iterative_solver_lowfield(cartkpts, scm)
+            f_iter, f_rta = iterative_solver_lowfield(fbzcartkpts, scm)
             end = time.time()
             print('Iterative solver took {:.2f} seconds'.format(end - start))
             np.save('f_iterative', f_iter)
@@ -386,8 +386,8 @@ if __name__ == '__main__':
         print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-        plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
-        plotting.plot_1dim_steady_soln(f_iter, cartkpts)
+        # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
+        # plotting.plot_1dim_steady_soln(f_iter, cartkpts)
 
         # print('RTA mobility')
         # calc_mobility(f_rta, cartkpts, con)
@@ -396,9 +396,9 @@ if __name__ == '__main__':
         # print('CG mobility')
         # calc_mobility(f_cg, cartkpts, con)
 
-    solve_full_steadystatebte = False
+    solve_full_steadystatebte = True
     if solve_full_steadystatebte:
-        field = 1E2
+        field = 1E7
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
