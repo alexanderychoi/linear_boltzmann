@@ -343,19 +343,23 @@ def highlight_L(kpt_df,L_inds):
     plt.show()
 
 
-def plot_1dim_steady_soln(f,f_rta, f_low, fullkpts_df):
+def plot_1dim_steady_soln(f, f_rta, f_low, fullkpts_df):
     font = {'size': 14}
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-    kpt_data = kptdata.sort_values(by=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'],ascending=True)
+    kpt_data = kptdata.sort_values(by=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'], ascending=True)
     ascending_inds = kpt_data.index
-    plt.plot(f[ascending_inds], linewidth=1,label='iterative w/Gamma der')
-    plt.plot(f_rta[ascending_inds], linewidth=1, label='rta')
-    plt.plot(f_low[ascending_inds], linewidth=1, label='low-field')
+    plt.figure()
+    plt.plot(kptdata['kx [1/A]'][ascending_inds], f[ascending_inds], '.', markersize=3,
+             linewidth=1,label='iterative w/Gamma der')
+    # plt.plot(kptdata['kx [1/A]'][ascending_inds], f_rta[ascending_inds], '.', markersize=4,
+             # linewidth=1, label='rta')
+    plt.plot(kptdata['kx [1/A]'][ascending_inds], f_low[ascending_inds], '.', markersize=3,
+             linewidth=1, label='low-field')
 
     plt.xlabel('kx')
+    plt.ylim([-1E-14, 1E-14])
     plt.ylabel('deviational occupation')
     plt.legend()
-    plt.show()
 
 
 def f2chi(f, kptsdf, c, arbfield=1):
@@ -386,7 +390,7 @@ def occupation_v_energy(chi, enk, kptsdf, c):
     en_axis = np.linspace(enk.min(), enk.max(), npts)
     dx = (en_axis.max() - en_axis.min()) / npts
     f0 = np.squeeze(kptsdf['k_FD'].values)
-    spread = 85 * dx
+    spread = 75 * dx
 
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
@@ -412,8 +416,9 @@ def main():
 
     cart_kpts_df = preprocessing_largegrid.load_vel_data(data_loc, con)
 
-    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cart_kpts_df.to_numpy()[:, 2:5], reciplattvecs)
+    fbzcartkpts = preprocessing_largegrid.translate_into_fbz(cart_kpts_df.values[:, 2:5], reciplattvecs)
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+    fbzcartkpts = pd.concat([cart_kpts_df[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
 
     enk = cart_kpts_df.sort_values(by=['k_inds'])
     enk = np.array(enk['energy'])
@@ -423,21 +428,30 @@ def main():
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
-    # plot_scattering_rates(data_loc, enk)
+    plot_scattering_rates(data_loc, enk)
+
+    field = 1E7
 
     f_iter = np.load(data_loc + 'f_iterative.npy')
+    f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
-    psi1e2 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E2))
-    psi1e3 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E3))
-    psi1e4 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E4))
-    chi1e2 = psi2chi(psi1e2, cartkpts)
-    chi1e3 = psi2chi(psi1e3, cartkpts)
-    chi1e4 = psi2chi(psi1e4, cartkpts)
-    chi_iter = f2chi(f_iter, cartkpts, con, arbfield=1E2)
+    psi_1e0 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
+    # psi_1e2 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E2))
+    # psi_1e3 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E3))
+    # psi_1e4 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E4))
+    chi_1e0 = psi2chi(psi_1e0, cartkpts)
+    # chi_1e2 = psi2chi(psi_1e2, cartkpts)
+    # chi_1e3 = psi2chi(psi_1e3, cartkpts)
+    # chi_1e4 = psi2chi(psi_1e4, cartkpts)
+    chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
+    chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
+    enax1, ftot_1e2_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
     enax1, ftot_1e2_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
-    enax2, ftot_1e2_enax, chi1e2ax, f0ax = occupation_v_energy(chi1e2, enk, cartkpts, con)
+    enax2, ftot_1e2_enax, chi_1e0ax, f0ax = occupation_v_energy(chi_1e0, enk, cartkpts, con)
     # enax2, ftot_1e3_enax, chi1e3ax, f0ax = occupation_v_energy(chi1e3, enk, cartkpts, con)
     # enax2, ftot_1e4_enax, chi1e4ax, f0ax = occupation_v_energy(chi1e4, enk, cartkpts, con)
+
+    plot_1dim_steady_soln(chi_1e0, chi_rta, chi_iter, fbzcartkpts)
 
     # plt.figure()
     # plt.plot(enax1, f0ax, label='Equilibrium (FD)')
@@ -449,11 +463,12 @@ def main():
     # plt.legend()
 
     plt.figure()
-    plt.plot(enax1, chi1e2ax, label='full iterative 1E2 V/m')
-    plt.plot(enax1, chi_iter_ax, label='low field iterative 1E2 V/m')
+    plt.plot(enax1, chi_1e0ax, label='full iterative {:.1E} V/m'.format(field))
+    plt.plot(enax1, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
+    plt.plot(enax1, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
     # plt.plot(enax2, chi1e3ax, label='1E3 V/m')
     # plt.plot(enax2, chi1e4ax, label='1E4 V/m')
-    plt.xlabel('Energy (ev)')
+    plt.xlabel('Energy (eV)')
     plt.ylabel(r'Deviational occupation ($\Delta$ f)')
     plt.legend()
 
