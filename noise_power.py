@@ -177,7 +177,9 @@ def iterative_solver_lowfield(kptdf, matrix):
     """Iterative solver hard coded for solving the BTE in low field approximation. Sign convention by Wu Li"""
     # sr = np.load(data_loc + 'scattering_rates_direct.npy')
     # tau = 1 / sr
+    # THERE ARE SIGNS IN THE MATRIX WHICH IS LOADED DIRECTLY HERE
     prefactor = (np.diag(matrix) * 1E12 * (2 * np.pi)**2)**(-1)
+    # HERE'S A MINUS
     f_0 = (-1) * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     print('The avg abs val of f_0 is {:.3E}'.format(np.average(np.abs(f_0))))
 
@@ -190,8 +192,9 @@ def iterative_solver_lowfield(kptdf, matrix):
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
+        # HERE'S A MINUS
         offdiagsum = mvp - (np.diag(matrix) * 1E12 * (2 * np.pi)**2 * f_prev)
-        f_next = f_0 - (prefactor * offdiagsum)
+        f_next = f_0 + (prefactor * offdiagsum)
         print('The avg abs val of offdiag part is {:.3E}'.format(np.average(np.abs(prefactor * offdiagsum))))
         errvecnorm = np.linalg.norm(f_next - f_prev)
         errpercent = errvecnorm / np.linalg.norm(f_prev)

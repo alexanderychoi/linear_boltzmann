@@ -421,33 +421,38 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
 
     # Need to define the energy range that I'm doing integration over
     # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
-    g_en_axis = np.linspace(enk.min(), enk.max(), npts)
-    l_en_axis = np.linspace(enk.min(), enk.max(), npts)
+    g_en_axis = np.linspace(enk.min()-0.1, enk.max()+0.1, npts)
+    l_en_axis = np.linspace(enk.min()-0.1, enk.max()+0.1, npts)
 
-    g_inds = kptsdf.loc[kptsdf['ingamma']==1].index - 1
-    l_inds = kptsdf.loc[kptsdf['ingamma']==0].index - 1
+    g_inds = kptsdf.loc[kptsdf['ingamma'] == 1].index - 1
+    l_inds = kptsdf.loc[kptsdf['ingamma'] == 0].index - 1
 
     g_chi = chi[g_inds]
     l_chi = chi[l_inds]
+    g_enk = enk[g_inds]
+    l_enk = enk[l_inds]
 
-
-    dx = (en_axis.max() - en_axis.min()) / npts
+    dx = (g_en_axis.max() - g_en_axis.min()) / npts
     g_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma']==1,'k_FD'].values)
     l_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma']==0,'k_FD'].values)
-    spread = 85 * dx
+    spread = 50 * dx
 
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
 
-    for k in range(len(enk)):
-        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
-        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
-        g_ftot[istart:iend] += (g_chi[k] + g_f0[k]) * gaussian(en_axis[istart:iend], enk[k])
-        g_f0ax[istart:iend] += g_f0[k] * gaussian(en_axis[istart:iend], enk[k])
-        g_chiax[istart:iend] += g_chi[k] * gaussian(en_axis[istart:iend], enk[k])
-        l_ftot[istart:iend] += (l_chi[k] + l_f0[k]) * gaussian(en_axis[istart:iend], enk[k])
-        l_f0ax[istart:iend] += l_f0[k] * gaussian(en_axis[istart:iend], enk[k])
-        l_chiax[istart:iend] += l_chi[k] * gaussian(en_axis[istart:iend], enk[k])
+    for k in range(len(g_inds)):
+        istart = int(np.maximum(np.floor((g_enk[k] - g_en_axis[0]) / dx) - (4*spread/dx), 0))
+        iend = int(np.minimum(np.floor((g_enk[k] - g_en_axis[0]) / dx) + (4*spread/dx), npts - 1))
+        g_ftot[istart:iend] += (g_chi[k] + g_f0[k]) * gaussian(g_en_axis[istart:iend], g_enk[k])
+        g_f0ax[istart:iend] += g_f0[k] * gaussian(g_en_axis[istart:iend], g_enk[k])
+        g_chiax[istart:iend] += g_chi[k] * gaussian(g_en_axis[istart:iend], g_enk[k])
+
+    for k in range(len(l_inds)):
+        istart = int(np.maximum(np.floor((l_enk[k] - l_en_axis[0]) / dx) - (4 * spread / dx), 0))
+        iend = int(np.minimum(np.floor((l_enk[k] - l_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+        l_ftot[istart:iend] += (l_chi[k] + l_f0[k]) * gaussian(l_en_axis[istart:iend], l_enk[k])
+        l_f0ax[istart:iend] += l_f0[k] * gaussian(l_en_axis[istart:iend], l_enk[k])
+        l_chiax[istart:iend] += l_chi[k] * gaussian(l_en_axis[istart:iend], l_enk[k])
 
     return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax
 
@@ -482,38 +487,29 @@ def main():
     f_iter = np.load(data_loc + 'f_iterative.npy')
     f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
-    psi_1e0 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
-    # psi_1e2 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E2))
-    # psi_1e3 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E3))
-    # psi_1e4 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E4))
-    chi_1e0 = psi2chi(psi_1e0, cartkpts)
-    # chi_1e2 = psi2chi(psi_1e2, cartkpts)
-    # chi_1e3 = psi2chi(psi_1e3, cartkpts)
-    # chi_1e4 = psi2chi(psi_1e4, cartkpts)
+    psi_fullfield = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
+    chi_fullfield = psi2chi(psi_fullfield, cartkpts)
     chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
+
     enax1, ftot_1e2_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
     enax1, ftot_1e2_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
-    enax2, ftot_1e2_enax, chi_1e0ax, f0ax = occupation_v_energy(chi_1e0, enk, cartkpts, con)
-    # enax2, ftot_1e3_enax, chi1e3ax, f0ax = occupation_v_energy(chi1e3, enk, cartkpts, con)
-    # enax2, ftot_1e4_enax, chi1e4ax, f0ax = occupation_v_energy(chi1e4, enk, cartkpts, con)
+    enax2, ftot_1e2_enax, chi_fullfieldax, f0ax = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
 
-    plot_1dim_steady_soln(chi_1e0, chi_rta, chi_iter, fbzcartkpts)
+    plot_1dim_steady_soln(chi_fullfield, chi_rta, chi_iter, fbzcartkpts)
 
-    g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(chi_iter, enk,
-                                                                                                     cartkpts, con)
+    g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
+        chi_fullfield, enk, cartkpts, con)
 
     # plt.figure()
     # plt.plot(enax1, f0ax, label='Equilibrium (FD)')
     # plt.plot(enax1, ftot_1e2_enax, label='1E2 V/m')
-    # plt.plot(enax1, ftot_1e3_enax, label='1E3 V/m')
-    # plt.plot(enax1, ftot_1e4_enax, label='1E4 V/m')
     # plt.xlabel('Energy (ev)')
     # plt.ylabel('Total occupation (f0 + delta f)')
     # plt.legend()
 
     plt.figure()
-    plt.plot(enax1, chi_1e0ax, label='full iterative {:.1E} V/m'.format(field))
+    plt.plot(enax1, chi_fullfieldax, label='full iterative {:.1E} V/m'.format(field))
     plt.plot(enax1, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
     plt.plot(enax1, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
     # plt.plot(enax2, chi1e3ax, label='1E3 V/m')
@@ -521,7 +517,6 @@ def main():
     plt.xlabel('Energy (eV)')
     plt.ylabel(r'Deviational occupation ($\Delta$ f)')
     plt.legend()
-
 
     plt.figure()
     plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
