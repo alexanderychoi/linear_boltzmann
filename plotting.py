@@ -362,6 +362,69 @@ def plot_1dim_steady_soln(f, f_rta, f_low, fullkpts_df):
     plt.legend()
 
 
+def plot_like_Stanton(chi_rta, fullkpts_df, con):
+    fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
+    f0 = fullkpts_df['k_FD'].values
+    print(np.mean(np.abs(chi_rta)))
+    print(np.mean(f0))
+
+    print(sum(f0))
+    f = chi_rta + f0
+    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
+    ascending_inds = kpt_data.index
+    plt.figure()
+    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
+             f[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
+             linewidth=1, label='E = 10^6 V/m')
+    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
+             f0[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
+             linewidth=1, label='Equilibrium')
+    plt.xlabel('vx/vth')
+    plt.ylabel('f*vth/n')
+    plt.legend()
+
+    fsorted = f[ascending_inds]
+    f0sorted = f0[ascending_inds]
+    bins = 10000
+    bin_width = int(round(len(f) / bins))
+    binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+    binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+    plt.figure()
+    plt.plot(binned_f)
+    plt.plot(binned_f0)
+
+
+# def plot_like_Stanton(chi_rta, fullkpts_df,con):
+#
+#     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
+#     f0 = fullkpts_df['k_FD'].values
+#     print(np.mean(np.abs(chi_rta)))
+#     print(np.mean(f0))
+#     f = chi_rta + f0
+#     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+#     kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]','kx [1/A]'], ascending=True)
+#     ascending_inds = kpt_data.index
+#     plt.figure()
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
+#              linewidth=1,label='E = 10^7 V/m')
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f0[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
+#              linewidth=1,label='Equilibrium')
+#     plt.xlabel('vx/vth')
+#     plt.ylabel('f*vth/n')
+#     plt.legend()
+#
+#     fsorted = f[ascending_inds]
+#     f0sorted = f0[ascending_inds]
+#     bins = 10000
+#     bin_width = int(round(len(f) / bins))
+#     binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+#     binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+#     plt.figure()
+#     plt.plot(binned_f)
+#     plt.plot(binned_f0)
+
+
 def f2chi(f, kptsdf, c, arbfield=1):
     """Convert F_k from low field approximation iterative scheme into chi which is easy to plot"""
     # Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
@@ -453,8 +516,12 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
 
 
 def main():
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
@@ -475,33 +542,35 @@ def main():
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
-    plot_scattering_rates(data_loc, enk)
+    # plot_scattering_rates(data_loc, enk)
 
     field = 1E7
 
-    f_iter = np.load(data_loc + 'f_iterative.npy')
+    # f_iter = np.load(data_loc + 'f_iterative.npy')
     f_rta = np.load(data_loc + 'f_rta.npy')
+    chi_rta = np.load(data_loc + 'chi_rta_1.0E+06.npy')
+    plot_like_Stanton(chi_rta, fbzcartkpts,con)
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
-    psi_1e0 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
+    # psi_1e0 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
     # psi_1e2 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E2))
     # psi_1e3 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E3))
     # psi_1e4 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(1E4))
-    chi_1e0 = psi2chi(psi_1e0, cartkpts)
+    # chi_1e0 = psi2chi(psi_1e0, cartkpts)
     # chi_1e2 = psi2chi(psi_1e2, cartkpts)
     # chi_1e3 = psi2chi(psi_1e3, cartkpts)
     # chi_1e4 = psi2chi(psi_1e4, cartkpts)
-    chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
-    chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
-    enax1, ftot_1e2_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
-    enax1, ftot_1e2_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
-    enax2, ftot_1e2_enax, chi_1e0ax, f0ax = occupation_v_energy(chi_1e0, enk, cartkpts, con)
+    # chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
+    # chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
+    # enax1, ftot_1e2_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
+    # enax1, ftot_1e2_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
+    # enax2, ftot_1e2_enax, chi_1e0ax, f0ax = occupation_v_energy(chi_1e0, enk, cartkpts, con)
     # enax2, ftot_1e3_enax, chi1e3ax, f0ax = occupation_v_energy(chi1e3, enk, cartkpts, con)
     # enax2, ftot_1e4_enax, chi1e4ax, f0ax = occupation_v_energy(chi1e4, enk, cartkpts, con)
 
-    plot_1dim_steady_soln(chi_1e0, chi_rta, chi_iter, fbzcartkpts)
-
-    g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(chi_iter, enk,
-                                                                                                     cartkpts, con)
+    # plot_1dim_steady_soln(chi_1e0, chi_rta, chi_iter, fbzcartkpts)
+    #
+    # g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(chi_iter, enk,
+    #                                                                                                  cartkpts, con)
 
     # plt.figure()
     # plt.plot(enax1, f0ax, label='Equilibrium (FD)')
@@ -512,24 +581,24 @@ def main():
     # plt.ylabel('Total occupation (f0 + delta f)')
     # plt.legend()
 
-    plt.figure()
-    plt.plot(enax1, chi_1e0ax, label='full iterative {:.1E} V/m'.format(field))
-    plt.plot(enax1, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
-    plt.plot(enax1, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
-    # plt.plot(enax2, chi1e3ax, label='1E3 V/m')
-    # plt.plot(enax2, chi1e4ax, label='1E4 V/m')
-    plt.xlabel('Energy (eV)')
-    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
-    plt.legend()
-
-
-    plt.figure()
-    plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
-    plt.plot(l_en_axis, l_chiax, label='L Valley')
-
-    plt.xlabel('Energy (ev)')
-    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
-    plt.legend()
+    # plt.figure()
+    # plt.plot(enax1, chi_1e0ax, label='full iterative {:.1E} V/m'.format(field))
+    # plt.plot(enax1, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
+    # plt.plot(enax1, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
+    # # plt.plot(enax2, chi1e3ax, label='1E3 V/m')
+    # # plt.plot(enax2, chi1e4ax, label='1E4 V/m')
+    # plt.xlabel('Energy (eV)')
+    # plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+    # plt.legend()
+    #
+    #
+    # plt.figure()
+    # plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
+    # plt.plot(l_en_axis, l_chiax, label='L Valley')
+    #
+    # plt.xlabel('Energy (ev)')
+    # plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+    # plt.legend()
 
 
     plt.show()
