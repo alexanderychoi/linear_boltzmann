@@ -8,6 +8,8 @@ import os
 import pandas as pd
 import time
 import re
+import glob
+import matplotlib.pyplot as plt
 
 
 def fermi_distribution(df, fermilevel=6.03, temp=300, testboltzmann=False):
@@ -210,6 +212,46 @@ def drift_velocity(chi,kpt_df, cons):
     n = 2 / Nuc / Vuc * np.sum(f)
     vd = np.sum(f*kpt_df['vx [m/s]'])/np.sum(f0)
     return vd
+
+
+def calculate_density(kpt_df, cons):
+    f0 = kpt_df['k_FD'].values
+    Nuc = len(kpt_df)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f0)
+    return n
+
+
+def calculate_RTA_chi(F, kptsdf, c, EFieldVector, data_location):
+    for i in range(len(EFieldVector)):
+        EField = EFieldVector[i]
+        chi_RTA = plotting.f2chi(F, kptsdf, c, EField)
+        np.save(data_location + 'chi_RTA' + "{:.1e}".format(EField), chi_RTA)
+        print('chi_RTA' + "{:.1e}".format(EField))
+
+
+def process_RTA_chis(data_location, kpts_df, con):
+    p = plt.figure()
+    vels = []
+    fields = []
+    for fname in glob.glob(data_location+'/*chi_RTA*.npy'):
+        z = np.load(fname)
+        spl_word = 'eV\chi_RTA'
+        res = str(fname).partition(spl_word)[2]
+        res2 = res.partition('.npy')[0]
+        print(res2)
+        plotting.plot_like_Stanton(z, kpts_df, con, res2)
+        vels = np.append(vels, drift_velocity(z, kpts_df, con))
+        fields = np.append(fields,res2)
+    plt.legend()
+    plt.xlabel('vx (m/s)')
+    plt.ylabel('(chi_RTA + f0)/n')
+
+    plt.figure()
+    plt.plot(fields, vels)
+    plt.ylabel('vd (m/s)')
+    plt.xlabel('EField (V/m)')
+    plt.show()
 
 
 def conj_grad_soln(kptdf, matrix):
@@ -431,7 +473,7 @@ if __name__ == '__main__':
         # print('CG mobility')
         # calc_mobility(f_cg, cartkpts, con)
 
-    solve_full_steadystatebte = True
+    solve_full_steadystatebte = False
     if solve_full_steadystatebte:
         field = 1E7
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
@@ -439,3 +481,14 @@ if __name__ == '__main__':
         psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
         np.save('psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
         np.save('psi_rta_{:.1E}_field'.format(field), psi_rta)
+
+    F_rta = np.load(data_loc + 'f_rta.npy')
+    write_RTA_chis = True
+    if write_RTA_chis:
+        EFields = np.linspace(10e2, 10e4, num = 5)
+        calculate_RTA_chi(F_rta, fbzcartkpts, con, EFields, data_loc)
+        print('RTA_chis written to file.')
+
+    processRTAchis = True
+    if processRTAchis:
+        process_RTA_chis(data_loc, fbzcartkpts, con)
