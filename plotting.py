@@ -362,56 +362,42 @@ def plot_1dim_steady_soln(f, f_rta, f_low, fullkpts_df):
     plt.legend()
 
 
-def plot_like_Stanton(chi_rta, fullkpts_df, con):
-    fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
-    f0 = fullkpts_df['k_FD'].values
-    print(np.mean(np.abs(chi_rta)))
-    print(np.mean(f0))
-
-    print(sum(f0))
-    f = chi_rta + f0
-    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-    kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
-    ascending_inds = kpt_data.index
-    plt.figure()
-    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
-             f[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
-             linewidth=1, label='E = 10^6 V/m')
-    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
-             f0[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
-             linewidth=1, label='Equilibrium')
-    plt.xlabel('vx/vth')
-    plt.ylabel('f*vth/n')
-    plt.legend()
-
-    fsorted = f[ascending_inds]
-    f0sorted = f0[ascending_inds]
-    bins = 10000
-    bin_width = int(round(len(f) / bins))
-    binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
-    binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
-    plt.figure()
-    plt.plot(binned_f)
-    plt.plot(binned_f0)
-
-
-# def plot_like_Stanton(chi_rta, fullkpts_df,con):
-#
+# def plot_like_Stanton(chi_rta, fullkpts_df, con):
 #     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
 #     f0 = fullkpts_df['k_FD'].values
-#     print(np.mean(np.abs(chi_rta)))
-#     print(np.mean(f0))
 #     f = chi_rta + f0
+#     Nuc = len(fullkpts_df)
+#     Vuc = np.dot(np.cross(con.b1, con.b2), con.b3) * 1E-30  # unit cell volume in m^3
+#     n = 2 / Nuc / Vuc * np.sum(f)
+#     print('Sum f0')
+#     print(sum(f0))
+#     print('Sum f')
+#     print(sum(f))
+#     print('Sum chi_RTA')
+#     print(sum(chi_rta))
+#     print('Carrier dens equilibrium')
+#     carrier_dens_eq = 2 / Nuc  * np.sum(f0)
+#     print(carrier_dens_eq)
+#
+#     print('Carrier dens non-equilibrium')
+#     carrier_dens = 2 / Nuc  * np.sum(f)
+#     print(carrier_dens)
+#
+#     print(np.sum(np.abs(f0)))
+#     print(np.sum(np.abs(f)))
+#
 #     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-#     kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]','kx [1/A]'], ascending=True)
+#     kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
 #     ascending_inds = kpt_data.index
 #     plt.figure()
-#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
-#              linewidth=1,label='E = 10^7 V/m')
-#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f0[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
-#              linewidth=1,label='Equilibrium')
-#     plt.xlabel('vx/vth')
-#     plt.ylabel('f*vth/n')
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
+#              f[ascending_inds]/n,
+#              linewidth=1, label='E = 10^2 V/m')
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
+#              f0[ascending_inds]/n,
+#              linewidth=1, label='Equilibrium')
+#     plt.xlabel('vx (m/s)')
+#     plt.ylabel('f/n')
 #     plt.legend()
 #
 #     fsorted = f[ascending_inds]
@@ -423,7 +409,26 @@ def plot_like_Stanton(chi_rta, fullkpts_df, con):
 #     plt.figure()
 #     plt.plot(binned_f)
 #     plt.plot(binned_f0)
+#
+#     plt.figure()
+#     plt.plot(chi_rta)
+#
+#     print(noise_power.drift_velocity(chi_rta,fullkpts_df, con))
 
+def plot_like_Stanton(chi_rta, fullkpts_df, con, res):
+    fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
+    f0 = fullkpts_df['k_FD'].values
+    f = chi_rta + f0
+    Nuc = len(fullkpts_df)
+    Vuc = np.dot(np.cross(con.b1, con.b2), con.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f)
+
+    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
+    ascending_inds = kpt_data.index
+    plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
+             f[ascending_inds]/n,
+             linewidth=1, label=res)
 
 def f2chi(f, kptsdf, c, arbfield=1):
     """Convert F_k from low field approximation iterative scheme into chi which is easy to plot"""
@@ -523,6 +528,7 @@ def main():
     chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
 
+
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
     con = preprocessing_largegrid.PhysicalConstants()
@@ -548,7 +554,12 @@ def main():
 
     # f_iter = np.load(data_loc + 'f_iterative.npy')
     f_rta = np.load(data_loc + 'f_rta.npy')
-    chi_rta = np.load(data_loc + 'chi_rta_1.0E+06.npy')
+
+
+    chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 2e1)
+    np.save(data_loc+'chiRTA_2e1', chi)
+
+    chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
     plot_like_Stanton(chi_rta, fbzcartkpts,con)
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
     # psi_1e0 = np.load(data_loc + 'psi_iter_{:.1E}_field.npy'.format(field))
