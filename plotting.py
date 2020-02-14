@@ -366,6 +366,69 @@ def plot_1dim_steady_soln(solns, labels, fullkpts_df, plotf0=True):
     plt.legend()
 
 
+def plot_like_Stanton(chi_rta, fullkpts_df, con):
+    fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
+    f0 = fullkpts_df['k_FD'].values
+    print(np.mean(np.abs(chi_rta)))
+    print(np.mean(f0))
+
+    print(sum(f0))
+    f = chi_rta + f0
+    kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
+    ascending_inds = kpt_data.index
+    plt.figure()
+    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
+             f[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
+             linewidth=1, label='E = 10^6 V/m')
+    plt.plot(fullkpts_df['kx [1/A]'][ascending_inds],
+             f0[ascending_inds] / np.sum(f0) * 2.67 * 10 ** 5 / len(f0),
+             linewidth=1, label='Equilibrium')
+    plt.xlabel('vx/vth')
+    plt.ylabel('f*vth/n')
+    plt.legend()
+
+    fsorted = f[ascending_inds]
+    f0sorted = f0[ascending_inds]
+    bins = 10000
+    bin_width = int(round(len(f) / bins))
+    binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+    binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+    plt.figure()
+    plt.plot(binned_f)
+    plt.plot(binned_f0)
+
+
+# def plot_like_Stanton(chi_rta, fullkpts_df,con):
+#
+#     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
+#     f0 = fullkpts_df['k_FD'].values
+#     print(np.mean(np.abs(chi_rta)))
+#     print(np.mean(f0))
+#     f = chi_rta + f0
+#     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+#     kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]','kx [1/A]'], ascending=True)
+#     ascending_inds = kpt_data.index
+#     plt.figure()
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
+#              linewidth=1,label='E = 10^7 V/m')
+#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds]/(2.67*10**5), f0[ascending_inds]/np.sum(f0)*2.67*10**5/len(f0),
+#              linewidth=1,label='Equilibrium')
+#     plt.xlabel('vx/vth')
+#     plt.ylabel('f*vth/n')
+#     plt.legend()
+#
+#     fsorted = f[ascending_inds]
+#     f0sorted = f0[ascending_inds]
+#     bins = 10000
+#     bin_width = int(round(len(f) / bins))
+#     binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+#     binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
+#     plt.figure()
+#     plt.plot(binned_f)
+#     plt.plot(binned_f0)
+
+
 def f2chi(f, kptsdf, c, arbfield=1.0):
     """Convert F_k from low field approximation iterative scheme into chi which is easy to plot"""
     # Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
@@ -464,8 +527,12 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
 
 
 def main():
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
@@ -504,6 +571,8 @@ def main():
     chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
     # np.save(data_loc + '/chi/chi_rta_{:.1E}'.format(field), chi_rta)
+
+    plot_like_Stanton(chi_rta, fbzcartkpts,con)
 
     chi_rta_1e6 = np.load(data_loc + '/chi/chi_rta_1.0E+06.npy')
     chi_rta_5e6 = np.load(data_loc + '/chi/chi_rta_5.0E+06.npy')
