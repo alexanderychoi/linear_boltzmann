@@ -148,19 +148,22 @@ def conj_grad_soln(kptdf, matrix):
     return x
 
 
-def calc_mobility(F, kptdata, cons):
+def calc_mobility(F, kptdata, cons, E=[]):
     """Calculate mobility as per Wu Li PRB 92, 2015"""
-    # kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'energy', 'vx [m/s]']]
-    # fermi_distribution(kptdata)
     V = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     Nuc = len(kptdata)
-    prefactor = 2 * cons.e**2 / (V*cons.kb_joule*cons.T*Nuc)
-
-    conductivity = prefactor * np.sum(kptdata['k_FD'] * (1 - kptdata['k_FD']) * kptdata['vx [m/s]'] * F)
+    if np.any(E):
+        print('Field specified. Mobility calculated using general definition of conductivity')
+        prefactor = 2 * cons.e / V / Nuc / E
+        conductivity = prefactor * np.sum(kptdata['vx [m/s]'] * F)
+    else:
+        print('Field not specified. Mobility calculated using linear in E formula.')
+        prefactor = 2 * cons.e ** 2 / (V * cons.kb_joule * cons.T * Nuc)
+        conductivity = prefactor * np.sum(kptdata['k_FD'] * (1 - kptdata['k_FD']) * kptdata['vx [m/s]'] * F)
     carrier_dens = 2 / Nuc / V * np.sum(kptdata['k_FD'])
-    print('Carrier density is {:.4E}'.format(carrier_dens))
+    print('Carrier density is {:.4E}'.format(carrier_dens) + r' per m^{-3}')
     mobility = conductivity / cons.e / carrier_dens
-    print('Mobility is {:.10E}'.format(mobility))
+    print('Mobility is {:.10E} (m^2 / V / s)'.format(mobility))
 
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
@@ -400,10 +403,6 @@ if __name__ == '__main__':
         # plt.plot(f_iter, label='iterative')
         # plt.plot(f_rta, label='rta')
         # plt.legend()
-        print('RTA mobility')
-        calc_mobility(f_rta, cartkpts, con)
-        print('Iterative mobility')
-        calc_mobility(f_iter, cartkpts, con)
 
         # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
         # plotting.plot_1dim_steady_soln(f_iter, cartkpts)
@@ -412,13 +411,22 @@ if __name__ == '__main__':
         # calc_mobility(f_cg, cartkpts, con)
 
     solve_full_steadystatebte = False
+    field = 1E2
     if solve_full_steadystatebte:
-        field = 1E2
         # scm = np.memmap(data_loc + 'scattering_matrix_6.03.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
         np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
         np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
+
+    print('\nRTA mobility')
+    calc_mobility(f_rta, cartkpts, con)
+    print('\nIterative mobility')
+    calc_mobility(f_iter, cartkpts, con)
+    print('\nFull drift soln mobility at ')
+    psi = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
+    chi_full = plotting.psi2chi(psi, cartkpts)
+    calc_mobility(chi_full, cartkpts, con, E=field)
 
     plt.show()

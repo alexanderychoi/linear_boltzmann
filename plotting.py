@@ -527,11 +527,11 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
 
 
 def main():
-    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
 
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
@@ -560,29 +560,25 @@ def main():
     font = {'size': 12}
     matplotlib.rc('font', **font)
 
-    field = 1E7
+    field = 1E2
 
-    # psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
+    psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     f_iter = np.load(data_loc + 'f_iterative.npy')
     f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
 
-    # chi_fullfield = psi2chi(psi_fullfield, cartkpts)
+    chi_fullfield = psi2chi(psi_fullfield, cartkpts)
     chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
     # np.save(data_loc + '/chi/chi_rta_{:.1E}'.format(field), chi_rta)
 
-    plot_like_Stanton(chi_rta, fbzcartkpts,con)
+    # plot_like_Stanton(chi_rta, fbzcartkpts, con)
 
-    chi_rta_1e6 = np.load(data_loc + '/chi/chi_rta_1.0E+06.npy')
-    chi_rta_5e6 = np.load(data_loc + '/chi/chi_rta_5.0E+06.npy')
-    chi_rta_1e7 = np.load(data_loc + '/chi/chi_rta_1.0E+07.npy')
+    plot_1dim_steady_soln([chi_fullfield, chi_iter, chi_rta], ['full drift', 'low field iterative', 'RTA'], fbzcartkpts, plotf0=False)
 
-    plot_1dim_steady_soln([chi_rta_1e6, chi_rta_5e6, chi_rta_1e7], ['1E6', '5E6', '1E7'], fbzcartkpts, plotf0=False)
-
-    # enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
-    # enax, ftot_iter_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
-    # enax, ftot_fullfield_enax, chi_fullfieldax, f0ax = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
+    enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
+    enax, ftot_iter_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
+    enax, ftot_fullfield_enax, chi_fullfieldax, f0ax = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
 
     # g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
     #     chi_fullfield, enk, cartkpts, con)
@@ -596,14 +592,14 @@ def main():
     # plt.ylabel('Total occupation (f0 + delta f)')
     # plt.legend()
 
-    # plt.figure()
-    # plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
-    # plt.plot(enax, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
-    # plt.plot(enax, chi_fullfieldax, label='full iterative {:.1E} V/m'.format(field))
-    # plt.xlim([0, 0.4])
-    # plt.xlabel('Energy (eV)')
-    # plt.ylabel(r'Deviational occupation ($\Delta$ f)')
-    # plt.legend()
+    plt.figure()
+    plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
+    plt.plot(enax, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
+    plt.plot(enax, chi_fullfieldax, label='full iterative {:.1E} V/m'.format(field))
+    plt.xlim([0, 0.4])
+    plt.xlabel('Energy (eV)')
+    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+    plt.legend()
 
     # plt.figure()
     # plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
