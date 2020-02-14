@@ -242,15 +242,16 @@ def process_RTA_chis(data_location, kpts_df, con):
         print(res2)
         plotting.plot_like_Stanton(z, kpts_df, con, res2)
         vels = np.append(vels, drift_velocity(z, kpts_df, con))
-        fields = np.append(fields,res2)
+        print(drift_velocity(z, kpts_df, con))
+        fields = np.append(fields,float(res2))
     plt.legend()
     plt.xlabel('vx (m/s)')
     plt.ylabel('(chi_RTA + f0)/n')
 
     plt.figure()
     plt.plot(fields, vels)
-    plt.ylabel('vd (m/s)')
     plt.xlabel('EField (V/m)')
+    plt.ylabel('vd (m/s)')
     plt.show()
 
 
@@ -485,7 +486,7 @@ if __name__ == '__main__':
     F_rta = np.load(data_loc + 'f_rta.npy')
     write_RTA_chis = True
     if write_RTA_chis:
-        EFields = np.linspace(10e2, 10e4, num = 5)
+        EFields = np.logspace(0, 6, num = 7)
         calculate_RTA_chi(F_rta, fbzcartkpts, con, EFields, data_loc)
         print('RTA_chis written to file.')
 
