@@ -202,9 +202,13 @@ def iterative_solver_lowfield(kptdf, matrix):
     return f_next, f_0
 
 
-def drift_velocity(f,kpt_df, cons):
-    """Assuming that f is in the form of chi/(eE/kbT)"""
-    vd = np.sum(f*kpt_df['vx [m/s]'])*cons.e*cons.E/(cons.kb_ev*cons.T)/len(f)
+def drift_velocity(chi,kpt_df, cons):
+    f0 = kpt_df['k_FD'].values
+    f = chi + kpt_df['k_FD'].values
+    Nuc = len(kpt_df)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f)
+    vd = np.sum(f*kpt_df['vx [m/s]'])/np.sum(f0)
     return vd
 
 
@@ -258,9 +262,20 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     counter = 0
     x_prev = x_0
     loopstart = time.time()
+    from scipy.linalg import get_blas_funcs
+    print('Starting convergence loop')
+
     while errpercent > convergence and counter < 25:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
+        # mvp_sc = xmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
+        # mvp_sc = np.matmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi) ** 2
+        # mvp_sc = scipy.linalg.blas.dgemm(1, matrix_sc, x_prev)
+        mvp_sc = matrix_sc@x_prev
+
+
+        print('First')
+        loopend = time.time()
+        print('First took {:.2f}s'.format(loopend - loopstart))
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
         # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
         offdiag_sc = mvp_sc - (np.diag(matrix_sc) * x_prev) * 1E12 * (2 * np.pi)**2
@@ -317,16 +332,36 @@ def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, conv
     return g_next, g_0
 
 
+def xmul(a, b):
+    """
+    Multiply stacked matrices A (with shape (s, m, n)) by stacked
+    matrices B (with shape (s, n, p)) to produce an array with
+    shape (s, m, p).
+
+    Mathematically equivalent to A @ B, but faster in many cases.
+
+    The arguments are not validated.  The code assumes that A and B
+    are numpy arrays with the same data type and with shapes described
+    above.
+    """
+    out = np.empty_like(a)
+    for j in range(a.shape[0]):
+        out[j]= np.dot(a[j], b[j])
+    return out
+
+
 if __name__ == '__main__':
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
+    np.__config__.show()
+    print(np.__version__)
     con = preprocessing_largegrid.PhysicalConstants()
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
