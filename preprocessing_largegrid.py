@@ -1,10 +1,4 @@
 #!/usr/bin/env python
-"""Data processing module for the electron-phonon collision matrix
-
-This is meant to be a frills-free calculation of the electron-phonon collision matrix utilizing the data from
-Jin Jian Zhou for GaAs.
-"""
-
 import numpy as np
 import os
 import pandas as pd
@@ -27,9 +21,10 @@ class PhysicalConstants:
     kb_ev = 8.617333 * (10 ** -5)    # Boltzmann constant in eV/K
     T = 300                          # Lattice temperature [K]
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
-    mu = 5.780                       # Chemical potential [eV] old 10/8/2019
+    # mu = 5.780                       # Chemical potential [eV] old 10/8/2019
     # mu = 6.03                        # Chemical potential [eV] based on carrier density cited in JJ Zhou paper
-    # mu = 5.353 + 0.2                 # 0.2 eV above midgap (5.353 eV)
+    mu = 5.353 + 0.2                 # 0.2 eV above midgap (5.353 eV)
+    # mu = 5.85
     b = 8/1000                       # Gaussian broadening [eV]
     hbar_joule = 1.054571817*10**(-34)  # Reduced Planck's constant [J/s]
     hbar_ev = 6.582119569*10**(-16)  # Reduced Planck's constant [eV/s]
@@ -467,16 +462,17 @@ def creating_mmap(dir, n, nl):
 if __name__ == '__main__':
     con = PhysicalConstants()
 
-    # data_loc = '/home/peishi/nvme/k100-0.3eV/'
-    # chunk_loc = '/home/peishi/nvme/k100-0.3eV/chunked/'
-    # recip_loc = '/home/peishi/nvme/k100-0.3eV/recips/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     recip_loc = '/home/peishi/nvme/k200-0.4eV/recips/'
+    # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
+    # chunk_loc = '/home/peishi/storage/chunked/'
+    # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
+    # chunk_loc = '/p/work3/peishi/chunked/'
 
     nkpts = 42433
     mmaplines = 100000
-    nthreads = 6
+    nthreads = 48
 
     # For the 200x200x200 kpoints will need to load and process line by line since file too large.
     # First load all the other stuff.
@@ -579,10 +575,10 @@ if __name__ == '__main__':
         end = time.time()
         print('Parallel fermionic and bosonic processing took {:.2f} seconds'.format(end - start))
 
-        # start = time.time()
-        # pool.map(gaussian_weight_inchunks, k_inds)
-        # end = time.time()
-        # print('Parallel gaussian weights took {:.2f} seconds'.format(end - start))
+        start = time.time()
+        pool.map(gaussian_weight_inchunks, k_inds)
+        end = time.time()
+        print('Parallel gaussian weights took {:.2f} seconds'.format(end - start))
 
 
 
