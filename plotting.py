@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/usr/bin/python3
 import preprocessing_largegrid
 import noise_power
 
@@ -348,76 +347,38 @@ def highlight_L(kpt_df,L_inds):
     plt.show()
 
 
-def plot_1dim_steady_soln(solns, labels, fullkpts_df, plotf0=True):
+def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
     """solns is a list of np arrays all of nk length and the function plots them together"""
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     f0 = fullkpts_df['k_FD']
     kpt_data = kptdata.sort_values(by=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'], ascending=True)
     ascending_inds = kpt_data.index
     plt.figure()
-    for i, soln_i in enumerate(solns):
-        plt.plot(kptdata['kx [1/A]'][ascending_inds], soln_i[ascending_inds],
-                 '.-', markersize=5, linewidth=1, label=labels[i])
-    if plotf0:
-        plt.plot(kptdata['kx [1/A]'][ascending_inds], f0[ascending_inds], '.-', markersize=5,
-                 linewidth=1, label='Equilibrium')
+    if summed:
+        uniqkx = np.sort(np.unique(kpt_data['kx [1/A]']))
+        for i, soln_i in enumerate(solns):
+            summed = np.zeros(len(uniqkx))
+            for j in range(len(uniqkx)):
+                which = kpt_data['kx [1/A]'] == uniqkx[j]
+                summed[j] = np.sum(soln_i[ascending_inds[which]])
+            plt.plot(uniqkx, summed, 'o-', markersize=3, linewidth=1, label=labels[i])
+        if plotf0:
+            summed = np.zeros(len(uniqkx))
+            for j in range(len(uniqkx)):
+                which = kpt_data['kx [1/A]'] == uniqkx[j]
+                summed[j] = np.sum(f0[ascending_inds[which]]) + np.sum(solns[0][ascending_inds[which]])
+            plt.plot(uniqkx, summed, 'k-', markersize=5, linewidth=1, label='f0 + low field iterative')
+    else:
+        for i, soln_i in enumerate(solns):
+            plt.plot(kptdata['kx [1/A]'][ascending_inds], soln_i[ascending_inds],
+                     'o-', markersize=5, linewidth=2, label=labels[i])
+        if plotf0:
+            plt.plot(kptdata['kx [1/A]'][ascending_inds], f0[ascending_inds], '.-', markersize=5,
+                     linewidth=1, label='Equilibrium')
     plt.xlabel(r'$k_x$ (1/$\AA$)')
     plt.ylabel('Occupation functions')
     plt.legend()
 
-
-# def plot_like_Stanton(chi_rta, fullkpts_df, con):
-#     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
-#     f0 = fullkpts_df['k_FD'].values
-#     f = chi_rta + f0
-#     Nuc = len(fullkpts_df)
-#     Vuc = np.dot(np.cross(con.b1, con.b2), con.b3) * 1E-30  # unit cell volume in m^3
-#     n = 2 / Nuc / Vuc * np.sum(f)
-#     print('Sum f0')
-#     print(sum(f0))
-#     print('Sum f')
-#     print(sum(f))
-#     print('Sum chi_RTA')
-#     print(sum(chi_rta))
-#     print('Carrier dens equilibrium')
-#     carrier_dens_eq = 2 / Nuc  * np.sum(f0)
-#     print(carrier_dens_eq)
-#
-#     print('Carrier dens non-equilibrium')
-#     carrier_dens = 2 / Nuc  * np.sum(f)
-#     print(carrier_dens)
-#
-#     print(np.sum(np.abs(f0)))
-#     print(np.sum(np.abs(f)))
-#
-#     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-#     kpt_data = kptdata.sort_values(by=['ky [1/A]', 'kz [1/A]', 'kx [1/A]'], ascending=True)
-#     ascending_inds = kpt_data.index
-#     plt.figure()
-#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
-#              f[ascending_inds]/n,
-#              linewidth=1, label='E = 10^2 V/m')
-#     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
-#              f0[ascending_inds]/n,
-#              linewidth=1, label='Equilibrium')
-#     plt.xlabel('vx (m/s)')
-#     plt.ylabel('f/n')
-#     plt.legend()
-#
-#     fsorted = f[ascending_inds]
-#     f0sorted = f0[ascending_inds]
-#     bins = 10000
-#     bin_width = int(round(len(f) / bins))
-#     binned_f = [sum(fsorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
-#     binned_f0 = [sum(f0sorted[i:i + bin_width]) for i in range(0, len(f), bin_width)]
-#     plt.figure()
-#     plt.plot(binned_f)
-#     plt.plot(binned_f0)
-#
-#     plt.figure()
-#     plt.plot(chi_rta)
-#
-#     print(noise_power.drift_velocity(chi_rta,fullkpts_df, con))
 
 def plot_like_Stanton(chi_rta, fullkpts_df, con, res):
     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
@@ -433,6 +394,7 @@ def plot_like_Stanton(chi_rta, fullkpts_df, con, res):
     plt.plot(fullkpts_df['vx [m/s]'][ascending_inds],
              f[ascending_inds]/n,
              linewidth=1, label=res)
+
 
 def f2chi(f, kptsdf, c, arbfield=1.0):
     """Convert F_k from low field approximation iterative scheme into chi which is easy to plot"""
@@ -538,8 +500,6 @@ def main():
     # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
     # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
-
-
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
     con = preprocessing_largegrid.PhysicalConstants()
@@ -566,60 +526,75 @@ def main():
     font = {'size': 12}
     matplotlib.rc('font', **font)
 
-    field = 1E2
+    field = 1.5E5
 
     psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
-    f_iter = np.load(data_loc + 'f_iterative.npy')
-    f_rta = np.load(data_loc + 'f_rta.npy')
+    f_iter = np.load(data_loc + 'f_simplelin_iterative.npy')
+    f_rta = np.load(data_loc + 'f_simplelin_rta.npy')
+    # f_iter = np.load(data_loc + 'f_iterative.npy')
+    # f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
 
-
-    chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 2e1)
-    np.save(data_loc+'chiRTA_2e1', chi)
-
-    chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
-    plot_like_Stanton(chi_rta, fbzcartkpts,con)
+    # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
+    # np.save(data_loc+'chiRTA_1e1', chi)
+    # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
+    # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
 
     chi_fullfield = psi2chi(psi_fullfield, cartkpts)
     chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
-    # np.save(data_loc + '/chi/chi_rta_{:.1E}'.format(field), chi_rta)
-
-    # plot_like_Stanton(chi_rta, fbzcartkpts, con)
-
-    plot_1dim_steady_soln([chi_fullfield, chi_iter, chi_rta], ['full drift', 'low field iterative', 'RTA'], fbzcartkpts, plotf0=False)
-
-    enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
-    enax, ftot_iter_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
-    enax, ftot_fullfield_enax, chi_fullfieldax, f0ax = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
-
-    # g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
-    #     chi_fullfield, enk, cartkpts, con)
-
-    # plt.figure()
-    # plt.plot(enax, f0ax, label='Equilibrium (FD)')
-    # plt.plot(enax, ftot_fullfield_enax, label='full iterative {:.1E} V/m'.format(field))
-    # plt.plot(enax, ftot_iter_enax, label='low field iterative {:.1E} V/m'.format(field))
-    # plt.plot(enax, ftot_rta_enax, label='low field rta {:.1E} V/m'.format(field))
-    # plt.xlabel('Energy (ev)')
-    # plt.ylabel('Total occupation (f0 + delta f)')
-    # plt.legend()
 
     plt.figure()
-    plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
-    plt.plot(enax, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
-    plt.plot(enax, chi_fullfieldax, label='full iterative {:.1E} V/m'.format(field))
-    plt.xlim([0, 0.4])
-    plt.xlabel('Energy (eV)')
-    plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+    plt.title('Solns unsorted')
+    plt.plot(chi_iter, label='low field iterative')
+    plt.plot(chi_fullfield, label='full drift')
     plt.legend()
 
-    # plt.figure()
-    # plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
-    # plt.plot(l_en_axis, l_chiax, label='L Valley')
-    # plt.xlabel('Energy (ev)')
-    # plt.ylabel(r'Deviational occupation ($\Delta$ f)')
-    # plt.legend()
+    diff = np.linalg.norm(chi_fullfield - chi_iter)
+    print('Difference vec norm between FDM iterative chi and low field iterative chi = {:.3E}'.format(diff))
+    print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
+          .format(diff / np.linalg.norm(chi_iter) * 100))
+
+    plot_solns_vs_kx([chi_rta, chi_iter, chi_fullfield], ['low field RTA', 'low field iterative', 'FDM iterative'],
+                     fbzcartkpts, plotf0=False, summed=True)
+
+    plots_vs_energy = True
+    if plots_vs_energy:
+        enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
+        _, ftot_iter_enax, chi_iter_ax, _ = occupation_v_energy(chi_iter, enk, cartkpts, con)
+        _, ftot_fullfield_enax, chi_fullfieldax, _ = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
+
+        # Deviational occupation vs energy
+        plt.figure()
+        plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
+        plt.plot(enax, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
+        # plt.plot(enax, chi_simple_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
+        plt.plot(enax, chi_fullfieldax, label='FDM iterative {:.1E} V/m'.format(field))
+        plt.xlim([0, 0.4])
+        plt.xlabel('Energy (eV)')
+        plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+        plt.legend()
+
+        # Total occupation vs energy
+        plt.figure()
+        plt.plot(enax, f0ax, label='Equilibrium (FD)')
+        plt.plot(enax, ftot_fullfield_enax, label='full iterative {:.1E} V/m'.format(field))
+        # plt.plot(enax, ftot_iter_enax, label='low field iterative {:.1E} V/m'.format(field))
+        # plt.plot(enax, ftot_rta_enax, label='low field rta {:.1E} V/m'.format(field))
+        plt.xlabel('Energy (ev)')
+        plt.ylabel('Total occupation (f0 + delta f)')
+        plt.legend()
+
+    plots_vs_energy_separate_gamma_and_l = False
+    if plots_vs_energy_separate_gamma_and_l:
+        g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
+            chi_fullfield, enk, cartkpts, con)
+        plt.figure()
+        plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
+        plt.plot(l_en_axis, l_chiax, label='L Valley')
+        plt.xlabel('Energy (ev)')
+        plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+        plt.legend()
 
     plt.show()
 
