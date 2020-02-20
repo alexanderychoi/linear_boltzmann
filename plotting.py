@@ -305,21 +305,17 @@ def plot_bandstructure(kpts, enk):
 
 def plot_scattering_rates(data_dir, energies, kpts):
     rates = np.load(data_dir + 'scattering_rates_direct.npy')
-
-    # scm = np.memmap(data_dir + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(42433, 42433))
-    # f0 = np.squeeze(kpts['k_FD'])
-    # rates = (-1) * np.diag(scm) / (f0 * (1-f0)) * (2*np.pi)**2 * 1E-12
-
     rates = rates * (2*np.pi)**2
 
-    font = {'size': 14}
-    matplotlib.rc('font', **font)
+    scm = np.memmap(data_dir + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(42433, 42433))
+    # f0 = np.squeeze(kpts['k_FD'])
+    rates = (-1) * np.diag(scm) * (2*np.pi)**2 * 1E-12
 
     plt.plot(energies, rates, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
-    plt.xlim([0, 0.4])
-    # plt.savefig('plot_scattering_rates.png')
+    # plt.xlim([0, 0.4])
+    # plt.savefig(plots_loc + 'scattering_rates.pdf')
 
 
 def plot_cg_iter_rta(f_cg,f_iter,f_rta):
@@ -361,7 +357,7 @@ def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
             for j in range(len(uniqkx)):
                 which = kpt_data['kx [1/A]'] == uniqkx[j]
                 summed[j] = np.sum(soln_i[ascending_inds[which]])
-            plt.plot(uniqkx, summed, 'o-', markersize=3, linewidth=1, label=labels[i])
+            plt.plot(uniqkx, summed, 'o-', markersize=3, linewidth=2, label=labels[i])
         if plotf0:
             summed = np.zeros(len(uniqkx))
             for j in range(len(uniqkx)):
@@ -510,37 +506,40 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
         mu_lin.append(noise_power.calc_mobility(f_lowfield, kpts, c))
         vd.append(noise_power.drift_velocity(chi_i, kpts, c))
         vd_lin.append(noise_power.drift_velocity(chi_lowfield, kpts, c))
-        meanE.append(noise_power.mean_energy(chi_i,kpts,c))
+        meanE.append(noise_power.mean_energy(chi_i, kpts, c))
         meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
 
     plt.figure()
-    plt.plot(fields, mu, label='FDM solns')
-    plt.plot(fields, mu_lin, label='Linear in E solns')
+    plt.plot(fields, mu, 'o-', linewidth=2, label='FDM solns')
+    plt.plot(fields, mu_lin, linewidth=2, label='Linear in E solns')
     plt.xlabel('Field [V/m]')
     plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, vd, label='FDM solns')
-    plt.plot(fields, vd_lin, label='Linear in E solns')
+    plt.plot(fields, vd, 'o-', linewidth=2,   label='FDM solns')
+    plt.plot(fields, vd_lin, linewidth=2, label='Linear in E solns')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Drift velocity [m/s]???')
     plt.legend()
     
     plt.figure()
-    plt.plot(fields, meanE, label='FDM solns')
-    plt.plot(fields, meanE_lin, label='Linear in E solns')
+    plt.plot(fields, meanE, 'o-', linewidth=2, label='FDM solns')
+    plt.plot(fields, meanE_lin, linewidth=2, label='Linear in E solns')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Mean Energy [eV]')
     plt.legend()
 
+
+data_loc = '/home/peishi/nvme/k200-0.4eV/'
+chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
+
+# data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+# chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+
+
 def main():
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-
-    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
-
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
 
     con = preprocessing_largegrid.PhysicalConstants()
@@ -560,12 +559,12 @@ def main():
     fbzcartkpts = noise_power.fermi_distribution(fbzcartkpts, fermilevel=con.mu, temp=con.T, testboltzmann=True)
     print('The fermi level is {:.2f} eV'.format(con.mu))
 
+    font = {'size': 12}
+    matplotlib.rc('font', **font)
+
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
     # plot_scattering_rates(data_loc, enk, cartkpts)
-
-    font = {'size': 12}
-    matplotlib.rc('font', **font)
 
     field = 2E5
 
@@ -585,11 +584,11 @@ def main():
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
-    plot_solns_vs_kx([chi_rta, chi_iter, chi_fullfield], ['low field RTA', 'low field iterative', 'FDM iterative'],
+    plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field iterative', 'FDM iterative'],
                      fbzcartkpts, plotf0=False, summed=True)
 
-    convergedfields = [1E3, 1E4, 1E5, 1.5E5, 2E5]
-    drift_vel_vs_field(data_loc, cartkpts, convergedfields, f_iter)
+    convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
+    # driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
 
     # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
     # np.save(data_loc+'chiRTA_1e1', chi)
@@ -628,7 +627,7 @@ def main():
         g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
             chi_fullfield, enk, cartkpts, con)
         plt.figure()
-        plt.plot(g_en_axis, g_chiax, label='Gamma Valley')
+        plt.plot(g_en_axis, g_chiax, label=r'$\Gamma$ Valley')
         plt.plot(l_en_axis, l_chiax, label='L Valley')
         plt.xlabel('Energy (ev)')
         plt.ylabel(r'Deviational occupation ($\Delta$ f)')

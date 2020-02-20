@@ -198,13 +198,14 @@ def drift_velocity(chi, kpt_df, cons):
     print('Drift velocity is {:.10E} [m/s]?'.format(vd))
     return vd
 
+
 def mean_energy(chi, kpt_df, cons):
     f0 = kpt_df['k_FD'].values
     f = chi + kpt_df['k_FD'].values
     Nuc = len(kpt_df)
     Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     n = 2 / Nuc / Vuc * np.sum(f)
-    meanE = np.sum(f * kpt_df['energy']) *cons.e / np.sum(f0)
+    meanE = np.sum(f * kpt_df['energy']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
@@ -381,26 +382,28 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     return x_next, x_0
 
 
-def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+def eff_distr_g_iterative_solver(psi, matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
-    chi = plotting.psi2chi(psi,kptdf)
-    vd = drift_velocity(psi, kptdf, cons)
-    b = (-1) * ((kptdf['vx [m/s']-vd) * (chi+kptdf['k_FD']))
+
+    chi = plotting.psi2chi(psi, kptdf)
+    vd = drift_velocity(chi, kptdf, c)
+    b = (-1) * ((kptdf['vx [m/s'] - vd) * (chi + kptdf['k_FD']))
+
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
-    invdiag = (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2) ** (-1)
+    scmfac = (2 * np.pi) ** 2  # Most scattering matrices in 1/s now but missing this factor
+    invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
     g_0 = b * invdiag
 
     errpercent = 1
     counter = 0
     g_prev = g_0
     loopstart = time.time()
-    while errpercent > convergence and counter < 500:
+    while errpercent > convergence and counter < 30:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi) ** 2, g_prev)
+        mvp_sc = np.matmul(matrix_sc, g_prev) * scmfac
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
-        # Also include  2pi^2 factor that we believe is the conversion between 1/radians and 1/seconds
-        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2 * g_prev)
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * g_prev * scmfac)
         offdiag_fd = np.matmul(matrix_fd, chi2psi * g_prev)
         e1 = time.time()
         print('Matrix vector multiplication (x2) took {:.2f}s'.format(e1 - s1))
@@ -470,7 +473,7 @@ if __name__ == '__main__':
     # scm = np.memmap(data_loc + 'scattering_matrix_5.55_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     scm = np.memmap(data_loc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
 
-    lowfieldsolns = True
+    lowfieldsolns = False
     itsoln = False
     cgcalc = False
     simplelinearization = True
@@ -512,7 +515,7 @@ if __name__ == '__main__':
         # print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         # print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-    solve_full_steadystatebte = True
+    solve_full_steadystatebte = False
     field = 1.5E5
     if solve_full_steadystatebte:
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
@@ -520,6 +523,11 @@ if __name__ == '__main__':
                                                                           simplelin=simplelinearization)
         np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
         # np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
+
+    solve_eff_distr = True
+    if solve_eff_distr:
+        fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+        eff_distr_g_iterative_solver
 
     f_simple_iter = np.load('f_simplelin_iterative.npy')
     f_simple_rta = np.load('f_simplelin_rta.npy')
@@ -559,11 +567,11 @@ if __name__ == '__main__':
     print('\nFDM iterative mean energy')
     mean_energy(chi_full, cartkpts, con)
 
-    plt.figure()
-    plt.title('Solns unsorted')
-    plt.plot(chi_iter, label='low field iterative')
-    plt.plot(chi_full, label='full drift')
-    plt.legend()
+    # plt.figure()
+    # plt.title('Solns unsorted')
+    # plt.plot(chi_iter, label='low field iterative')
+    # plt.plot(chi_full, label='full drift')
+    # plt.legend()
 
     plt.show()
 
