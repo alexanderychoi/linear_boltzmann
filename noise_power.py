@@ -198,6 +198,17 @@ def drift_velocity(chi, kpt_df, cons):
     print('Drift velocity is {:.10E} [m/s]?'.format(vd))
     return vd
 
+def mean_energy(chi, kpt_df, cons):
+    f0 = kpt_df['k_FD'].values
+    f = chi + kpt_df['k_FD'].values
+    Nuc = len(kpt_df)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f)
+    meanE = np.sum(f * kpt_df['energy']) *cons.e / np.sum(f0)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
+    return meanE
+
 
 def calc_mobility(F, kptdata, cons, E=None):
     """Calculate mobility as per Wu Li PRB 92, 2015"""
@@ -540,6 +551,13 @@ if __name__ == '__main__':
     drift_velocity(chi_iter, cartkpts, con)
     print('\nFDM iterative drift velocity')
     drift_velocity(chi_full, cartkpts, con)
+
+    print('\nLow field RTA mean energy')
+    mean_energy(chi_rta, cartkpts, con)
+    print('\nLow field iterative mean energy')
+    mean_energy(chi_iter, cartkpts, con)
+    print('\nFDM iterative mean energy')
+    mean_energy(chi_full, cartkpts, con)
 
     plt.figure()
     plt.title('Solns unsorted')
