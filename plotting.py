@@ -500,6 +500,8 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     mu_lin = []
     vd = []
     vd_lin = []
+    meanE = []
+    meanE_lin = []
     for ee in fields:
         psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
         chi_i = psi2chi(psi_i, kpts)
@@ -508,6 +510,8 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
         mu_lin.append(noise_power.calc_mobility(f_lowfield, kpts, c))
         vd.append(noise_power.drift_velocity(chi_i, kpts, c))
         vd_lin.append(noise_power.drift_velocity(chi_lowfield, kpts, c))
+        meanE.append(noise_power.mean_energy(chi_i,kpts,c))
+        meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
 
     plt.figure()
     plt.plot(fields, mu, label='FDM solns')
@@ -522,7 +526,13 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     plt.xlabel('Field [V/m]')
     plt.ylabel('Drift velocity [m/s]???')
     plt.legend()
-
+    
+    plt.figure()
+    plt.plot(fields, meanE, label='FDM solns')
+    plt.plot(fields, meanE_lin, label='Linear in E solns')
+    plt.xlabel('Field [V/m]')
+    plt.ylabel('Mean Energy [eV]')
+    plt.legend()
 
 def main():
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
