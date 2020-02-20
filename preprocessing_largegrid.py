@@ -23,8 +23,8 @@ class PhysicalConstants:
     e = 1.602*10**(-19)              # Fundamental electronic charge [C]
     # mu = 5.780                       # Chemical potential [eV] old 10/8/2019
     # mu = 6.03                        # Chemical potential [eV] based on carrier density cited in JJ Zhou paper
-    mu = 5.353 + 0.2                 # 0.2 eV above midgap (5.353 eV)
-    # mu = 5.85
+    # mu = 5.353 + 0.2                 # 0.2 eV above midgap (5.353 eV)
+    mu = 6.065254 - 0.2              # 0.2 eV below CBM which is at 6.065254
     b = 8/1000                       # Gaussian broadening [eV]
     hbar_joule = 1.054571817*10**(-34)  # Reduced Planck's constant [J/s]
     hbar_ev = 6.582119569*10**(-16)  # Reduced Planck's constant [eV/s]
