@@ -100,14 +100,13 @@ def iterative_solver_simple(b, matrix, convergence=1E-4):
     return x_next, x_0
 
 
-def iterative_solver_lowfield(kptdf, matrix):
+def iterative_solver_lowfield(kptdf, matrix, simplelin=False):
     """Iterative solver hard coded for solving the BTE in low field approximation. Sign convention by Wu Li"""
     scmfac = (2*np.pi)**2
     # scmfac = 1E12 * (2 * np.pi) ** 2
 
-    # THERE ARE SIGNS IN THE MATRIX WHICH IS LOADED DIRECTLY HERE
+    chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     prefactor = (np.diag(matrix) * scmfac)**(-1)
-    # HERE'S A MINUS
     f_0 = (-1) * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD']) * prefactor
     print('The avg abs val of f_rta is {:.3E}'.format(np.average(np.abs(f_0))))
     print('The sum over f_rta is {:.3E}'.format(np.sum(f_0)))
@@ -115,14 +114,13 @@ def iterative_solver_lowfield(kptdf, matrix):
     errpercent = 1
     counter = 0
     f_prev = f_0
-    while errpercent > 5E-4 and counter < 20:
+    while errpercent > 5E-4 and counter < 25:
         s1 = time.time()
         mvp = np.matmul(matrix, f_prev) * scmfac
         e1 = time.time()
         print('Matrix vector multiplication took {:.2f}s'.format(e1-s1))
         # Remove the part of the vector from the diagonal multiplication
-        offdiagsum = mvp - (np.diag(matrix) * scmfac * f_prev)
-        # CHANGED THIS SIGN AND KINDA GOT THE RIGHT ANSWER???
+        offdiagsum = mvp - (np.diag(matrix) * f_prev * scmfac)
         f_next = f_0 - (prefactor * offdiagsum)
         print('The avg abs val of offdiag part is {:.3E}'.format(np.average(np.abs(prefactor * offdiagsum))))
         errvecnorm = np.linalg.norm(f_next - f_prev)
@@ -131,17 +129,11 @@ def iterative_solver_lowfield(kptdf, matrix):
         counter += 1
         print('Iteration {:d}: Error percent is {:.3E}. Abs error norm is {:.3E}\n'
               .format(counter, errpercent, errvecnorm))
+    if simplelin:
+        print('Converting chi to psi since matrix in simple linearization')
+        f_next = f_next / chi2psi
+        f_0 = f_0 / chi2psi
     return f_next, f_0
-
-
-def drift_velocity(chi,kpt_df, cons):
-    f0 = kpt_df['k_FD'].values
-    f = chi + kpt_df['k_FD'].values
-    Nuc = len(kpt_df)
-    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
-    n = 2 / Nuc / Vuc * np.sum(f)
-    vd = np.sum(f*kpt_df['vx [m/s]'])/np.sum(f0)
-    return vd
 
 
 def calculate_density(kpt_df, cons):
@@ -195,7 +187,19 @@ def conj_grad_soln(kptdf, matrix):
     return x
 
 
-def calc_mobility(F, kptdata, cons, E=[]):
+def drift_velocity(chi, kpt_df, cons):
+    f0 = kpt_df['k_FD'].values
+    f = chi + kpt_df['k_FD'].values
+    Nuc = len(kpt_df)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f)
+    vd = np.sum(f * kpt_df['vx [m/s]']) / np.sum(f0)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Drift velocity is {:.10E} [m/s]?'.format(vd))
+    return vd
+
+
+def calc_mobility(F, kptdata, cons, E=None):
     """Calculate mobility as per Wu Li PRB 92, 2015"""
     V = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     Nuc = len(kptdata)
@@ -208,9 +212,9 @@ def calc_mobility(F, kptdata, cons, E=[]):
         prefactor = 2 * cons.e ** 2 / (V * cons.kb_joule * cons.T * Nuc)
         conductivity = prefactor * np.sum(kptdata['k_FD'] * (1 - kptdata['k_FD']) * kptdata['vx [m/s]'] * F)
     carrier_dens = 2 / Nuc / V * np.sum(kptdata['k_FD'])
-    print('Carrier density is {:.4E}'.format(carrier_dens) + r' per m^{-3}')
     mobility = conductivity / cons.e / carrier_dens
-    print('Mobility is {:.10E} (m^2 / V / s)'.format(mobility))
+    print('Carrier density is {:.8E}'.format(carrier_dens * 1E-6) + ' per cm^{-3}')
+    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
 
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
@@ -301,7 +305,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     return shortslice_inds, icinds, lvalley_inds, matrix
 
 
-def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=False):
     # field input should be in Volts/meter
     # scmfac = 1E12 * (2 * np.pi)**2
     scmfac = (2 * np.pi)**2
@@ -319,29 +323,34 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     errpercent = 1
     counter = 0
     x_prev = x_0
-    loopstart = time.time()
+
     from scipy.linalg import get_blas_funcs
     print('Starting convergence loop')
-
-    while errpercent > convergence and counter < 25:
+    loopstart = time.time()
+    while errpercent > convergence and counter < 40:
         s1 = time.time()
         mvp_sc = np.matmul(matrix_sc, x_prev) * scmfac
         # mvp_sc = xmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
         # mvp_sc = np.matmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi) ** 2
         # mvp_sc = scipy.linalg.blas.dgemm(1, matrix_sc, x_prev)
-        mvp_sc = matrix_sc@x_prev  # Need to add scmfac here
-
-        print('First')
-        loopend = time.time()
-        print('First took {:.2f}s'.format(loopend - loopstart))
+        # mvp_sc = matrix_sc @ x_prev  # Need to add scmfac here
+        # print('First')
+        # loopend = time.time()
+        # print('First took {:.2f}s'.format(loopend - loopstart))
 
         # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
         # Also include  2pi^2 factor that we believe is the conversion between radians and seconds
         offdiag_sc = mvp_sc - (np.diag(matrix_sc) * x_prev * scmfac)
         # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
-        offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
+        # If using simple linearization (chi instead of psi) then don't use chi2psi term
+        if simplelin:
+            offdiag_fd = np.matmul(matrix_fd, x_prev)
+        else:
+            offdiag_fd = np.matmul(matrix_fd, chi2psi * x_prev)
         e1 = time.time()
         print('Matrix vector multiplications took {:.2f}s'.format(e1 - s1))
+        print('The 2-norm of offdiag FDM part is {:.3E}'.format(np.linalg.norm(offdiag_fd)))
+        print('The 2-norm of offdiag scattering part is {:.3E}'.format(np.linalg.norm(offdiag_sc)))
         x_next = x_0 + (invdiag * (offdiag_fd - offdiag_sc))
 
         errvecnorm = np.linalg.norm(x_next - x_prev)
@@ -352,6 +361,11 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
               .format(counter, errpercent, errvecnorm))
     loopend = time.time()
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
+    if simplelin:
+        # Return psi in all cases so there's not confusion in plotting
+        print('Converting chi to psi since matrix in simple linearization')
+        x_next = x_next / chi2psi
+        x_0 = x_0 / chi2psi
     return x_next, x_0
 
 
@@ -410,17 +424,17 @@ def xmul(a, b):
 
 
 if __name__ == '__main__':
-    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
-    np.__config__.show()
-    print(np.__version__)
+    # np.__config__.show()
+    print('numpy version is ' + np.__version__)
     con = preprocessing_largegrid.PhysicalConstants()
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
@@ -439,10 +453,17 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
+    # CHOOSE A MATRIX TO LOAD. SHOULD BE CONSISTENT WITH FERMI LEVEL
+    # scm = np.memmap(data_loc + 'scattering_matrix_6.03_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    # scm = np.memmap(data_loc + 'scattering_matrix_5.55_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(data_loc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+
     lowfieldsolns = True
+    itsoln = False
+    cgcalc = False
+    simplelinearization = True
     approach = 'iterative'
     if approach is 'matrix' and lowfieldsolns:
-        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r+', shape=(nkpts, nkpts))
         # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
 
         edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
@@ -451,23 +472,23 @@ if __name__ == '__main__':
 
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
     elif approach is 'iterative' and lowfieldsolns:
-        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        itsoln = False
         if itsoln:
             start = time.time()
-            f_iter, f_rta = iterative_solver_lowfield(fbzcartkpts, scm)
+            f_iter, f_rta = iterative_solver_lowfield(fbzcartkpts, scm, simplelin=simplelinearization)
             end = time.time()
             print('Iterative solver took {:.2f} seconds'.format(end - start))
-            np.save('f_iterative', f_iter)
-            np.save('f_rta', f_rta)
+            if simplelinearization:
+                np.save('f_simplelin_iterative', f_iter)
+                np.save('f_simplelin_rta', f_rta)
+            else:
+                np.save('f_iterative', f_iter)
+                np.save('f_rta', f_rta)
         else:
             try:
                 f_iter = np.load('f_iterative.npy')
                 f_rta = np.load('f_rta.npy')
             except:
                 exit('Iterative solution not calculated and not stored on file.')
-
-        cgcalc = False
         if cgcalc:
             f_cg = conj_grad_soln(cartkpts, scm)
             np.save('f_conjgrad', f_cg)
@@ -475,48 +496,65 @@ if __name__ == '__main__':
             try:
                 f_cg = np.load('f_conjgrad.npy')
             except:
-                print('Cg solution not calculated and not stored on file.')
-                # exit('Conjugate gradient solution not calculated and not stored on file.')
-        print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
-        print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
-        # plt.plot(f_iter, label='iterative')
-        # plt.plot(f_rta, label='rta')
-        # plt.legend()
+                print('CG solution not calculated and not stored on file.')
+        # print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
+        # print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-        # plotting.plot_cg_iter_rta(f_cg, f_iter, f_rta)
-        # plotting.plot_1dim_steady_soln(f_iter, cartkpts)
-
-        # print('CG mobility')
-        # calc_mobility(f_cg, cartkpts, con)
-
-    solve_full_steadystatebte = False
-    field = 1E2
+    solve_full_steadystatebte = True
+    field = 1.5E5
     if solve_full_steadystatebte:
-        # scm = np.memmap(data_loc + 'scattering_matrix_6.03.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-        scm = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-        psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field)
+        psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field,
+                                                                          simplelin=simplelinearization)
         np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
-        np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
+        # np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
 
-    print('\nRTA mobility')
-    calc_mobility(f_rta, cartkpts, con)
-    print('\nIterative mobility')
-    calc_mobility(f_iter, cartkpts, con)
-    print('\nFull drift soln mobility at ')
-    psi = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
-    chi_full = plotting.psi2chi(psi, cartkpts)
+    f_simple_iter = np.load('f_simplelin_iterative.npy')
+    f_simple_rta = np.load('f_simplelin_rta.npy')
+    f_canon_iter = np.load('f_iterative.npy')
+    f_canon_rta = np.load('f_rta.npy')
+    psi_fulldrift = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
+
+    # print('\nCG mobility')
+    # calc_mobility(f_cg, cartkpts, con)
+    # print('\nCanonical RTA mobility')
+    # calc_mobility(f_canon_rta, cartkpts, con)
+    # print('\nCanonical Iterative mobility')
+    # calc_mobility(f_canon_iter, cartkpts, con)
+    print('\nLow field RTA mobility')
+    calc_mobility(f_simple_rta, cartkpts, con)
+    print('\nLow field iterative mobility')
+    calc_mobility(f_simple_iter, cartkpts, con)
+    print('\nFDM iterative mobility')
+    chi_full = plotting.psi2chi(psi_fulldrift, cartkpts)
     calc_mobility(chi_full, cartkpts, con, E=field)
+
+    chi_rta = plotting.f2chi(f_simple_rta, cartkpts, con, arbfield=field)
+    chi_iter = plotting.f2chi(f_simple_iter, cartkpts, con, arbfield=field)
+    chi_full = plotting.psi2chi(psi_fulldrift, cartkpts)
+
+    print('\nLow field RTA drift velocity')
+    drift_velocity(chi_rta, cartkpts, con)
+    print('\nLow field iterative drift velocity')
+    drift_velocity(chi_iter, cartkpts, con)
+    print('\nFDM iterative drift velocity')
+    drift_velocity(chi_full, cartkpts, con)
+
+    plt.figure()
+    plt.title('Solns unsorted')
+    plt.plot(chi_iter, label='low field iterative')
+    plt.plot(chi_full, label='full drift')
+    plt.legend()
 
     plt.show()
 
     F_rta = np.load(data_loc + 'f_rta.npy')
-    write_RTA_chis = True
+    write_RTA_chis = False
     if write_RTA_chis:
-        EFields = np.logspace(0, 6, num = 7)
+        EFields = np.logspace(0, 6, num=7)
         calculate_RTA_chi(F_rta, fbzcartkpts, con, EFields, data_loc)
         print('RTA_chis written to file.')
 
-    processRTAchis = True
+    processRTAchis = False
     if processRTAchis:
         process_RTA_chis(data_loc, fbzcartkpts, con)
