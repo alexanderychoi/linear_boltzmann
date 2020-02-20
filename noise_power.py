@@ -204,7 +204,7 @@ def mean_energy(chi, kpt_df, cons):
     Nuc = len(kpt_df)
     Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     n = 2 / Nuc / Vuc * np.sum(f)
-    meanE = np.sum(f * kpt_df['energy']) *cons.e / np.sum(f0)
+    meanE = np.sum(f * kpt_df['energy']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
@@ -381,31 +381,39 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     return x_next, x_0
 
 
-def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4):
+def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=False):
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
-    chi = plotting.psi2chi(psi,kptdf)
-    vd = drift_velocity(psi, kptdf, cons)
-    b = (-1) * ((kptdf['vx [m/s']-vd) * (chi+kptdf['k_FD']))
+    vd = drift_velocity(chi, kptdf, c)
+    f0 = kptdf['k_FD'].values()
+    f = chi + f0
+    b = (-1) * ((kptdf['vx [m/s']-vd) * (f))
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2) ** (-1)
     g_0 = b * invdiag
+    scmfac = (2 * np.pi) ** 2
+    print('The avg abs val of g_0 is {:.3E}'.format(np.average(np.abs(g_0))))
+    print('The sum over g_0 is {:.3E}'.format(np.sum(g_0)))
 
     errpercent = 1
     counter = 0
     g_prev = g_0
     loopstart = time.time()
-    while errpercent > convergence and counter < 500:
+    while errpercent > convergence and counter < 40:
         s1 = time.time()
-        mvp_sc = np.matmul(matrix_sc * 1E12 * (2 * np.pi) ** 2, g_prev)
-        # Remove diagonal terms from the scattering matrix multiplication (prevent double counting of diagonal term)
-        # Also include  2pi^2 factor that we believe is the conversion between 1/radians and 1/seconds
-        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * 1E12 * (2 * np.pi) ** 2 * g_prev)
-        offdiag_fd = np.matmul(matrix_fd, chi2psi * g_prev)
+        mvp_sc = np.matmul(matrix_sc, g_prev) * scmfac
+        offdiag_sc = mvp_sc - (np.diag(matrix_sc) * g_prev * scmfac)
+        # There's no diagonal component of the finite difference matrix so matmul directly gives contribution
+        # If using simple linearization (chi instead of psi) then don't use chi2psi term
+        if simplelin:
+            offdiag_fd = np.matmul(matrix_fd, g_prev)
+        else:
+            offdiag_fd = np.matmul(matrix_fd, chi2psi * g_prev)
         e1 = time.time()
-        print('Matrix vector multiplication (x2) took {:.2f}s'.format(e1 - s1))
+        print('Matrix vector multiplications took {:.2f}s'.format(e1 - s1))
+        print('The 2-norm of offdiag FDM part is {:.3E}'.format(np.linalg.norm(offdiag_fd)))
+        print('The 2-norm of offdiag scattering part is {:.3E}'.format(np.linalg.norm(offdiag_sc)))
         g_next = g_0 + (invdiag * (offdiag_fd - offdiag_sc))
-
         errvecnorm = np.linalg.norm(g_next - g_prev)
         errpercent = errvecnorm / np.linalg.norm(g_prev)
         g_prev = g_next
@@ -414,6 +422,11 @@ def eff_distr_g_iterative_solver(psi,matrix_sc, matrix_fd, kptdf, c, field, conv
               .format(counter, errpercent, errvecnorm))
     loopend = time.time()
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
+    if simplelin:
+        # Return psi in all cases so there's not confusion in plotting
+        print('Converting chi to psi since matrix in simple linearization')
+        x_next = g_next / chi2psi
+        g_0 = g_0 / chi2psi
     return g_next, g_0
 
 
