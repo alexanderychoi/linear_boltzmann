@@ -493,6 +493,37 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
     return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax
 
 
+def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
+    """Takes solutions which are already calculated and plots drift velocity vs field"""
+    c = preprocessing_largegrid.PhysicalConstants()
+    mu = []
+    mu_lin = []
+    vd = []
+    vd_lin = []
+    for ee in fields:
+        psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
+        chi_i = psi2chi(psi_i, kpts)
+        chi_lowfield = f2chi(f_lowfield, kpts, c, arbfield=ee)
+        mu.append(noise_power.calc_mobility(chi_i, kpts, c, E=ee))
+        mu_lin.append(noise_power.calc_mobility(f_lowfield, kpts, c))
+        vd.append(noise_power.drift_velocity(chi_i, kpts, c))
+        vd_lin.append(noise_power.drift_velocity(chi_lowfield, kpts, c))
+
+    plt.figure()
+    plt.plot(fields, mu, label='FDM solns')
+    plt.plot(fields, mu_lin, label='Linear in E solns')
+    plt.xlabel('Field [V/m]')
+    plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
+    plt.legend()
+
+    plt.figure()
+    plt.plot(fields, vd, label='FDM solns')
+    plt.plot(fields, vd_lin, label='Linear in E solns')
+    plt.xlabel('Field [V/m]')
+    plt.ylabel('Drift velocity [m/s]???')
+    plt.legend()
+
+
 def main():
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
@@ -526,7 +557,7 @@ def main():
     font = {'size': 12}
     matplotlib.rc('font', **font)
 
-    field = 1.5E5
+    field = 2E5
 
     psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     f_iter = np.load(data_loc + 'f_simplelin_iterative.npy')
@@ -535,20 +566,9 @@ def main():
     # f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
 
-    # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
-    # np.save(data_loc+'chiRTA_1e1', chi)
-    # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
-    # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
-
     chi_fullfield = psi2chi(psi_fullfield, cartkpts)
     chi_iter = f2chi(f_iter, cartkpts, con, arbfield=field)
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
-
-    plt.figure()
-    plt.title('Solns unsorted')
-    plt.plot(chi_iter, label='low field iterative')
-    plt.plot(chi_fullfield, label='full drift')
-    plt.legend()
 
     diff = np.linalg.norm(chi_fullfield - chi_iter)
     print('Difference vec norm between FDM iterative chi and low field iterative chi = {:.3E}'.format(diff))
@@ -558,7 +578,15 @@ def main():
     plot_solns_vs_kx([chi_rta, chi_iter, chi_fullfield], ['low field RTA', 'low field iterative', 'FDM iterative'],
                      fbzcartkpts, plotf0=False, summed=True)
 
-    plots_vs_energy = True
+    convergedfields = [1E3, 1E4, 1E5, 1.5E5, 2E5]
+    drift_vel_vs_field(data_loc, cartkpts, convergedfields, f_iter)
+
+    # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
+    # np.save(data_loc+'chiRTA_1e1', chi)
+    # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
+    # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
+
+    plots_vs_energy = False
     if plots_vs_energy:
         enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
         _, ftot_iter_enax, chi_iter_ax, _ = occupation_v_energy(chi_iter, enk, cartkpts, con)

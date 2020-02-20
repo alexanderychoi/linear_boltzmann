@@ -215,6 +215,7 @@ def calc_mobility(F, kptdata, cons, E=None):
     mobility = conductivity / cons.e / carrier_dens
     print('Carrier density is {:.8E}'.format(carrier_dens * 1E-6) + ' per cm^{-3}')
     print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    return mobility
 
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
