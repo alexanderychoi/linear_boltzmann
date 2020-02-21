@@ -189,11 +189,11 @@ def conj_grad_soln(kptdf, matrix):
 
 def drift_velocity(chi, kpt_df, cons):
     f0 = kpt_df['k_FD'].values
-    f = chi + kpt_df['k_FD'].values
+    f = chi + f0
     Nuc = len(kpt_df)
     Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
     n = 2 / Nuc / Vuc * np.sum(f)
-    vd = np.sum(f * kpt_df['vx [m/s]']) / np.sum(f0)
+    vd = np.sum(f * kpt_df['vx [m/s]']) / np.sum(f)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Drift velocity is {:.10E} [m/s]?'.format(vd))
     return vd
@@ -209,6 +209,16 @@ def mean_energy(chi, kpt_df, cons):
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
+
+
+def noneq_density(chi, kpt_df, cons):
+    f0 = kpt_df['k_FD'].values
+    f = chi + f0
+    Nuc = len(kpt_df)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n = 2 / Nuc / Vuc * np.sum(f)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    return n
 
 
 def calc_mobility(F, kptdata, cons, E=None):
@@ -229,6 +239,22 @@ def calc_mobility(F, kptdata, cons, E=None):
     print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
+def calc_L_Gamma_ratio(chi, kptsdf, cons):
+    f0 = kptsdf['k_FD'].values
+    f = chi + f0
+    kptsdf['kpt_mag'] = np.sqrt(kptsdf['kx [1/A]'].values**2 + kptsdf['ky [1/A]'].values**2 +
+                                 kptsdf['kz [1/A]'].values**2)
+    kptsdf['ingamma'] = kptsdf['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
+
+    g_inds = kptsdf.loc[kptsdf['ingamma'] == 1].index - 1
+    l_inds = kptsdf.loc[kptsdf['ingamma'] == 0].index - 1
+
+    Nuc = len(kptsdf)
+    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
+    n_g = 2 / Nuc / Vuc * np.sum(f[g_inds])
+    n_l = 2 / Nuc / Vuc * np.sum(f[l_inds])
+
+    return n_g, n_l
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
     """Assuming that f is in the form of chi/(eE/kbT)"""
@@ -427,9 +453,15 @@ def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, conv
     if simplelin:
         # Return psi in all cases so there's not confusion in plotting
         print('Converting chi to psi since matrix in simple linearization')
-        x_next = g_next / chi2psi
+        g_next = g_next / chi2psi
         g_0 = g_0 / chi2psi
     return g_next, g_0
+
+
+def lowfreq_noise(g, kptdf):
+    Nuc = len(kptdf)
+    noise = np.sum(g * kptdf['vx [m/s'].values) / Nuc
+    return noise
 
 
 def xmul(a, b):
@@ -451,14 +483,14 @@ def xmul(a, b):
 
 
 if __name__ == '__main__':
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     # np.__config__.show()
     print('numpy version is ' + np.__version__)
@@ -483,12 +515,12 @@ if __name__ == '__main__':
     # CHOOSE A MATRIX TO LOAD. SHOULD BE CONSISTENT WITH FERMI LEVEL
     # scm = np.memmap(data_loc + 'scattering_matrix_6.03_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     # scm = np.memmap(data_loc + 'scattering_matrix_5.55_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-    scm = np.memmap(data_loc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    # scm = np.memmap(data_loc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
 
     lowfieldsolns = False
     itsoln = False
     cgcalc = False
-    simplelinearization = True
+    simplelinearization = False
     approach = 'iterative'
     if approach is 'matrix' and lowfieldsolns:
         # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
@@ -536,7 +568,7 @@ if __name__ == '__main__':
         np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
         # np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
 
-    solve_eff_distr = True
+    solve_eff_distr = False
     if solve_eff_distr:
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         eff_distr_g_iterative_solver
@@ -578,6 +610,7 @@ if __name__ == '__main__':
     mean_energy(chi_iter, cartkpts, con)
     print('\nFDM iterative mean energy')
     mean_energy(chi_full, cartkpts, con)
+
 
     # plt.figure()
     # plt.title('Solns unsorted')
