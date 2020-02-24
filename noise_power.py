@@ -458,9 +458,20 @@ def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, conv
     return g_next, g_0
 
 
+def equilibrium_g(matrix_sc, matrix_fd, kptdf, c, field):
+    _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+    f0 = kptdf['k_FD'].values()
+    b = ((kptdf['vx [m/s']) * (f0))
+    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
+    scmfac = (2 * np.pi) ** 2  # Most scattering matrices in 1/s now but missing this factor
+    invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
+    g_0 = b * invdiag
+    return g_0
+
+
 def lowfreq_noise(g, kptdf):
     Nuc = len(kptdf)
-    noise = np.sum(g * kptdf['vx [m/s'].values) / Nuc
+    noise = np.sum(g * kptdf['vx [m/s]'].values) / Nuc
     return noise
 
 
@@ -630,3 +641,12 @@ if __name__ == '__main__':
     processRTAchis = False
     if processRTAchis:
         process_RTA_chis(data_loc, fbzcartkpts, con)
+
+    calcNoise = True
+    g_low = np.load(data_loc +'g_eff_distr/' + 'g_1.0E+02_field.npy')
+    g_high = np.load(data_loc +'g_eff_distr/' + 'g_1.0E+05_field.npy')
+
+    if calcNoise:
+        print(lowfreq_noise(g_low, cartkpts))
+        print(lowfreq_noise(g_high, cartkpts))
+
