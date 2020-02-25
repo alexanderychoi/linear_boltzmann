@@ -501,6 +501,11 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     mean_en_rta = []
     rta = np.load(data_loc + 'f_simplelin_rta.npy')
     meanE_lin = []
+    noneqn = []
+    noneqn_lin = []
+    n_g = []
+    n_l = []
+
     for ee in fields:
         psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
         chi_i = psi2chi(psi_i, kpts)
@@ -514,6 +519,11 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
         meanE.append(noise_power.mean_energy(chi_i, kpts, c))
         mean_en_rta.append(noise_power.mean_energy(chi_rta, kpts, c))
         meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
+        noneqn.append(noise_power.noneq_density(chi_i, kpts, c))
+        noneqn_lin.append(noise_power.noneq_density(chi_lowfield, kpts, c))
+        ng, nl = noise_power.calc_L_Gamma_ratio(chi_i, kpts, c)
+        n_g.append(ng)
+        n_l.append(nl)
 
     plt.figure()
     plt.plot(fields, mu, 'o-', linewidth=2, label='FDM solns')
@@ -538,13 +548,27 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     plt.ylabel('Mean Energy [eV]')
     plt.legend()
 
+    plt.figure()
+    plt.plot(fields, noneqn, 'o-', linewidth=2, label='FDM solns')
+    plt.plot(fields, noneqn_lin, linewidth=2, label='Linear in E solns')
+    plt.xlabel('Field [V/m]')
+    plt.ylabel('Total Carrier Population [m^-3]')
+    plt.legend()
 
-data_loc = '/home/peishi/nvme/k200-0.4eV/'
-chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
+    plt.figure()
+    plt.plot(fields, n_g, 'o-', linewidth=2, label='FDM Gamma')
+    plt.plot(fields, n_l, 'o-', linewidth=2, label='FDM L')
+    plt.xlabel('Field [V/m]')
+    plt.ylabel('Carrier Population [m^-3]')
+    plt.legend()
 
-# data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-# chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+
+# data_loc = '/home/peishi/nvme/k200-0.4eV/'
+# chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+# plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
+
+data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
 
 def main():
@@ -603,7 +627,7 @@ def main():
     # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
     # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
 
-    plots_vs_energy = False
+    plots_vs_energy = True
     if plots_vs_energy:
         enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
         _, ftot_iter_enax, chi_iter_ax, _ = occupation_v_energy(chi_iter, enk, cartkpts, con)
