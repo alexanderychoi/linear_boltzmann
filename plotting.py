@@ -357,7 +357,7 @@ def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
             for j in range(len(uniqkx)):
                 which = kpt_data['kx [1/A]'] == uniqkx[j]
                 summed[j] = np.sum(soln_i[ascending_inds[which]])
-            plt.plot(uniqkx, summed, 'o-', markersize=3, linewidth=2, label=labels[i])
+            plt.plot(uniqkx, summed, 'o-', markersize=5, linewidth=2, label=labels[i])
         if plotf0:
             summed = np.zeros(len(uniqkx))
             for j in range(len(uniqkx)):
@@ -496,36 +496,44 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     mu_lin = []
     vd = []
     vd_lin = []
+    vd_rta = []
     meanE = []
+    mean_en_rta = []
+    rta = np.load(data_loc + 'f_simplelin_rta.npy')
     meanE_lin = []
     for ee in fields:
         psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
         chi_i = psi2chi(psi_i, kpts)
         chi_lowfield = f2chi(f_lowfield, kpts, c, arbfield=ee)
+        chi_rta = f2chi(rta, kpts, c, arbfield=ee)
         mu.append(noise_power.calc_mobility(chi_i, kpts, c, E=ee))
         mu_lin.append(noise_power.calc_mobility(f_lowfield, kpts, c))
         vd.append(noise_power.drift_velocity(chi_i, kpts, c))
         vd_lin.append(noise_power.drift_velocity(chi_lowfield, kpts, c))
+        vd_rta.append(noise_power.drift_velocity(chi_rta, kpts, c))
         meanE.append(noise_power.mean_energy(chi_i, kpts, c))
+        mean_en_rta.append(noise_power.mean_energy(chi_rta, kpts, c))
         meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
 
     plt.figure()
     plt.plot(fields, mu, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, mu_lin, linewidth=2, label='Linear in E solns')
+    plt.plot(fields, mu_lin, linewidth=2, label='low field iterative')
     plt.xlabel('Field [V/m]')
     plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
     plt.legend()
 
     plt.figure()
     plt.plot(fields, vd, 'o-', linewidth=2,   label='FDM solns')
-    plt.plot(fields, vd_lin, linewidth=2, label='Linear in E solns')
+    plt.plot(fields, vd_lin, linewidth=2, label='Low field iterative')
+    plt.plot(fields, vd_rta, linewidth=2, label='RTA')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Drift velocity [m/s]???')
     plt.legend()
     
     plt.figure()
     plt.plot(fields, meanE, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, meanE_lin, linewidth=2, label='Linear in E solns')
+    # plt.plot(fields, mean_en_rta, '-', linewidth=2, label='RTA')
+    plt.plot(fields, meanE_lin, linewidth=2, label='low field iterative')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Mean Energy [eV]')
     plt.legend()
@@ -566,7 +574,7 @@ def main():
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
     # plot_scattering_rates(data_loc, enk, cartkpts)
 
-    field = 2E5
+    field = 1E5
 
     psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     f_iter = np.load(data_loc + 'f_simplelin_iterative.npy')
@@ -580,15 +588,15 @@ def main():
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
 
     diff = np.linalg.norm(chi_fullfield - chi_iter)
-    print('Difference vec norm between FDM iterative chi and low field iterative chi = {:.3E}'.format(diff))
+    print('Difference vec norm between FDM iterative chi and low field iterative ;chi = {:.3E}'.format(diff))
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
-    plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field iterative', 'FDM iterative'],
+    plot_solns_vs_kx([chi_iter - chi_fullfield], ['low field soln - FDM soln'],
                      fbzcartkpts, plotf0=False, summed=True)
 
     convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
-    # driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
+    driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
 
     # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
     # np.save(data_loc+'chiRTA_1e1', chi)

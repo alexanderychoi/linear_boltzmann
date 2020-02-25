@@ -315,7 +315,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     print('Scattering matrix modified to incorporate central difference contribution.')
     print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
     print('Finite difference not applied to L valleys. Derivative treated as zero for these points.')
-    return shortslice_inds, icinds, lvalley_inds, matrix
+    return shortslice_inds, np.array(icinds), lvalley_inds, matrix
 
 
 def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=False):
@@ -323,7 +323,7 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     # scmfac = 1E12 * (2 * np.pi)**2
     scmfac = (2 * np.pi)**2
 
-    _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+    _, icinds, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
 
     b = (-1)*c.e*field/c.kb_joule/c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
@@ -341,6 +341,9 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     print('Starting convergence loop')
     loopstart = time.time()
     while errpercent > convergence and counter < 40:
+        # Directly make the boundary condition points zero. icinds is 1-indexed. Subtract 1.
+        x_prev[icinds - 1] = 0
+
         s1 = time.time()
         mvp_sc = np.matmul(matrix_sc, x_prev) * scmfac
         # mvp_sc = xmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
@@ -382,18 +385,21 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     return x_next, x_0
 
 
-def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=False):
+def eff_distr_g_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=True):
+    """DEFAULT IS TO RETURN CHI"""
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+    # Will only be able to run if you have a precalculated psi stored on file
+    psi = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
+    chi = plotting.psi2chi(psi, kptdf)
     vd = drift_velocity(chi, kptdf, c)
-    f0 = kptdf['k_FD'].values()
+    f0 = kptdf['k_FD'].values
     f = chi + f0
-    b = (-1) * ((kptdf['vx [m/s']-vd) * (f))
+    b = (-1) * ((kptdf['vx [m/s]'] - vd) * f)
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
-    chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
+    psi2chi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     scmfac = (2 * np.pi) ** 2  # Most scattering matrices in 1/s now but missing this factor
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
     g_0 = b * invdiag
-    scmfac = (2 * np.pi) ** 2
     print('The avg abs val of g_0 is {:.3E}'.format(np.average(np.abs(g_0))))
     print('The sum over g_0 is {:.3E}'.format(np.sum(g_0)))
 
@@ -410,7 +416,7 @@ def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, conv
         if simplelin:
             offdiag_fd = np.matmul(matrix_fd, g_prev)
         else:
-            offdiag_fd = np.matmul(matrix_fd, chi2psi * g_prev)
+            offdiag_fd = np.matmul(matrix_fd, psi2chi * g_prev)
         e1 = time.time()
         print('Matrix vector multiplications took {:.2f}s'.format(e1 - s1))
         print('The 2-norm of offdiag FDM part is {:.3E}'.format(np.linalg.norm(offdiag_fd)))
@@ -424,30 +430,12 @@ def eff_distr_g_iterative_solver(chi,matrix_sc, matrix_fd, kptdf, c, field, conv
               .format(counter, errpercent, errvecnorm))
     loopend = time.time()
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
-    if simplelin:
-        # Return psi in all cases so there's not confusion in plotting
-        print('Converting chi to psi since matrix in simple linearization')
-        x_next = g_next / chi2psi
-        g_0 = g_0 / chi2psi
+    if not simplelin:
+        # Return chi in all cases so there's not confusion in plotting
+        print('Converting psi to chi since matrix in simple linearization')
+        g_next = g_next * psi2chi
+        g_0 = g_0 * psi2chi
     return g_next, g_0
-
-
-def xmul(a, b):
-    """
-    Multiply stacked matrices A (with shape (s, m, n)) by stacked
-    matrices B (with shape (s, n, p)) to produce an array with
-    shape (s, m, p).
-
-    Mathematically equivalent to A @ B, but faster in many cases.
-
-    The arguments are not validated.  The code assumes that A and B
-    are numpy arrays with the same data type and with shapes described
-    above.
-    """
-    out = np.empty_like(a)
-    for j in range(a.shape[0]):
-        out[j]= np.dot(a[j], b[j])
-    return out
 
 
 if __name__ == '__main__':
@@ -484,11 +472,11 @@ if __name__ == '__main__':
     # scm = np.memmap(data_loc + 'scattering_matrix_6.03_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     # scm = np.memmap(data_loc + 'scattering_matrix_5.55_canonical.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     scm = np.memmap(data_loc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    simplelinearization = True
 
     lowfieldsolns = False
     itsoln = False
     cgcalc = False
-    simplelinearization = True
     approach = 'iterative'
     if approach is 'matrix' and lowfieldsolns:
         # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
@@ -527,8 +515,8 @@ if __name__ == '__main__':
         # print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
         # print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-    solve_full_steadystatebte = False
-    field = 1.5E5
+    solve_full_steadystatebte = True
+    field = 2E5
     if solve_full_steadystatebte:
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field,
@@ -536,10 +524,11 @@ if __name__ == '__main__':
         np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
         # np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
 
-    solve_eff_distr = True
+    solve_eff_distr = False
     if solve_eff_distr:
         fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-        eff_distr_g_iterative_solver
+        g = eff_distr_g_iterative_solver(scm, fdm, fbzcartkpts, con, field, simplelin=True)
+        np.save(data_loc + 'g_eff_distr/g_{:.1E}_field'.format(field), g)
 
     f_simple_iter = np.load('f_simplelin_iterative.npy')
     f_simple_rta = np.load('f_simplelin_rta.npy')
@@ -578,11 +567,13 @@ if __name__ == '__main__':
     mean_energy(chi_iter, cartkpts, con)
     print('\nFDM iterative mean energy')
     mean_energy(chi_full, cartkpts, con)
+    print('\nEquilbrium mean energy')
+    mean_energy(0*nkpts, cartkpts, con)
 
     # plt.figure()
     # plt.title('Solns unsorted')
     # plt.plot(chi_iter, label='low field iterative')
-    # plt.plot(chi_full, label='full drift')
+    # plt.plot(chi_rta, label='RTA')
     # plt.legend()
 
     plt.show()
