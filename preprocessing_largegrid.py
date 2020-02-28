@@ -217,6 +217,13 @@ def translate_into_fbz(coords, rlv):
         iteration += 1
         print('Finished %d iterations of bringing points into FBZ' % iteration)
 
+    uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
+    deltakx = np.diff(uniqkx)
+    smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
+    for kxi in np.nditer(np.nonzero(smalldkx)):
+        kx = uniqkx[kxi]
+        fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+
     print('Done bringing points into FBZ!')
 
     return fbzcoords

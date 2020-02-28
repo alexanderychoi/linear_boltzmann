@@ -503,12 +503,15 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     meanE_lin = []
     noneqn = []
     noneqn_lin = []
+    n_new = []
     n_g = []
     n_l = []
 
     for ee in fields:
         psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
         chi_i = psi2chi(psi_i, kpts)
+        psi_new = np.load(datdir + '/psi_zeroic/psi_iter_{:.1E}_field.npy'.format(ee))
+        chi_new = psi2chi(psi_new, kpts)
         chi_lowfield = f2chi(f_lowfield, kpts, c, arbfield=ee)
         chi_rta = f2chi(rta, kpts, c, arbfield=ee)
         mu.append(noise_power.calc_mobility(chi_i, kpts, c, E=ee))
@@ -521,54 +524,56 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
         meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
         noneqn.append(noise_power.noneq_density(chi_i, kpts, c))
         noneqn_lin.append(noise_power.noneq_density(chi_lowfield, kpts, c))
+        n_new.append(noise_power.noneq_density(chi_new, kpts, c))
         ng, nl = noise_power.calc_L_Gamma_ratio(chi_i, kpts, c)
         n_g.append(ng)
         n_l.append(nl)
 
+    kvcm = np.array(fields) * 1E-5
     plt.figure()
-    plt.plot(fields, mu, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, mu_lin, linewidth=2, label='low field iterative')
+    plt.plot(kvcm, mu, 'o-', linewidth=2, label='FDM solns')
+    plt.plot(kvcm, mu_lin, linewidth=2, label='low field iterative')
     plt.xlabel('Field [V/m]')
     plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, vd, 'o-', linewidth=2,   label='FDM solns')
-    plt.plot(fields, vd_lin, linewidth=2, label='Low field iterative')
-    plt.plot(fields, vd_rta, linewidth=2, label='RTA')
+    plt.plot(kvcm, vd, 'o-', linewidth=2,   label='FDM solns')
+    plt.plot(kvcm, vd_lin, linewidth=2, label='Low field iterative')
+    plt.plot(kvcm, vd_rta, linewidth=2, label='RTA')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Drift velocity [m/s]???')
     plt.legend()
     
     plt.figure()
-    plt.plot(fields, meanE, 'o-', linewidth=2, label='FDM solns')
-    # plt.plot(fields, mean_en_rta, '-', linewidth=2, label='RTA')
-    plt.plot(fields, meanE_lin, linewidth=2, label='low field iterative')
+    plt.plot(kvcm, meanE, 'o-', linewidth=2, label='FDM solns')
+    # plt.plot(kvcm, mean_en_rta, '-', linewidth=2, label='RTA')
+    plt.plot(kvcm, meanE_lin, linewidth=2, label='low field iterative')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Mean Energy [eV]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, noneqn, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, noneqn_lin, linewidth=2, label='Linear in E solns')
+    plt.plot(kvcm, noneqn, 'o-', linewidth=2, label='IC only in finite difference')
+    plt.plot(kvcm, noneqn_lin, linewidth=2, label='Linear in E solns')
+    plt.plot(kvcm, n_new, 'o-', linewidth=2, label='Zero IC directly in solution')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Total Carrier Population [m^-3]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, n_g, 'o-', linewidth=2, label='FDM Gamma')
-    plt.plot(fields, n_l, 'o-', linewidth=2, label='FDM L')
+    plt.plot(kvcm, n_g, 'o-', linewidth=2, label='FDM Gamma')
+    plt.plot(kvcm, n_l, 'o-', linewidth=2, label='FDM L')
     plt.xlabel('Field [V/m]')
     plt.ylabel('Carrier Population [m^-3]')
     plt.legend()
 
 
-# data_loc = '/home/peishi/nvme/k200-0.4eV/'
-# chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-# plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
-
-data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+data_loc = '/home/peishi/nvme/k200-0.4eV/'
+chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
+# data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+# chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
 
 def main():
@@ -598,7 +603,7 @@ def main():
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
     # plot_scattering_rates(data_loc, enk, cartkpts)
 
-    field = 1E5
+    field = 2E5
 
     psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     f_iter = np.load(data_loc + 'f_simplelin_iterative.npy')
@@ -616,7 +621,7 @@ def main():
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
-    plot_solns_vs_kx([chi_iter - chi_fullfield], ['low field soln - FDM soln'],
+    plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field soln', 'FDM soln'],
                      fbzcartkpts, plotf0=False, summed=True)
 
     convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
@@ -627,7 +632,7 @@ def main():
     # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
     # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
 
-    plots_vs_energy = True
+    plots_vs_energy = False
     if plots_vs_energy:
         enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
         _, ftot_iter_enax, chi_iter_ax, _ = occupation_v_energy(chi_iter, enk, cartkpts, con)
