@@ -376,6 +376,40 @@ def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
     plt.legend()
 
 
+def velocity_distribution_kde(chi, kpts, title=[]):
+    vel = kpts['vx [m/s]']
+    npts = 600  # number of points in the KDE
+    vdist = np.zeros(npts)
+    vdist_tot = np.zeros(npts)
+    vdist_f0 = np.zeros(npts)
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    v_ax = np.linspace(vel.min(), vel.max(), npts)
+    dx = (v_ax.max() - v_ax.min()) / npts
+    f0 = np.squeeze(kpts['k_FD'].values)
+    spread = 22 * dx
+
+    def gaussian(x, mu, sigma=spread):
+        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    for k in range(len(chi)):
+        istart = int(np.maximum(np.floor((vel[k] - v_ax[0]) / dx) - (4 * spread / dx), 0))
+        iend = int(np.minimum(np.floor((vel[k] - v_ax[0]) / dx) + (4 * spread / dx), npts - 1))
+        vdist_tot[istart:iend] += (chi[k] + f0[k]) * gaussian(v_ax[istart:iend], vel[k])
+        vdist_f0[istart:iend] += f0[k] * gaussian(v_ax[istart:iend], vel[k])
+        vdist[istart:iend] += chi[k] * gaussian(v_ax[istart:iend], vel[k])
+
+    plt.figure()
+    plt.plot(v_ax, vdist_f0, label='equilibrium')
+    plt.plot(v_ax, vdist_tot, label='total')
+    plt.fill(v_ax, vdist, label='non-eq distr', color='red')
+    plt.xlabel(r'Velocity [ms$^{-1}$]')
+    plt.ylabel(r'Occupation [arb.]')
+    plt.legend()
+    if title:
+        plt.title(title)
+
+
 def plot_like_Stanton(chi_rta, fullkpts_df, con, res):
     fullkpts_df = noise_power.fermi_distribution(fullkpts_df, fermilevel=con.mu, temp=con.T)
     f0 = fullkpts_df['k_FD'].values
@@ -617,7 +651,7 @@ def main():
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
 
     diff = np.linalg.norm(chi_fullfield - chi_iter)
-    print('Difference vec norm between FDM iterative chi and low field iterative ;chi = {:.3E}'.format(diff))
+    print('Difference vec norm between FDM iterative chi and low field iterative chi = {:.3E}'.format(diff))
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
@@ -625,12 +659,15 @@ def main():
                      fbzcartkpts, plotf0=False, summed=True)
 
     convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
-    driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
+    # driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
 
     # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
     # np.save(data_loc+'chiRTA_1e1', chi)
     # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
     # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
+
+    velocity_distribution_kde(chi_fullfield, cartkpts, title='FDM')
+    velocity_distribution_kde(chi_iter, cartkpts, title='low field iterative')
 
     plots_vs_energy = False
     if plots_vs_energy:
