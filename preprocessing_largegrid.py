@@ -257,7 +257,7 @@ def load_vel_data(data_dir, cons):
         cart_kpts['vx [m/s]'] = np.multiply(cart_kpts['vx_dir'].values, cart_kpts['v_mag [m/s]'])
 
         cart_kpts = cart_kpts.drop(['bands'], axis=1)
-        cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'], axis=1)
+        cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir'], axis=1)
 
         cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * cons.e - cons.mu * cons.e)
                                   / (cons.kb_joule * cons.T)) + 1) ** (-1)
