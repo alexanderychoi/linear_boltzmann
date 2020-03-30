@@ -28,8 +28,13 @@ def way_counter(k, valley_inds):
     """
     spread = 3 * dx
 
-    def gaussian(x, mu, sigma=spread):
-        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
+
+    # def gaussian(x, mu, sigma=spread):
+    #     return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
 
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
     print(r'Loaded k={:d}'.format(k))
@@ -69,6 +74,7 @@ if __name__ == '__main__':
     # recip_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/recips/'
     data_loc = '/home/peishi/nvme/k200-0.4eV/'
     chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
 
     _, kpts_df, enk_df, qpts_df, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
     con = preprocessing_largegrid.PhysicalConstants()
@@ -113,7 +119,7 @@ if __name__ == '__main__':
     en_axis = np.linspace(enk.min(), enk.max() + 0.1, npts)
     dx = (en_axis.max() - en_axis.min()) / npts
 
-    count_intervalleys = True
+    count_intervalleys = False
     if count_intervalleys:
         # gamma_ratio = np.zeros((np.count_nonzero(inverse_key), 1))
         # number = np.zeros((np.count_nonzero(inverse_key), 1))
@@ -137,32 +143,35 @@ if __name__ == '__main__':
             exit('Couldn''t find intervalley kernel density data')
 
     # Plotting
-    font = {'size': 14}
+    font = {'size': 12}
     mpl.rc('font', **font)
 
-    # ivw200k = np.load('intervalley_weight_by_en_200K.npy')
+    ivw200k = np.load('intervalley_weight_by_en_200K.npy')
+    ivw300k = np.load('intervalley_weight_by_en_300K.npy')
 
-    fig = plt.figure(figsize=(6, 5))
-    plt.axes([0.2, 0.14, 0.7, 0.7])
-    plt.plot(en_axis, fractioniv, linewidth=2.5, color='darkred', label='300 K')
-    # plt.plot(en_axis, ivw200k, linewidth=2.5, color='red', label='200 K')
-    plt.xlim([enk.min(), enk.min() + 0.4])
-    plt.xlabel('Energy (eV)')
-    plt.ylabel('Fraction of scattering intervalley')
-    plt.legend()
+    plt.figure(figsize=(5, 4.5))
+    ax = plt.axes([0.22, 0.15, 0.73, 0.73])
+    cmap = plt.cm.get_cmap('Oranges', 20)
+    plt.plot(en_axis - enk.min(), ivw200k, linewidth=2, color=cmap(12)[:3], label='200 K')
+    plt.plot(en_axis - enk.min(), ivw300k, linewidth=2, color=cmap(15)[:3], label='300 K')
+    plt.xlim([0, 0.385])
+    plt.xlabel('Energy above CBM (eV)')
+    plt.yticks([])
+    # plt.annotate(r'$\sum_q\delta(\epsilon_k \pm \hbar\omega_q - \epsilon_{k+q})$', (0.025, 9000))
+    # plt.ylabel(r'Intervalley scattering strength ($\sum_q(\delta(\epsilon_k \pm \hbar\omega_q - \epsilon_{k+q}))$)')
+    plt.ylabel(r'Intervalley scattering strength (arb.)')
+    plt.savefig(plots_loc + 'intervalley wrt temp.png', dpi=300)
+    # plt.legend()
 
-    saveloc = '/home/peishi/calculations/first-principles-fluctuations/'
-    plt.savefig(saveloc+'fraction_intervalley.png', dpi=400)
-
-    plt.figure(figsize=(6, 5))
-    plt.semilogy(en_axis, intervalley_weight, label='Intervalley', linewidth=2)
-    plt.semilogy(en_axis, total_delta_weight, label='Total', linewidth=2)
-    plt.ylim([1E5, 1.6E9])
-    plt.xlim([enk.min(), enk.min() + 0.4])
-    plt.xlabel('Energy (eV)')
-    plt.ylabel('Phase space volume (arb.)')
-    plt.legend()
-    plt.savefig(saveloc + 'phasespace.png', dpi=400)
+    # plt.figure(figsize=(6, 5))
+    # plt.semilogy(en_axis, intervalley_weight, label='Intervalley', linewidth=2)
+    # plt.semilogy(en_axis, total_delta_weight, label='Total', linewidth=2)
+    # plt.ylim([1E5, 1.6E9])
+    # plt.xlim([enk.min(), enk.min() + 0.4])
+    # plt.xlabel('Energy (eV)')
+    # plt.ylabel('Phase space volume (arb.)')
+    # plt.legend()
+    # plt.savefig(saveloc + 'phasespace.png', dpi=400)
 
     plt.show()
 
@@ -215,16 +224,3 @@ if __name__ == '__main__':
     #
     # plt.savefig('common_labels2.png', dpi=400)
     # plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-

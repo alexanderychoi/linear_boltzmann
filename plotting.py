@@ -349,7 +349,8 @@ def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
     f0 = fullkpts_df['k_FD']
     kpt_data = kptdata.sort_values(by=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'], ascending=True)
     ascending_inds = kpt_data.index
-    plt.figure()
+    plt.figure(figsize=(5, 4.8))
+    ax = plt.axes([0.22, 0.15, 0.73, 0.73])
     if summed:
         uniqkx = np.sort(np.unique(kpt_data['kx [1/A]']))
         for i, soln_i in enumerate(solns):
@@ -357,23 +358,70 @@ def plot_solns_vs_kx(solns, labels, fullkpts_df, plotf0=True, summed=False):
             for j in range(len(uniqkx)):
                 which = kpt_data['kx [1/A]'] == uniqkx[j]
                 summed[j] = np.sum(soln_i[ascending_inds[which]])
-            plt.plot(uniqkx, summed, 'o-', markersize=5, linewidth=2, label=labels[i])
+            # ax.plot(uniqkx, summed, '-', markersize=5, linewidth=2, label=labels[i])
+            if i == 0:
+                ax.plot(uniqkx, summed, '--', markersize=5, linewidth=1.5, label=labels[i], color='C1')
+            else:
+                ax.plot(uniqkx, summed, '-', markersize=5, linewidth=1.5, label=labels[i], color='C1')
         if plotf0:
-            summed = np.zeros(len(uniqkx))
+            summed_f0 = np.zeros(len(uniqkx))
             for j in range(len(uniqkx)):
                 which = kpt_data['kx [1/A]'] == uniqkx[j]
-                summed[j] = np.sum(f0[ascending_inds[which]]) + np.sum(solns[0][ascending_inds[which]])
-            plt.plot(uniqkx, summed, 'k-', markersize=5, linewidth=1, label='f0 + low field iterative')
+                summed_f0[j] = np.sum(f0[ascending_inds[which]])
+            ax.plot(uniqkx, summed_f0, 'k-', markersize=5, linewidth=1, label='f0')
     else:
         for i, soln_i in enumerate(solns):
-            plt.plot(kptdata['kx [1/A]'][ascending_inds], soln_i[ascending_inds],
+            ax.plot(kptdata['kx [1/A]'][ascending_inds], soln_i[ascending_inds],
                      'o-', markersize=5, linewidth=2, label=labels[i])
         if plotf0:
-            plt.plot(kptdata['kx [1/A]'][ascending_inds], f0[ascending_inds], '.-', markersize=5,
+            ax.plot(kptdata['kx [1/A]'][ascending_inds], f0[ascending_inds], '.-', markersize=5,
                      linewidth=1, label='Equilibrium')
-    plt.xlabel(r'$k_x$ (1/$\AA$)')
-    plt.ylabel('Occupation functions')
+    plt.xlabel(r'$\Gamma$ valley $k_x$ [1/$\AA$]')
+    plt.xlim([-0.1, 0.1])
+    plt.ylabel('Occupation')
+    # plt.xticks([-0.10, 0.00, 0.10])
+    # plt.yticks([-0.0004, -0.0002, 0.0000, 0.0002])
+    # plt.grid()
     plt.legend()
+    # plt.savefig(plots_loc + 'kspace_plot.png', dpi=300)
+
+
+def velocity_distribution_kde(chi, kpts, title=[]):
+    vel = kpts['vx [m/s]']
+    npts = 600  # number of points in the KDE
+    vdist = np.zeros(npts)
+    vdist_tot = np.zeros(npts)
+    vdist_f0 = np.zeros(npts)
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    v_ax = np.linspace(vel.min(), vel.max(), npts)
+    dx = (v_ax.max() - v_ax.min()) / npts
+    f0 = np.squeeze(kpts['k_FD'].values)
+    spread = 22 * dx
+
+    def gaussian(x, mu, sigma=spread):
+        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    for k in range(len(chi)):
+        istart = int(np.maximum(np.floor((vel[k] - v_ax[0]) / dx) - (4 * spread / dx), 0))
+        iend = int(np.minimum(np.floor((vel[k] - v_ax[0]) / dx) + (4 * spread / dx), npts - 1))
+        vdist_tot[istart:iend] += (chi[k] + f0[k]) * gaussian(v_ax[istart:iend], vel[k])
+        vdist_f0[istart:iend] += f0[k] * gaussian(v_ax[istart:iend], vel[k])
+        vdist[istart:iend] += chi[k] * gaussian(v_ax[istart:iend], vel[k])
+
+    plt.figure(figsize=(6, 4))
+    ax = plt.axes([0.18, 0.15, 0.76, 0.76])
+    ax.plot(v_ax, [0]*len(v_ax), 'k')
+    ax.plot(v_ax, vdist_f0, '--', linewidth=2, label='Equilbrium')
+    ax.plot(v_ax, vdist_tot, linewidth=2, label='Hot electron distribution')
+    # plt.fill(v_ax, vdist, label='non-eq distr', color='red')
+    ax.fill(v_ax, vdist, '--', linewidth=2, label='Non-equilibrium distribution', color='C1')
+    ax.set_xlabel(r'Velocity [ms$^{-1}$]')
+    ax.set_ylabel(r'Occupation [arb.]')
+    plt.legend()
+    if title:
+        plt.title(title)
+    # plt.savefig(plots_loc + 'vel_distr.png', dpi=300)
 
 
 def plot_like_Stanton(chi_rta, fullkpts_df, con, res):
@@ -411,7 +459,7 @@ def psi2chi(psi, kptsdf):
 
 
 def occupation_v_energy(chi, enk, kptsdf, c):
-    npts = 4000  # number of points in the KDE
+    npts = 1000  # number of points in the KDE
     chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     ftot = np.zeros(npts)
     f0ax = np.zeros(npts)
@@ -420,17 +468,23 @@ def occupation_v_energy(chi, enk, kptsdf, c):
     en_axis = np.linspace(enk.min(), enk.max(), npts)
     dx = (en_axis.max() - en_axis.min()) / npts
     f0 = np.squeeze(kptsdf['k_FD'].values)
-    spread = 50 * dx
+    vmags = kptsdf['v_mag [m/s]']
+    spread = 46 * dx
 
-    def gaussian(x, mu, sigma=spread):
-        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+    # def gaussian(x, mu, sigma=spread):
+    #     return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
 
     for k in range(len(enk)):
         istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
         iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
-        ftot[istart:iend] += (chi[k] + f0[k]) * gaussian(en_axis[istart:iend], enk[k])
-        f0ax[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k])
-        chiax[istart:iend] += chi[k] * gaussian(en_axis[istart:iend], enk[k])
+        ftot[istart:iend] += (chi[k] + f0[k]) * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+        f0ax[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+        chiax[istart:iend] += chi[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
 
     ftot = f0ax + chiax
 
@@ -441,8 +495,9 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
     kptsdf['kpt_mag'] = np.sqrt(kptsdf['kx [1/A]'].values**2 + kptsdf['ky [1/A]'].values**2 +
                                  kptsdf['kz [1/A]'].values**2)
     kptsdf['ingamma'] = kptsdf['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
+    vmags = kptsdf['v_mag [m/s]']
 
-    npts = 4000  # number of points in the KDE
+    npts = 1000  # number of points in the KDE
     g_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     g_ftot = np.zeros(npts)
     g_f0ax = np.zeros(npts)
@@ -467,24 +522,29 @@ def occupation_v_energy_sep(chi, enk, kptsdf, c):
     dx = (g_en_axis.max() - g_en_axis.min()) / npts
     g_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma'] == 1,'k_FD'].values)
     l_f0 = np.squeeze(kptsdf.loc[kptsdf['ingamma'] == 0,'k_FD'].values)
-    spread = 75 * dx
+    spread = 50 * dx
 
-    def gaussian(x, mu, sigma=spread):
-        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+    # def gaussian(x, mu, sigma=spread):
+    #     return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
 
     for k in range(len(g_inds)):
         istart = int(np.maximum(np.floor((g_enk[k] - g_en_axis[0]) / dx) - (4*spread/dx), 0))
         iend = int(np.minimum(np.floor((g_enk[k] - g_en_axis[0]) / dx) + (4*spread/dx), npts - 1))
-        g_ftot[istart:iend] += (g_chi[k] + g_f0[k]) * gaussian(g_en_axis[istart:iend], g_enk[k])
-        g_f0ax[istart:iend] += g_f0[k] * gaussian(g_en_axis[istart:iend], g_enk[k])
-        g_chiax[istart:iend] += g_chi[k] * gaussian(g_en_axis[istart:iend], g_enk[k])
+        g_ftot[istart:iend] += (g_chi[k] + g_f0[k]) * gaussian(g_en_axis[istart:iend], g_enk[k],vmags[k])
+        g_f0ax[istart:iend] += g_f0[k] * gaussian(g_en_axis[istart:iend], g_enk[k], vmags[k])
+        g_chiax[istart:iend] += g_chi[k] * gaussian(g_en_axis[istart:iend], g_enk[k], vmags[k])
 
     for k in range(len(l_inds)):
         istart = int(np.maximum(np.floor((l_enk[k] - l_en_axis[0]) / dx) - (4 * spread / dx), 0))
         iend = int(np.minimum(np.floor((l_enk[k] - l_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
-        l_ftot[istart:iend] += (l_chi[k] + l_f0[k]) * gaussian(l_en_axis[istart:iend], l_enk[k])
-        l_f0ax[istart:iend] += l_f0[k] * gaussian(l_en_axis[istart:iend], l_enk[k])
-        l_chiax[istart:iend] += l_chi[k] * gaussian(l_en_axis[istart:iend], l_enk[k])
+        l_ftot[istart:iend] += (l_chi[k] + l_f0[k]) * gaussian(l_en_axis[istart:iend], l_enk[k], vmags[k])
+        l_f0ax[istart:iend] += l_f0[k] * gaussian(l_en_axis[istart:iend], l_enk[k], vmags[k])
+        l_chiax[istart:iend] += l_chi[k] * gaussian(l_en_axis[istart:iend], l_enk[k], vmags[k])
 
     return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax
 
@@ -503,12 +563,15 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
     meanE_lin = []
     noneqn = []
     noneqn_lin = []
+    n_new = []
     n_g = []
     n_l = []
 
     for ee in fields:
         psi_i = np.load(datdir + '/psi/psi_iter_{:.1E}_field.npy'.format(ee))
         chi_i = psi2chi(psi_i, kpts)
+        psi_new = np.load(datdir + '/psi_zeroic/psi_iter_{:.1E}_field.npy'.format(ee))
+        chi_new = psi2chi(psi_new, kpts)
         chi_lowfield = f2chi(f_lowfield, kpts, c, arbfield=ee)
         chi_rta = f2chi(rta, kpts, c, arbfield=ee)
         mu.append(noise_power.calc_mobility(chi_i, kpts, c, E=ee))
@@ -521,54 +584,58 @@ def driftvel_mobility_vs_field(datdir, kpts, fields, f_lowfield):
         meanE_lin.append(noise_power.mean_energy(chi_lowfield, kpts, c))
         noneqn.append(noise_power.noneq_density(chi_i, kpts, c))
         noneqn_lin.append(noise_power.noneq_density(chi_lowfield, kpts, c))
+        n_new.append(noise_power.noneq_density(chi_new, kpts, c))
         ng, nl = noise_power.calc_L_Gamma_ratio(chi_i, kpts, c)
         n_g.append(ng)
         n_l.append(nl)
 
+    kvcm = np.array(fields) * 1E-5
     plt.figure()
-    plt.plot(fields, mu, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, mu_lin, linewidth=2, label='low field iterative')
-    plt.xlabel('Field [V/m]')
+    plt.plot(kvcm, mu, 'o-', linewidth=2, label='FDM solns')
+    plt.plot(kvcm, mu_lin, linewidth=2, label='low field iterative')
+    plt.xlabel('Field [kV/m]')
     plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
     plt.legend()
 
-    plt.figure()
-    plt.plot(fields, vd, 'o-', linewidth=2,   label='FDM solns')
-    plt.plot(fields, vd_lin, linewidth=2, label='Low field iterative')
-    plt.plot(fields, vd_rta, linewidth=2, label='RTA')
-    plt.xlabel('Field [V/m]')
-    plt.ylabel('Drift velocity [m/s]???')
+    plt.figure(figsize=(5, 4.5))
+    ax = plt.axes([0.22, 0.15, 0.73, 0.73])
+    plt.plot(kvcm, vd, 'o-', linewidth=2,   label='FDM solns', color='C1')
+    plt.plot(kvcm, vd_lin, linewidth=1.5, label='Low field iterative', color='black')
+    # plt.plot(kvcm, vd_rta, linewidth=2, label='RTA')
+    plt.xlabel('Field [kV/cm]')
+    plt.ylabel('Drift velocity [m/s]')
+    # plt.savefig(plots_loc + 'drift velocity vs field.png', dpi=300)
     plt.legend()
     
     plt.figure()
-    plt.plot(fields, meanE, 'o-', linewidth=2, label='FDM solns')
-    # plt.plot(fields, mean_en_rta, '-', linewidth=2, label='RTA')
-    plt.plot(fields, meanE_lin, linewidth=2, label='low field iterative')
-    plt.xlabel('Field [V/m]')
+    plt.plot(kvcm, meanE, 'o-', linewidth=2, label='FDM solns')
+    # plt.plot(kvcm, mean_en_rta, '-', linewidth=2, label='RTA')
+    plt.plot(kvcm, meanE_lin, linewidth=2, label='low field iterative')
+    plt.xlabel('Field [kV/cm]')
     plt.ylabel('Mean Energy [eV]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, noneqn, 'o-', linewidth=2, label='FDM solns')
-    plt.plot(fields, noneqn_lin, linewidth=2, label='Linear in E solns')
-    plt.xlabel('Field [V/m]')
+    plt.plot(kvcm, noneqn, 'o-', linewidth=2, label='IC only in finite difference')
+    plt.plot(kvcm, noneqn_lin, linewidth=2, label='Linear in E solns')
+    plt.plot(kvcm, n_new, 'o-', linewidth=2, label='Zero IC directly in solution')
+    plt.xlabel('Field [kV/cm]')
     plt.ylabel('Total Carrier Population [m^-3]')
     plt.legend()
 
     plt.figure()
-    plt.plot(fields, n_g, 'o-', linewidth=2, label='FDM Gamma')
-    plt.plot(fields, n_l, 'o-', linewidth=2, label='FDM L')
-    plt.xlabel('Field [V/m]')
+    plt.plot(kvcm, n_g, 'o-', linewidth=2, label='FDM Gamma')
+    plt.plot(kvcm, n_l, 'o-', linewidth=2, label='FDM L')
+    plt.xlabel('Field [kV/cm]')
     plt.ylabel('Carrier Population [m^-3]')
     plt.legend()
 
 
-# data_loc = '/home/peishi/nvme/k200-0.4eV/'
-# chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-# plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
-
-data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+data_loc = '/home/peishi/nvme/k200-0.4eV/'
+chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+plots_loc = '/home/peishi/Dropbox (Minnich Lab)/Papers-Proposals-Plots/analysis-noise/'
+# data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+# chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
 
 def main():
@@ -598,11 +665,12 @@ def main():
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
     # plot_scattering_rates(data_loc, enk, cartkpts)
 
-    field = 1E5
+    field = 2E5
 
     psi_fullfield = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     f_iter = np.load(data_loc + 'f_simplelin_iterative.npy')
     f_rta = np.load(data_loc + 'f_simplelin_rta.npy')
+    f0 = cartkpts['k_FD']
     # f_iter = np.load(data_loc + 'f_iterative.npy')
     # f_rta = np.load(data_loc + 'f_rta.npy')
     # f_cg = np.load(data_loc + 'f_conjgrad.npy')
@@ -612,11 +680,11 @@ def main():
     chi_rta = f2chi(f_rta, cartkpts, con, arbfield=field)
 
     diff = np.linalg.norm(chi_fullfield - chi_iter)
-    print('Difference vec norm between FDM iterative chi and low field iterative ;chi = {:.3E}'.format(diff))
+    print('Difference vec norm between FDM iterative chi and low field iterative chi = {:.3E}'.format(diff))
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
-    plot_solns_vs_kx([chi_iter - chi_fullfield], ['low field soln - FDM soln'],
+    plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field iterative', 'FDM'],
                      fbzcartkpts, plotf0=False, summed=True)
 
     convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
@@ -627,15 +695,18 @@ def main():
     # chi_rta = np.load(data_loc + 'chiRTA_1e1.npy')
     # plot_like_Stanton(chi_rta, fbzcartkpts, con, 'label?')
 
-    plots_vs_energy = True
+    # velocity_distribution_kde(chi_fullfield, cartkpts)
+    # velocity_distribution_kde(chi_iter, cartkpts, title='low field iterative')
+
+    plots_vs_energy = False
     if plots_vs_energy:
-        enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
-        _, ftot_iter_enax, chi_iter_ax, _ = occupation_v_energy(chi_iter, enk, cartkpts, con)
-        _, ftot_fullfield_enax, chi_fullfieldax, _ = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
+        # enax, ftot_rta_enax, chi_rta_ax, f0ax = occupation_v_energy(chi_rta, enk, cartkpts, con)
+        enax, ftot_iter_enax, chi_iter_ax, f0ax = occupation_v_energy(chi_iter, enk, cartkpts, con)
+        enax, ftot_fullfield_enax, chi_fullfieldax, f0ax = occupation_v_energy(chi_fullfield, enk, cartkpts, con)
 
         # Deviational occupation vs energy
         plt.figure()
-        plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
+        # plt.plot(enax, chi_rta_ax, label='low field rta {:.1E} V/m'.format(field))
         plt.plot(enax, chi_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
         # plt.plot(enax, chi_simple_iter_ax, label='low field iterative {:.1E} V/m'.format(field))
         plt.plot(enax, chi_fullfieldax, label='FDM iterative {:.1E} V/m'.format(field))
@@ -645,25 +716,33 @@ def main():
         plt.legend()
 
         # Total occupation vs energy
-        plt.figure()
-        plt.plot(enax, f0ax, label='Equilibrium (FD)')
-        plt.plot(enax, ftot_fullfield_enax, label='full iterative {:.1E} V/m'.format(field))
+        plt.figure(figsize=(5, 4.8))
+        ax = plt.axes([0.22, 0.15, 0.73, 0.73])
+        plt.plot(enax, ftot_iter_enax, '--', linewidth=1.5, label='Equilibrium (FD)', color='C1')
+        plt.plot(enax, ftot_fullfield_enax, linewidth=1.5, label='full iterative {:.1E} V/m'.format(field), color='C1')
         # plt.plot(enax, ftot_iter_enax, label='low field iterative {:.1E} V/m'.format(field))
         # plt.plot(enax, ftot_rta_enax, label='low field rta {:.1E} V/m'.format(field))
-        plt.xlabel('Energy (ev)')
-        plt.ylabel('Total occupation (f0 + delta f)')
-        plt.legend()
+        plt.xlabel('Energy above CBM (eV)')
+        plt.ylabel(r'Total occupation ($f^0_{\mathbf{k}} + \chi_{\mathbf{k}}$)')
+        plt.ylim([0, 0.35])
+        plt.xlim([0, 0.475])
+        # plt.savefig(plots_loc + 'Total occ vs energy.png', dpi=300)
+        # plt.legend()
 
     plots_vs_energy_separate_gamma_and_l = False
     if plots_vs_energy_separate_gamma_and_l:
         g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax = occupation_v_energy_sep(
             chi_fullfield, enk, cartkpts, con)
-        plt.figure()
+        plt.figure(figsize=(3, 3))
+        ax = plt.axes([0.19, 0.2, 0.75, 0.73])
         plt.plot(g_en_axis, g_chiax, label=r'$\Gamma$ Valley')
-        plt.plot(l_en_axis, l_chiax, label='L Valley')
-        plt.xlabel('Energy (ev)')
-        plt.ylabel(r'Deviational occupation ($\Delta$ f)')
+        plt.plot(l_en_axis, l_chiax, '--', label='L Valley', color='C0')
+        plt.xlabel('Energy above CBM (eV)')
+        plt.xlim([0, 0.475])
+        plt.yticks([])
+        plt.ylabel(r'Deviational occupation ($\chi_{\mathbf{k}}$)')
         plt.legend()
+        # plt.savefig(plots_loc + 'dev occ vs energy gamma vs L.png', dpi=300)
 
     plt.show()
 
