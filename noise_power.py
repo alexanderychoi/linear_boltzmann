@@ -239,6 +239,7 @@ def calc_mobility(F, kptdata, cons, E=None):
     print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
+
 def calc_L_Gamma_ratio(chi, kptsdf, cons):
     f0 = kptsdf['k_FD'].values
     f = chi + f0
@@ -255,6 +256,7 @@ def calc_L_Gamma_ratio(chi, kptsdf, cons):
     n_l = 2 / Nuc / Vuc * np.sum(f[l_inds])
 
     return n_g, n_l
+
 
 def g_conj_grad_soln(kptdf, matrix, f, cons):
     """Assuming that f is in the form of chi/(eE/kbT)"""
@@ -358,6 +360,8 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     x_0 = b * invdiag
     print('The avg abs val of f_rta is {:.3E}'.format(np.average(np.abs(x_0))))
     print('The sum over f_rta is {:.3E}'.format(np.sum(x_0)))
+    print('The average occupation of the initial condition states at {:.1E} V/m is {:.2E}'
+          .format(field, np.average(x_0[icinds-1])))
 
     errpercent = 1
     counter = 0
@@ -367,9 +371,6 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     print('Starting convergence loop')
     loopstart = time.time()
     while errpercent > convergence and counter < 40:
-        # Directly make the boundary condition points zero. icinds is 1-indexed. Subtract 1.
-        x_prev[icinds - 1] = 0
-
         s1 = time.time()
         mvp_sc = np.matmul(matrix_sc, x_prev) * scmfac
         # mvp_sc = xmul(matrix_sc, x_prev) * 1E12 * (2 * np.pi)**2
@@ -482,14 +483,14 @@ def lowfreq_noise(g, kptdf):
 
 
 if __name__ == '__main__':
-    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
     # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
     # chunk_loc = '/home/peishi/storage/chunked/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
-    data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
-    chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
+    # data_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/k200-0.4eV/'
+    # chunk_loc = 'D:/Users/AlexanderChoi/GaAs_300K_10_19/chunked/'
 
     # np.__config__.show()
     print('numpy version is ' + np.__version__)
@@ -526,7 +527,6 @@ if __name__ == '__main__':
         edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
         fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
         plotting.highlighted_points(fo, edgepoints, con)
-
         f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
     elif approach is 'iterative' and lowfieldsolns:
         if itsoln:
@@ -554,32 +554,39 @@ if __name__ == '__main__':
                 f_cg = np.load('f_conjgrad.npy')
             except:
                 print('CG solution not calculated and not stored on file.')
-        # print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
-        # print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
+        print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_iter - f_cg)))
+        print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
-    solve_full_steadystatebte = True
-    field = 2E5
+    solve_full_steadystatebte = False
+    fields = [0, 1E3, 2E3, 4E3, 6E3, 8E3, 1.5E4, 2E4]
+    # field = 1E4
     if solve_full_steadystatebte:
-        fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-        psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field,
-                                                                          simplelin=simplelinearization)
-        np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
-        # np.save(data_loc + '/psi/psi_rta_{:.1E}_field'.format(field), psi_rta)
+        for field in fields:
+            print('\n Doing field = {:.2E} V/m'.format(field))
+            fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+            psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field,
+                                                                              simplelin=simplelinearization)
+            np.save(data_loc + '/psi/psi_iter_{:.1E}_field'.format(field), psi_fulldrift)
 
     solve_eff_distr = False
     if solve_eff_distr:
-        fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-        g = eff_distr_g_iterative_solver(scm, fdm, fbzcartkpts, con, field, simplelin=True)
-        np.save(data_loc + 'g_eff_distr/g_{:.1E}_field'.format(field), g)
+        for field in fields:
+            fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+            g = eff_distr_g_iterative_solver(scm, fdm, fbzcartkpts, con, field, simplelin=True)
+            np.save(data_loc + 'g_eff_distr/g_{:.1E}_field'.format(field), g)
 
+    f_cg = np.load('f_conjgrad.npy')
     f_simple_iter = np.load('f_simplelin_iterative.npy')
     f_simple_rta = np.load('f_simplelin_rta.npy')
     f_canon_iter = np.load('f_iterative.npy')
     f_canon_rta = np.load('f_rta.npy')
     psi_fulldrift = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
 
-    # print('\nCG mobility')
-    # calc_mobility(f_cg, cartkpts, con)
+    print('The norm of difference vector of iterative and cg is {:.3E}'.format(np.linalg.norm(f_simple_iter - f_cg)))
+    print('The percent difference is {:.3E}'.format(np.linalg.norm(f_simple_iter - f_cg) / np.linalg.norm(f_simple_iter)))
+
+    print('\nCG mobility')
+    calc_mobility(f_cg, cartkpts, con)
     # print('\nCanonical RTA mobility')
     # calc_mobility(f_canon_rta, cartkpts, con)
     # print('\nCanonical Iterative mobility')
@@ -611,7 +618,6 @@ if __name__ == '__main__':
     mean_energy(chi_full, cartkpts, con)
     print('\nEquilbrium mean energy')
     mean_energy(0*nkpts, cartkpts, con)
-
 
     # plt.figure()
     # plt.title('Solns unsorted')
