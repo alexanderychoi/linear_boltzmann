@@ -115,7 +115,8 @@ def write_iterative_solver_lowfield(outLoc, inLoc, fieldVector, df, cons, canoni
         None. Just writes the chi solutions to file. chi_#_EField. #1 corresponds to low-field RTA, #2 corresponds to
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
-    scm = np.load(inLoc + 'diag_elem_5.87_simple.npy')
+    nkpts = len(np.unique(df['k_inds']))
+    scm = np.memmap(inLoc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         EField = fieldVector[i]
         f_next, f_0 = iterative_solver_lowfield(df, scm, canonical=canonical2, applyscmFac=applyscmFac2)
@@ -318,7 +319,7 @@ def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, cons, canonical2=
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.load(inLoc + 'diag_elem_5.87_simple')
+    scm = np.memmap(inLoc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         fdm = np.memmap(inLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
@@ -576,13 +577,15 @@ def load_problem_params(in_loc):
     return con
 
 if __name__ == '__main__':
-    out_Loc = 'D:/Users/AlexanderChoi/Dropbox (Minnich Lab)/Minnich Lab Team ' \
-              'Folder/Peishi+Alex/BoltzmannGreensFunctionSolver/#1_Problem/1_Pipeline/Output/ '
-    in_Loc = 'D:/Users/AlexanderChoi/Dropbox (Minnich Lab)/Minnich Lab Team ' \
-              'Folder/Peishi+Alex/BoltzmannGreensFunctionSolver/#1_Problem/0_Data/'
+    # out_Loc = 'D:/Users/AlexanderChoi/Dropbox (Minnich Lab)/Minnich Lab Team ' \
+    #           'Folder/Peishi+Alex/BoltzmannGreensFunctionSolver/#1_Problem/1_Pipeline/Output/ '
+    # in_Loc = 'D:/Users/AlexanderChoi/Dropbox (Minnich Lab)/Minnich Lab Team ' \
+    #           'Folder/Peishi+Alex/BoltzmannGreensFunctionSolver/#1_Problem/0_Data/'
 
     con = load_problem_params(in_Loc)
     fields = np.array([1e1,1e2,1e3])
     electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
     # Steady state solutions
     write_iterative_solver_lowfield(out_Loc, in_Loc, fields, electron_df, con, canonical2=False, applyscmFac2=False)
+    write_iterative_solver_fdm(out_Loc, in_Loc, fields, electron_df, con, canonical2=False, applyscmFac2=False,
+                               convergence2=5E-4)
