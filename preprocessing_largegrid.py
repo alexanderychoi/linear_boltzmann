@@ -377,7 +377,7 @@ def chunkify(fname, size=512 * 1024 * 1024):
     f.close()
 
 
-def chunk_linebyline(matrixel_path, chunkloc):
+def chunk_linebyline(dataloc, chunkloc):
     """Load the matrix elements in chunks, calculate additional info needed, and store into file for each kpoint
 
     Parameters:
@@ -387,6 +387,8 @@ def chunk_linebyline(matrixel_path, chunkloc):
     Returns:
         None. Just a function call to load shit and process it into the right form
     """
+
+    matrixel_path = dataloc +  'gaas.eph_matrix'
     f = open(matrixel_path)
     nGB = 0
     nlines = 0
@@ -395,11 +397,11 @@ def chunk_linebyline(matrixel_path, chunkloc):
         f.seek(chunkStart)
         all_lines = np.array([float(i) for i in f.read(chunkSize).split()])
         print('Finished read for GB number {:d}'.format(nGB))
-        data = np.reshape(all_lines, (-1, 7), order='C')
+        data = np.reshape(all_lines, (-1, 5), order='C')
         nlines += data.shape[0]
         this_df = pd.DataFrame(data=data,
-                               columns=['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode', 'g_element'])
-        this_df.drop(columns=['m_band', 'n_band'], inplace=True)
+                               columns=['k_inds', 'q_inds', 'k+q_inds', 'im_mode', 'g_element'])
+        # this_df.drop(columns=['m_band', 'n_band'], inplace=True)
         for k in np.nditer(np.unique(this_df['k_inds'])):
             to_store = this_df[this_df['k_inds'] == k].copy()
             k_fname = chunkloc+'k{:05d}.parquet'.format(int(k))
@@ -411,9 +413,10 @@ def chunk_linebyline(matrixel_path, chunkloc):
         nGB += 1
 
     print('Total number of lines is {:d}'.format(nlines))
-    os.chdir('/home/peishi/nvme/k200-0.4eV')
+    os.chdir(dataloc)
     ln = open('totallines', 'w')
     ln.write('Total number of lines is {:d}'.format(nlines))
+    # For the k160-0.4eV matrix, it should have 628241287 lines including the header
 
 
 def create_q_en_key(df):
@@ -460,30 +463,30 @@ def chunked_bosonic_fermionic(k_ind, ph_energies, nb, el_energies, constants):
 
 def creating_mmap(dir, n, nl):
     """Creates the memory mapped numpy arrays which can be opened and have data added to them later"""
-    os.chdir(dir)
     for k in range(1, n+1):
-        kmap = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(nl, 4))
+        kmap = np.memmap(dir + 'k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(nl, 4))
         del kmap
 
 
 if __name__ == '__main__':
     con = PhysicalConstants()
 
-    data_loc = '/home/peishi/nvme/k200-0.4eV/'
-    chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
-    recip_loc = '/home/peishi/nvme/k200-0.4eV/recips/'
-    # data_loc = '/home/peishi/storage/k200-0.4eV/'  # for Comet
-    # chunk_loc = '/home/peishi/storage/chunked/'
+    # data_loc = '/home/peishi/nvme/k200-0.4eV/'
+    # chunk_loc = '/home/peishi/nvme/k200-0.4eV/chunked/'
+    # recip_loc = '/home/peishi/nvme/k200-0.4eV/recips/'
+    data_loc = '/home/peishi/storage/k160-0.4eV/'  # for Comet
+    chunk_loc = '/home/peishi/storage/chunked/'
+    recip_loc = '/home/peishi/storage/recips/'
     # data_loc = '/p/work3/peishi/k200-0.4eV/'  # for gaffney (navy cluster)
     # chunk_loc = '/p/work3/peishi/chunked/'
 
-    nkpts = 42433
+    nkpts = 23643
     mmaplines = 100000
-    nthreads = 48
+    nthreads = 24
 
     # For the 200x200x200 kpoints will need to load and process line by line since file too large.
     # First load all the other stuff.
-    load_data = True
+    load_data = False
     if load_data:
         print('Loading data from ' + data_loc)
         load_matrix_elements = False
@@ -509,12 +512,11 @@ if __name__ == '__main__':
     if len([name for name in os.listdir(chunk_loc) if os.path.isfile(chunk_loc + name)]) == nkpts:
         print('Data already chunked (probably). Not running chunking code.')
     else:
-        pass
-        # chunk_linebyline(data_loc + 'gaas.eph_matrix', chunk_loc)
+        chunk_linebyline(data_loc, chunk_loc)
 
     # After chunking the matrix elements, need to populate each one with the reciprocal data. Doing this using numpy
     # memmap arrays for each kpoint since they are really fast.
-    populate_memmaps = False  # Finished doing this. Takes 9 hours
+    populate_memmaps = True  # Finished doing this. Takes 9 hours
     if populate_memmaps:
         print('Populating reciprocals by adding data into memmapped files')
         os.chdir(recip_loc)  # THIS IS REALLY IMPORTANT FOR SOME REASON
@@ -533,8 +535,8 @@ if __name__ == '__main__':
             print('Finished READ IN for {:d} chunks of 512 MB'.format(counter))
             # The columns are ['k_inds', 'q_inds', 'k+q_inds', 'm_band', 'n_band', 'im_mode', 'g_element']
             # We only use columns 0, 1, 2, 5, 6
-            chunkdata = np.reshape(all_lines, (-1, 7), order='C')
-            chunkdata = chunkdata[:, [0, 1, 2, 5, 6]]
+            chunkdata = np.reshape(all_lines, (-1, 5), order='C')
+            # chunkdata = chunkdata[:, [0, 1, 2, 5, 6]]
             kqinds = np.unique(chunkdata[:, 2])
             print('There are {:d} unique k+q inds for the number {:d} chunk'.format(len(kqinds), counter))
             start = time.time()
