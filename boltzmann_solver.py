@@ -9,42 +9,42 @@ import re
 import glob
 import matplotlib.pyplot as plt
 import pickle
-import constants as c
 
 # The following set of functions calculate quantities based on the kpt DataFrame
-def fermi_distribution(df, testboltzmann=False):
+def fermi_distribution(df, cons, testboltzmann=False):
     """Given an electron DataFrame, a Fermi Level, and a temperature, calculate the Fermi-Dirac distribution and add ...
     as a column to the DataFrame. Flagged option to add another column with the Boltzmann distribution.
 
     Parameters:
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
         testboltzmann (bool): Boolean for whether to write the Maxwell-Boltzmann distribution as a column.
 
     Returns:
         df (dataframe): Edited electron DataFrame containing the new columns with equilibrium distribution functions.
     """
 
-    df['k_FD'] = (np.exp((df['energy'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T)) + 1) ** (-1)
+    df['k_FD'] = (np.exp((df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb_joule * cons.T)) + 1) ** (-1)
     if testboltzmann:
-        boltzdist = (np.exp((df['energy'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T))) ** (-1)
+        boltzdist = (np.exp((df['energy'].values * cons.e - cons.mu * cons.e) / (cons.kb_joule * cons.T))) ** (-1)
         partfunc = np.sum(boltzdist)
         df['k_MB'] = boltzdist/partfunc
     return df
 
 
-def calculate_density(df):
+def calculate_density(df, cons):
     """Function that calculates the carrier density by a sum of the equilibrium distribution function over the BZ.
     Parameters:
         df (dataframe): Electron DataFrame indexed by kpt containing the eq. dist associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         n (double): The value of the carrier density specified by the equilibrium FD distribution.
     """
     f0 = df['k_FD'].values
     Nuc = len(df)
-    n = 2 / Nuc / c.Vuc * np.sum(f0)
+    n = 2 / Nuc / cons.Vuc * np.sum(f0)
     return n
-
 
 # The following set of functions calculate solutions to the steady Boltzmann Equation and write the solutions to file.
 def iterative_solver_lowfield(df, scm, canonical=False, applyscmFac=False):
@@ -116,7 +116,7 @@ def write_iterative_solver_lowfield(outLoc, inLoc, fieldVector, df, cons, canoni
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         EField = fieldVector[i]
         f_next, f_0 = iterative_solver_lowfield(df, scm, canonical=canonical2, applyscmFac=applyscmFac2)
@@ -125,7 +125,7 @@ def write_iterative_solver_lowfield(outLoc, inLoc, fieldVector, df, cons, canoni
         print('Solution written to file for ' + "{:.1e}".format(EField))
 
 
-def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size=1):
+def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     """Given a scattering matrix, calculate a modified matrix using the central difference stencil and apply bc. In the
     current version, bc is not applied to points in the L valley.
 
@@ -133,6 +133,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size=1):
         matrix (memmap): Scattering matrix in simple linearization.
         fullkpts_df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
         E (dbl): Value of the electric field in V/m.
+        cons (class): Class object containing physical and problem parameters.
         scm (memmap): Memory-mapped array containing the scattering matrix, assumed simple linearization by default.
         step_size (dbl): Specifies the spacing between consecutive k-pts for the integration.
 
@@ -187,23 +188,23 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size=1):
 
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
-            matrix[ordered_inds[0], ordered_inds[1]] += 1/(2*step_size)*c.e*E/c.hbar_joule
-            matrix[ordered_inds[1], ordered_inds[2]] += 1/(2*step_size)*c.e*E/c.hbar_joule
+            matrix[ordered_inds[0], ordered_inds[1]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[1], ordered_inds[2]] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the other "boundary condition" i.e. the point with the most positive kx value is treated as being zero
             # (and virtual point above)
             last = len(ordered_inds) - 1
             slast = len(ordered_inds) - 2
-            matrix[ordered_inds[last], ordered_inds[slast]] += -1 * 1/(2*step_size)*c.e*E/c.hbar_joule
-            matrix[ordered_inds[slast], ordered_inds[slast-1]] += -1 * 1/(2*step_size)*c.e*E/c.hbar_joule
+            matrix[ordered_inds[last], ordered_inds[slast]] += -1 * 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[ordered_inds[slast], ordered_inds[slast-1]] += -1 * 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
             # Set the value of all other points in the slice
             inter_inds = ordered_inds[2:slast]
             inter_inds_up = ordered_inds[3:last]
             inter_inds_down = ordered_inds[1:slast-1]
 
-            matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*c.e*E/c.hbar_joule
-            matrix[inter_inds, inter_inds_down] += -1 * 1/(2*step_size)*c.e*E/c.hbar_joule
+            matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*cons.e*E/cons.hbar_joule
+            matrix[inter_inds, inter_inds_down] += -1 * 1/(2*step_size)*cons.e*E/cons.hbar_joule
 
         else:
             shortslice_inds.append(slice_inds)
@@ -218,7 +219,7 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, step_size=1):
     return shortslice_inds, np.array(icinds), lvalley_inds, matrix
 
 
-def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, field, canonical=False, applyscmFac=False,
+def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, canonical=False, applyscmFac=False,
                                              convergence=5E-4):
     """Iterative solver for calculating steady BTE solution in the form of Chi using the full finite difference matrix.
 
@@ -297,7 +298,7 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, field,
     return x_next, x_0
 
 
-def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, canonical2=False, applyscmFac2=False,
+def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, cons, canonical2=False, applyscmFac2=False,
                                convergence2=5E-4):
     """Calls the iterative solver hard coded for solving the BTE with full FDM and writes the chis to file.
 
@@ -307,6 +308,7 @@ def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, canonical2=False,
         linearization by default.
         fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
         canonical2 (bool): Boolean that specifies whether the scattering matrix is assumed simple or canonical
         linearization, assumed simple by default (i.e. canonical=False).
         applyscmFac2 (bool): Boolean that specifies whether or not to apply the 2*pi squared factor.
@@ -317,41 +319,43 @@ def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, canonical2=False,
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         fdm = np.memmap(inLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
-        x_next, _ = steady_state_full_drift_iterative_solver(scm, fdm, df, EField, canonical2, applyscmFac2, convergence2)
+        x_next, _ = steady_state_full_drift_iterative_solver(scm, fdm, df, cons, EField, canonical2, applyscmFac2, convergence2)
         del fdm
         np.save(outLoc + 'chi_' + '3_' + "{:.1e}".format(EField), x_next)
         print('Solution written to file for ' + "{:.1e}".format(EField))
 
 
 # The following set of functions calculate quantities based on steady state chi solutions
-def drift_velocity(chi, df):
+def drift_velocity(chi, df, cons):
     """Function that calculates the drift velocity given a Chi solution through moment of group velocity in BZ. Note that
     this makes use of the equilibrium carrier density.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         vd (double): The value of the drift velocity for a given steady-state solution of the BTE in m/s.
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    n = calculate_density(df)
+    n = calculate_density(df,cons)
     vd = np.sum(f * df['vx [m/s]']) / np.sum(f)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Drift velocity is {:.10E} [m/s]'.format(vd))
     return vd
 
 
-def calculate_noneq_density(chi, df):
+def calculate_noneq_density(chi, df, cons):
     """Function that calculates the carrier density by a sum of the steady non-eq distribution function over the BZ.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt containing the eq. dist associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         n (double): The value of the carrier density specified by the noneq distribution.
@@ -359,36 +363,38 @@ def calculate_noneq_density(chi, df):
     f0 = df['k_FD'].values
     f = chi + f0
     Nuc = len(df)
-    n = 2 / Nuc / c.Vuc * np.sum(f)
+    n = 2 / Nuc / cons.Vuc * np.sum(f)
     print('Non-eq carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     return n
 
 
-def mean_energy(chi, df):
+def mean_energy(chi, df, cons):
     """Function that calculates the mean energy by a sum of the electron energy over the BZ. Note that this makes use of
     the equilbrium carrier density.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         meanE (double): The value of the mean carrier energy in eV.
     """
     f0 = df['k_FD'].values
     f = chi + df['k_FD'].values
-    n = calculate_density(df)
+    n = calculate_density(df,cons)
     meanE = np.sum(f * kpt_df['energy']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
 
 
-def calc_mobility(F, df, E=None):
+def calc_mobility(F, df, cons, E=None):
     """Calculate mobility as per Wu Li PRB 92, 2015. Solution must be fed in as either F with no field provided or psi
     with a field provided.
     Parameters:
         F (nparray): Numpy array containing a solution of the steady Boltzmann equation in F form or as psi
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
         E (dbl): Number specifying the field in V/m.
 
     Returns:
@@ -397,24 +403,25 @@ def calc_mobility(F, df, E=None):
     Nuc = len(kptdata)
     if np.any(E):
         print('Field specified. Mobility calculated using general definition of conductivity')
-        prefactor = 2 * c.e / c.Vuc / Nuc / E
+        prefactor = 2 * cons.e / cons.Vuc / Nuc / E
         conductivity = prefactor * np.sum(df['vx [m/s]'] * F)
     else:
         print('Field not specified. Mobility calculated using linear in E formula.')
-        prefactor = 2 * c.e ** 2 / (c.Vuc * c.kb_joule * c.T * Nuc)
+        prefactor = 2 * cons.e ** 2 / (cons.Vuc * cons.kb_joule * cons.T * Nuc)
         conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
-    n = calculate_density(df)
-    mobility = conductivity / c.e / carrier_dens
+    n = calculate_density(df, cons)
+    mobility = conductivity / cons.e / carrier_dens
     print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
 
-def calc_L_Gamma_pop(chi, df):
+def calc_L_Gamma_pop(chi, df, cons):
     """Function that calculates the carrrier populations in the Gamma and L valleys given a Chi solution.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         ng (double): The value of the gamma carrier population in m^-3.
@@ -428,13 +435,13 @@ def calc_L_Gamma_pop(chi, df):
     g_inds = df.loc[df['ingamma'] == 1].index - 1
     l_inds = df.loc[df['ingamma'] == 0].index - 1
     Nuc = len(df)
-    n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
-    n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
+    n_g = 2 / Nuc / cons.Vuc * np.sum(f[g_inds])
+    n_l = 2 / Nuc / cons.Vuc * np.sum(f[l_inds])
     return n_g, n_l
 
 
 # The following set of functions calculate the solutions to the effective Boltzmann equation and write the solutions
-def eff_distr_g_iterative_solver(chi, matrix_sc, matrix_fd, df, field, simplelin=True, applyscmFac=False, convergence=5E-4):
+def eff_distr_g_iterative_solver(chi, matrix_sc, matrix_fd, df, c, field, simplelin=True, applyscmFac=False, convergence=5E-4):
     """Iterative solver for calculating effective BTE solution in the form of g_Chi using the full finite difference matrix.
 
     Parameters:
@@ -442,6 +449,7 @@ def eff_distr_g_iterative_solver(chi, matrix_sc, matrix_fd, df, field, simplelin
         matrix_sc (memmap): Scattering matrix in simple linearization by default..
         matrix_fd (memmap): Finite difference matrix, generated by apply_centraldiff_matrix.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        c (class): Class object containing physical and problem parameters.
         field (dbl): Value of the electric field in V/m.
         simplelin (bool): Boolean that specifies whether the scattering matrix is assumed simple or canonical
         applyscmFac (bool): Boolean that specifies whether or not to apply the 2*pi squared factor.
@@ -460,7 +468,7 @@ def eff_distr_g_iterative_solver(chi, matrix_sc, matrix_fd, df, field, simplelin
 
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, df, field, c)
     # Will only be able to run if you have a precalculated chi stored on file
-    vd = drift_velocity(chi, df)
+    vd = drift_velocity(chi, df, c)
     f0 = df['k_FD'].values
     f = chi + f0
     b = (-1) * ((df['vx [m/s]'] - vd) * f)
@@ -506,7 +514,7 @@ def eff_distr_g_iterative_solver(chi, matrix_sc, matrix_fd, df, field, simplelin
     return g_next, g_0
 
 
-def write_iterative_solver_g(outLoc, inLoc, fieldVector, df, simplelin2=True, applyscmFac2 = False,
+def write_iterative_solver_g(outLoc, inLoc, fieldVector, df, cons, simplelin2=True, applyscmFac2 = False,
                                convergence2=5E-4):
     """Calls the iterative solver hard coded for solving the effective BTE w/FDM and writes the chis to file.
 
@@ -516,6 +524,7 @@ def write_iterative_solver_g(outLoc, inLoc, fieldVector, df, simplelin2=True, ap
         linearization by default.
         fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
         simplelin2 (bool): Boolean that specifies whether the scattering matrix is assumed simple or canonical
         linearization, assumed simple by default (i.e. canonical=False).
         applyscmFac2 (bool): Boolean that specifies whether or not to apply the 2*pi squared factor.
@@ -532,34 +541,41 @@ def write_iterative_solver_g(outLoc, inLoc, fieldVector, df, simplelin2=True, ap
         chi = np.load(outLoc + 'chi_3_{:.1E}_field.npy'.format(field))
         fdm = np.memmap(inLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
-        g_next, g_0 = eff_distr_g_iterative_solver(chi, scm, fdm, kptdf, field, simplelin2, applyscmFac2, convergence2)
+        g_next, g_0 = eff_distr_g_iterative_solver(chi, scm, fdm, kptdf, cons, field, simplelin2, applyscmFac2, convergence2)
         np.save(outLoc + 'g' + '1_' + "{:.1e}".format(EField), g_0)
         np.save(outLoc + 'g' + '3_' + "{:.1e}".format(EField), g_next)
         print('Solution written to file for ' + "{:.1e}".format(EField))
 
 
 # The following set of functions calculate the low-frequency PSD based on solutions to effective Boltzmann equation
-def lowfreq_noise(g, df):
+def lowfreq_noise(g, df, cons):
     """Calculate the low-frequency non-eq diffusion coefficent as per Wu Li PRB 92, 2015. Effective distribution g must
     be passed in as chi.
     Parameters:
         g (nparray): Effective distribution function passed as chi.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        cons (class): Class object containing physical and problem parameters.
 
     Returns:
         noise (double): The value of the non-eq diffusion coefficient in m^2/s.
     """
-    n = calculate_density(df)
+    n = calculate_density(df, cons)
     Nuc = len(df)
-    noise = 1 / Nuc / c.Vuc * np.sum(g*df['vx [m/s]']) / n
+    noise = 1 / Nuc / cons.Vuc * np.sum(g*df['vx [m/s]']) / n
     return noise
 
-def load_problem_params(inLoc):
-    print('Physical constants loaded from' + in_Loc)
-    print('Temperature is {:.1e} K'.format(c.T))
-    print('Fermi Level is {:.1e} eV'.format(c.mu))
-    print('Gaussian broadening is {:.1e} eV'.format(c.b))
-    print('Grid density is {:.1e} cubed'.format(c.gD))
+def load_problem_params(in_loc):
+    import sys
+    sys.path.append(in_Loc)
+    import user_input
+    con = user_input.PhysicalConstants()
+    print('Physical constants loaded form user_input in ' + in_Loc)
+
+    print('Temperature is {:.1e} K'.format(con.T))
+    print('Fermi Level is {:.1e} eV'.format(con.mu))
+    print('Gaussian broadening is {:.1e} eV'.format(con.b))
+
+    return con
 
 
 if __name__ == '__main__':
@@ -573,11 +589,12 @@ if __name__ == '__main__':
     in_Loc = 'C:/users/TheDingDongDiddler/Dropbox (Minnich ' \
              'Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
 
-    load_problem_params(in_Loc)
+    con = load_problem_params(in_Loc)
     fields = np.array([0,1e1,1e2,1e3])
+    np.save(outLoc + 'fields', fields)
     electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
     # Steady state solutions
     # write_iterative_solver_lowfield(out_Loc, in_Loc, fields, electron_df, con, canonical2=False, applyscmFac2=False)
-    # write_iterative_solver_fdm(out_Loc, in_Loc, fields, electron_df, con, canonical2=False, applyscmFac2=False,
-    #                            convergence2=5E-4)
+    write_iterative_solver_fdm(out_Loc, in_Loc, fields, electron_df, con, canonical2=False, applyscmFac2=False,
+                               convergence2=5E-4)
 
