@@ -1,6 +1,4 @@
 import numpy as np
-import pickle
-import os
 import pandas
 
 # Change this directory to point at the problem-specific input folder (containing 'ProblemParameters.txt')
