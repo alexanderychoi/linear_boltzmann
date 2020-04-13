@@ -416,17 +416,18 @@ if __name__ == '__main__':
 
     # Steady state solutions
     fields = np.array([5])
-    applySCMFac = True
+    applySCMFac = pp.scmBool
+    simpleLin = pp.simpleBool
     writeLowfield = True
     writeFDM = True
     writeEffective = True
 
     if writeLowfield:
-        write_iterative_solver_lowfield(out_Loc, in_Loc, electron_df, True, applySCMFac)
+        write_iterative_solver_lowfield(out_Loc, in_Loc, electron_df, simpleLin, applySCMFac)
         print('Low field solutions written to file as Fs.')
     if writeFDM:
-        write_iterative_solver_fdm(out_Loc, in_Loc, fields, electron_df, False, applySCMFac,5E-4)
+        write_iterative_solver_fdm(out_Loc, in_Loc, fields, electron_df, not simpleLin, applySCMFac,5E-4)
         print('FDM solutions written to file as chis.')
     if writeEffective:
-        write_iterative_solver_g(out_Loc, in_Loc, fields, electron_df,True, applySCMFac,5E-4)
+        write_iterative_solver_g(out_Loc, in_Loc, fields, electron_df, simpleLin, applySCMFac,5E-4)
         print('Effective distribution solutions written to file.')

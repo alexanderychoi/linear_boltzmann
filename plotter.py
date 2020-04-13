@@ -277,13 +277,14 @@ if __name__ == '__main__':
     plotKDE = True
     plotScattering = True
     plotNoise = True
+    applySCMFac = pp.scmBool
 
     if plotTransport:
         driftvel_mobility_vs_field(out_Loc, electron_df, fields)
     if plotKDE:
         plot_vel_KDEs(out_Loc, KDEField, electron_df, plotRTA=True, plotLowField=True, plotFDM=True)
     if plotScattering:
-        plot_scattering_rates(in_Loc, electron_df, applyscmFac=True)
+        plot_scattering_rates(in_Loc, electron_df, applySCMFac)
     if plotNoise:
         plot_noise(out_Loc, fields, electron_df, plotRTA=True, plotFDM=True)
     plt.show()
