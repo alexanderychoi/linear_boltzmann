@@ -75,7 +75,7 @@ def write_iterative_solver_lowfield(outLoc,inLoc,df,simplelin2=True,applyscmFac2
         low-field iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     f_next, f_0 = iterative_solver_lowfield(df, scm, simplelin=simplelin2, applyscmFac=applyscmFac2)
     np.save(outLoc +'f_' + '1', f_0)
     np.save(outLoc +'f_' + '2', f_next)
@@ -252,7 +252,7 @@ def write_iterative_solver_fdm(outLoc, inLoc, fieldVector, df, canonical2=False,
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         fdm = np.memmap(inLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
@@ -382,7 +382,7 @@ def write_iterative_solver_g(outLoc, inLoc, fieldVector, df, simplelin2=True, ap
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(np.unique(df['k_inds']))
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     for i in range(len(fieldVector)):
         EField = fieldVector[i]
         chi = np.load(outLoc + 'chi_3_{:.1e}.npy'.format(EField))

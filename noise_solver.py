@@ -35,7 +35,7 @@ def noiseT(inLoc,D,mobility,df):
         low-field iterative, #3 corresponds to full finite-difference iterative.
     """
     nkpts = len(df)
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     scmfac = (2*np.pi)**2
     invdiag = (np.diag(scm) * scmfac) ** (-1)
     f0 = df['k_FD'].values

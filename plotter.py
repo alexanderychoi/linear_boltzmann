@@ -252,7 +252,8 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
         print('Applying 2 Pi-squared factor.')
     else:
         scmfac = 1
-    scm = np.memmap(inLoc + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(42433, 42433))
+    nkpts = len(df)
+    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     rates = (-1) * np.diag(scm) * scmfac * 1E-12
     plt.figure()
     plt.plot(df['energy'], rates, '.', MarkerSize=3)

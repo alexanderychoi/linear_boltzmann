@@ -10,6 +10,9 @@ simpleBool = False
 # Should we apply the (2*Pi)**2 factor to the scattering rates as a correction? False = Don't apply factor.
 scmBool = True
 
+# What's the name of the matrix?
+scmName = 'scattering_matrix_5.87_simple.mmap'
+
 # Load the problem parameters (these change depending on which calc we're doing)
 df = pandas.read_csv(inputLoc+'ProblemParameters.txt')
 T = df.iloc[0]['LatticeT(K)']
