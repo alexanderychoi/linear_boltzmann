@@ -1,6 +1,7 @@
 import numpy as np
 import constants as c
 import utilities
+import problemparameters as pp
 
 
 # The following set of functions calculate the low-frequency PSD based on solutions to effective Boltzmann equation
@@ -40,15 +41,15 @@ def noiseT(inLoc,D,mobility,df):
     f0 = df['k_FD'].values
     tau = -np.sum(f0 * invdiag) / np.sum(f0)
     n = utilities.calculate_density(df)
-    D_eq = c.kb_joule*c.T*tau/(0.063*9.11e-31)
+    D_eq = c.kb_joule*pp.T*tau/(0.063*9.11e-31)
 
     con_eq = c.e*tau/(0.063*9.11e-31) * c.e * n *2
     con_neq = mobility * c.e * n
-    Tn = D/D_eq*c.T*con_eq/con_neq
+    Tn = D/D_eq*pp.T*con_eq/con_neq
     return Tn
 
 
 if __name__ == '__main__':
-    out_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/1_Pipeline/Output/'
-    in_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
+    out_Loc = pp.outputLoc
+    in_Loc = pp.inputLoc
     utilities.read_problem_params(in_Loc)

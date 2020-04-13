@@ -1,16 +1,4 @@
 import numpy as np
-import pandas
-
-# Change this directory to point at the problem-specific input folder (containing 'ProblemParameters.txt')
-inLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
-
-# Load the problem parameters (these change depending on which calc we're doing)
-df = pandas.read_csv(inLoc+'ProblemParameters.txt')
-T = df.iloc[0]['LatticeT(K)']
-mu = df.iloc[0]['FermiLevel(eV)']
-b = df.iloc[0]['GaussianBroadening(eV)']
-gD = df.iloc[0]['GridDensity(k)']
-
 
 # Physical parameters (these will typically not change)
 a = 5.5563606  # Lattice constant for GaAs [Angstrom]

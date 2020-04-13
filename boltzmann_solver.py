@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import constants as c
 import utilities
+import problemparameters as pp
 
 
 # The following set of functions calculate solutions to the steady Boltzmann Equation and write the solutions to file.
@@ -184,7 +185,7 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, field,
     else:
         scmfac = 1
     _, icinds, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field)
-    b = (-1)*c.e*field/c.kb_joule/c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
+    b = (-1)*c.e*field/c.kb_joule/pp.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
@@ -405,8 +406,8 @@ if __name__ == '__main__':
     # with a new scattering matrix, which is probably good so we don't mess up.
 
     # Point to inputs and outputs
-    out_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/1_Pipeline/Output/'
-    in_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
+    out_Loc = pp.outputLoc
+    in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
     utilities.read_problem_params(in_Loc)

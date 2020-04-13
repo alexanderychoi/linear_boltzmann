@@ -4,7 +4,7 @@ import noise_solver
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+import problemparameters as pp
 
 def velocity_distribution_kde(chi, df,title=[]):
     """Takes chi solutions which are already calculated and plots the KDE of the distribution in velocity space
@@ -262,8 +262,8 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
 
 if __name__ == '__main__':
     # Points to inputs and outputs
-    out_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/1_Pipeline/Output/'
-    in_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
+    out_Loc = pp.outputLoc
+    in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
     utilities.read_problem_params(in_Loc)

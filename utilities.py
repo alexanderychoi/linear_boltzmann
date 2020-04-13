@@ -1,14 +1,5 @@
 import numpy as np
-import scipy.sparse.linalg
-import multiprocessing as mp
-from functools import partial
-import os
-import pandas as pd
-import time
-import re
-import glob
-import matplotlib.pyplot as plt
-import pickle
+import problemparameters as pp
 import constants as c
 
 
@@ -20,10 +11,10 @@ def read_problem_params(inLoc):
         None. Just prints the values of the problem parameters.
     """
     print('Physical constants loaded from' + inLoc)
-    print('Temperature is {:.1e} K'.format(c.T))
-    print('Fermi Level is {:.1e} eV'.format(c.mu))
-    print('Gaussian broadening is {:.1e} eV'.format(c.b))
-    print('Grid density is {:.1e} cubed'.format(c.gD))
+    print('Temperature is {:.1e} K'.format(pp.T))
+    print('Fermi Level is {:.1e} eV'.format(pp.mu))
+    print('Gaussian broadening is {:.1e} eV'.format(pp.b))
+    print('Grid density is {:.1e} cubed'.format(pp.gD))
 
 
 # The following set of functions calculate quantities based on the kpt DataFrame
@@ -39,9 +30,9 @@ def fermi_distribution(df, testboltzmann=False):
         df (dataframe): Edited electron DataFrame containing the new columns with equilibrium distribution functions.
     """
 
-    df['k_FD'] = (np.exp((df['energy'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T)) + 1) ** (-1)
+    df['k_FD'] = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
     if testboltzmann:
-        boltzdist = (np.exp((df['energy'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T))) ** (-1)
+        boltzdist = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
         partfunc = np.sum(boltzdist)
         df['k_MB'] = boltzdist/partfunc
     return df
@@ -128,7 +119,7 @@ def calc_mobility(F, df):
     """
     Nuc = len(df)
     print('Field not specified. Mobility calculated using linear in E formula.')
-    prefactor = 2 * c.e ** 2 / (c.Vuc * c.kb_joule * c.T * Nuc)
+    prefactor = 2 * c.e ** 2 / (c.Vuc * c.kb_joule * pp.T * Nuc)
     conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
     n = calculate_density(df)
     mobility = conductivity / c.e / n
@@ -193,12 +184,12 @@ def f2chi(f, df, field):
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
     """
     f0 = np.squeeze(df['k_FD'].values)
-    prefactor = field * c.e / c.kb_joule / c.T * f0 * (1 - f0)
+    prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
     chi = np.squeeze(f) * np.squeeze(prefactor)
     return chi
 
 
 if __name__ == '__main__':
-    out_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/1_Pipeline/Output/'
-    in_Loc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/#1_Problem/0_Data/'
+    out_Loc = pp.outputLoc
+    in_Loc = pp.inputLoc
     read_problem_params(in_Loc)
