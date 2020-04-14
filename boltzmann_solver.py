@@ -410,6 +410,7 @@ if __name__ == '__main__':
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
+    utilities.load_electron_df(in_Loc)
     utilities.read_problem_params(in_Loc)
     electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
     electron_df = utilities.fermi_distribution(electron_df)

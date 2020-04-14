@@ -1,6 +1,148 @@
 import numpy as np
 import problemparameters as pp
 import constants as c
+import os
+import pandas as pd
+
+
+def load_electron_df(inLoc):
+    """Loads the electron dataframe from the .VEL output from Perturbo, transforms into cartesian coordinates, and
+    translates the points back into the FBZ.
+    Parameters:
+        inLoc (str): String containing the location of the directory containing the input text file.
+    Returns:
+        None. Just prints the values of the problem parameters.
+    """
+
+    os.chdir(inLoc)
+    kvel = np.loadtxt('gaas.vel', skiprows=3)
+    kvel_df = pd.DataFrame(data=kvel,
+                           columns=['k_inds', 'bands', 'energy', 'kx [2pi/alat]', 'ky [2pi/alat]', 'kz [2pi/alat]',
+                                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
+    kvel_df[['k_inds']] = kvel_df[['k_inds']].astype(int)
+    cart_kpts = kvel_df.copy(deep=True)
+    cart_kpts['kx [2pi/alat]'] = cart_kpts['kx [2pi/alat]'].values * 2 * np.pi / c.a
+    cart_kpts['ky [2pi/alat]'] = cart_kpts['ky [2pi/alat]'].values * 2 * np.pi / c.a
+    cart_kpts['kz [2pi/alat]'] = cart_kpts['kz [2pi/alat]'].values * 2 * np.pi / c.a
+    cart_kpts.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
+                         'vz_dir', 'v_mag [m/s]']
+    cart_kpts['vx [m/s]'] = np.multiply(cart_kpts['vx_dir'].values, cart_kpts['v_mag [m/s]'])
+    cart_kpts = cart_kpts.drop(['bands'], axis=1)
+    cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir'], axis=1)
+
+    cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * c.e - c.mu * c.e)
+                              / (c.kb_joule * pp.T)) + 1) ** (-1)
+    reciplattvecs = np.concatenate((c.b1[np.newaxis, :], c.b2[np.newaxis, :], c.b3[np.newaxis, :]), axis=0)
+    fbzcartkpts = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
+    fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
+    fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
+    fbzcartkpts.to_pickle(in_Loc + 'electron_df.pkl')
+
+
+def translate_into_fbz(coords, rlv):
+    """Manually translate coordinates back into first Brillouin zone
+
+    The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
+    with these planes. Since the FBZ is centered on Gamma, the position vectors of the high symmetry points are also
+    vectors normal to the plane. Once we have these vectors, we find the distance between a given point (u) and
+    a plane (n) using the dot product of the difference vector (u-n). And if the distance is positive, then translate
+    back into the FBZ.
+
+    Args:
+        rlv: numpy array of vectors where the rows are the reciprocal lattice vectors given in Cartesian basis
+        coords: numpy array of coordinates where each row is a point. For N points, coords is N x 3
+
+    Returns:
+        fbzcoords:
+    """
+    # First, find all the vectors defining the boundary
+    b1, b2, b3 = rlv[0, :], rlv[1, :], rlv[2, :]
+    b1pos = 0.5 * b1[:, np.newaxis]
+    b2pos = 0.5 * b2[:, np.newaxis]
+    b3pos = 0.5 * b3[:, np.newaxis]
+    lpos = 0.5 * (b1 + b2 + b3)[:, np.newaxis]
+    b1neg = -1 * b1pos
+    b2neg = -1 * b2pos
+    b3neg = -1 * b3pos
+    lneg = -1 * lpos
+    xpos = -0.5 * (b1 + b3)[:, np.newaxis]
+    ypos = 0.5 * (b2 + b3)[:, np.newaxis]
+    zpos = 0.5 * (b1 + b2)[:, np.newaxis]
+    xneg = -1 * xpos
+    yneg = -1 * ypos
+    zneg = -1 * zpos
+
+    # Place them into octants to avoid problems when finding points
+    # (naming is based on positive or negative for coordinate so octpmm means x+ y- z-. p=plus, m=minus)
+    vecs_ppp = np.concatenate((b2pos, xpos, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_ppm = np.concatenate((b1neg, xpos, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmm = np.concatenate((lneg, xpos, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmm = np.concatenate((b2neg, xneg, yneg, zneg), axis=1)[:, :, np.newaxis]
+    vecs_mmp = np.concatenate((b1pos, xneg, yneg, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpp = np.concatenate((lpos, xneg, ypos, zpos), axis=1)[:, :, np.newaxis]
+    vecs_mpm = np.concatenate((b3pos, xneg, ypos, zneg), axis=1)[:, :, np.newaxis]
+    vecs_pmp = np.concatenate((b3neg, xpos, yneg, zpos), axis=1)[:, :, np.newaxis]
+    # Construct matrix which is 3 x 4 x 8 where we have 3 Cartesian coordinates, 4 vectors per octant, and 8 octants
+    allvecs = np.concatenate((vecs_ppp, vecs_ppm, vecs_pmm, vecs_mmm, vecs_mmp, vecs_mpp, vecs_mpm, vecs_pmp), axis=2)
+
+    # Since the number of points in each octant is not equal, can't create array of similar shape. Instead the 'octant'
+    # array below is used as a boolean map where 1 (true) indicates positive, and 0 (false) indicates negative
+    octants = np.array([[1, 1, 1],
+                        [1, 1, 0],
+                        [1, 0, 0],
+                        [0, 0, 0],
+                        [0, 0, 1],
+                        [0, 1, 1],
+                        [0, 1, 0],
+                        [1, 0, 1]])
+
+    fbzcoords = np.copy(coords)
+    exitvector = np.zeros((8, 1))
+    iteration = 0
+    while not np.all(exitvector):  # don't exit until all octants have points inside
+        exitvector = np.zeros((8, 1))
+        for i in range(8):
+            oct_vecs = allvecs[:, :, i]
+            whichoct = octants[i, :]
+            if whichoct[0]:
+                xbool = fbzcoords[:, 0] > 0
+            else:
+                xbool = fbzcoords[:, 0] < 0
+            if whichoct[1]:
+                ybool = fbzcoords[:, 1] > 0
+            else:
+                ybool = fbzcoords[:, 1] < 0
+            if whichoct[2]:
+                zbool = fbzcoords[:, 2] > 0
+            else:
+                zbool = fbzcoords[:, 2] < 0
+            octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
+            octcoords = fbzcoords[octindex, :]
+            allplanes = 0
+            for j in range(oct_vecs.shape[1]):
+                diffvec = octcoords[:, :] - np.tile(oct_vecs[:, j], (octcoords.shape[0], 1))
+                dist2plane = np.dot(diffvec, oct_vecs[:, j]) / np.linalg.norm(oct_vecs[:, j])
+                outside = dist2plane[:] > 0
+                if np.any(outside):
+                    octcoords[outside, :] = octcoords[outside, :] - \
+                                            (2 * np.tile(oct_vecs[:, j], (np.count_nonzero(outside), 1)))
+                    # Times 2 because the vectors that define FBZ are half of the full recip latt vectors
+                    # print('number outside this plane is %d' % np.count_nonzero(outside))
+                else:
+                    allplanes += 1
+            if allplanes == 4:
+                exitvector[i] = 1
+            fbzcoords[octindex, :] = octcoords
+        iteration += 1
+        print('Finished %d iterations of bringing points into FBZ' % iteration)
+    uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
+    deltakx = np.diff(uniqkx)
+    smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
+    for kxi in np.nditer(np.nonzero(smalldkx)):
+        kx = uniqkx[kxi]
+        fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+    print('Done bringing points into FBZ!')
+    return fbzcoords
 
 
 def read_problem_params(inLoc):
