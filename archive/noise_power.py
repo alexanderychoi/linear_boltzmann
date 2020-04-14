@@ -136,47 +136,6 @@ def iterative_solver_lowfield(kptdf, matrix, simplelin=False):
     return f_next, f_0
 
 
-def calculate_density(kpt_df, cons):
-    f0 = kpt_df['k_FD'].values
-    Nuc = len(kpt_df)
-    Vuc = np.dot(np.cross(cons.b1, cons.b2), cons.b3) * 1E-30  # unit cell volume in m^3
-    n = 2 / Nuc / Vuc * np.sum(f0)
-    return n
-
-
-def calculate_RTA_chi(F, kptsdf, c, EFieldVector, data_location):
-    for i in range(len(EFieldVector)):
-        EField = EFieldVector[i]
-        chi_RTA = plotting.f2chi(F, kptsdf, c, EField)
-        np.save(data_location + 'chi_RTA' + "{:.1e}".format(EField), chi_RTA)
-        print('chi_RTA' + "{:.1e}".format(EField))
-
-
-def process_RTA_chis(data_location, kpts_df, con):
-    p = plt.figure()
-    vels = []
-    fields = []
-    for fname in glob.glob(data_location+'/*chi_RTA*.npy'):
-        z = np.load(fname)
-        spl_word = 'eV\chi_RTA'
-        res = str(fname).partition(spl_word)[2]
-        res2 = res.partition('.npy')[0]
-        print(res2)
-        plotting.plot_like_Stanton(z, kpts_df, con, res2)
-        vels = np.append(vels, drift_velocity(z, kpts_df, con))
-        print(drift_velocity(z, kpts_df, con))
-        fields = np.append(fields,float(res2))
-    plt.legend()
-    plt.xlabel('vx (m/s)')
-    plt.ylabel('(chi_RTA + f0)/n')
-
-    plt.figure()
-    plt.plot(fields, vels)
-    plt.xlabel('EField (V/m)')
-    plt.ylabel('vd (m/s)')
-    plt.show()
-
-
 def conj_grad_soln(kptdf, matrix):
     b = (-1) * np.squeeze(kptdf[['vx [m/s]']].values * kptdf[['k_FD']].values) * (1 - kptdf['k_FD'])
 
