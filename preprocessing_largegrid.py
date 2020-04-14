@@ -479,7 +479,7 @@ if __name__ == '__main__':
 
     nkpts = 42433
     mmaplines = 100000
-    nthreads = 48
+    nthreads = 6
 
     # For the 200x200x200 kpoints will need to load and process line by line since file too large.
     # First load all the other stuff.
@@ -569,7 +569,6 @@ if __name__ == '__main__':
         pool = mp.Pool(nthreads)
 
         k_inds = [k0 + 1 for k0 in range(nkpts)]
-        # k_inds = [1]
 
         # Don't need a separate key for k energies since only one band. I checked for both datasets
         k_en_key = cart_kpts_df.sort_values(by=['k_inds'])
