@@ -7,6 +7,7 @@ kb_joule = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-
 kb_ev = 8.617333 * (10 ** -5)  # Boltzmann constant in eV/K
 hbar_joule = 1.054571817 * 10 ** (-34)  # Reduced Planck's constant [J/s]
 hbar_ev = 6.582119569 * 10 ** (-16)  # Reduced Planck's constant [eV/s]
+ryd2ev = 13.6056980659
 
 # Lattice vectors
 a1 = np.array([-2.7781803, 0.0000000, 2.7781803])

@@ -316,7 +316,8 @@ def calc_L_Gamma_pop(chi, df):
 
 
 def f2chi(f, df, field):
-    """Convert F_k from low field approximation iterative scheme into chi which is easy to plot. Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
+    """Convert F_k from low field approximation iterative scheme into chi which is easy to plot. 
+    Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
     then we need to bring these factors back in to get the right units
     Parameters:
         f (nparray): Numpy array containing a solution of the steady Boltzmann equation in f form.
