@@ -3,6 +3,7 @@ import problemparameters as pp
 import constants as c
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def load_electron_df(inLoc):
@@ -30,14 +31,18 @@ def load_electron_df(inLoc):
     cart_kpts = cart_kpts.drop(['bands'], axis=1)
     cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir'], axis=1)
 
-    cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * c.e - c.mu * c.e)
+    cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * c.e - pp.mu * c.e)
                               / (c.kb_joule * pp.T)) + 1) ** (-1)
     reciplattvecs = np.concatenate((c.b1[np.newaxis, :], c.b2[np.newaxis, :], c.b3[np.newaxis, :]), axis=0)
-    fbzcartkpts = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
+    fbzcartkpts, delta_kx = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
+    #d1 = delta_kx[(delta_kx <0.05) & (delta_kx>0.001)]
+    #print(np.mean(d1))
+    #plt.plot(d1)
+    #plt.show()
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
     fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
-    fbzcartkpts.to_pickle(in_Loc + 'electron_df.pkl')
-
+    fbzcartkpts.to_pickle(inLoc + 'electron_df.pkl')
+    print('Wrote electron DF')
 
 def translate_into_fbz(coords, rlv):
     """Manually translate coordinates back into first Brillouin zone
@@ -142,7 +147,7 @@ def translate_into_fbz(coords, rlv):
         kx = uniqkx[kxi]
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
     print('Done bringing points into FBZ!')
-    return fbzcoords
+    return fbzcoords, deltakx
 
 
 def read_problem_params(inLoc):
@@ -153,10 +158,10 @@ def read_problem_params(inLoc):
         None. Just prints the values of the problem parameters.
     """
     print('Physical constants loaded from' + inLoc)
-    print('Temperature is {:.1e} K'.format(pp.T))
-    print('Fermi Level is {:.1e} eV'.format(pp.mu))
-    print('Gaussian broadening is {:.1e} eV'.format(pp.b))
-    print('Grid density is {:.1e} cubed'.format(pp.gD))
+    print('Temperature is {:.3e} K'.format(pp.T))
+    print('Fermi Level is {:.3e} eV'.format(pp.mu))
+    print('Gaussian broadening is {:.3e} eV'.format(pp.b))
+    print('Grid density is {:.3e} cubed'.format(pp.gD))
 
 
 # The following set of functions calculate quantities based on the kpt DataFrame
