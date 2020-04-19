@@ -223,9 +223,7 @@ def translate_into_fbz(coords, rlv):
     for kxi in np.nditer(np.nonzero(smalldkx)):
         kx = uniqkx[kxi]
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
-
     print('Done bringing points into FBZ!')
-
     return fbzcoords
 
 
