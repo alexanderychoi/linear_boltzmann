@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import problemparameters as pp
 
+
 def velocity_distribution_kde(chi, df,title=[]):
     """Takes chi solutions which are already calculated and plots the KDE of the distribution in velocity space
     Parameters:
@@ -47,7 +48,7 @@ def velocity_distribution_kde(chi, df,title=[]):
     ax.set_ylabel(r'Occupation [arb.]')
     plt.legend()
     if title:
-        plt.title(title)
+        plt.title(title,fontsize=8)
 
 
 def plot_vel_KDEs(outLoc,field,df,plotRTA=True,plotLowField=True,plotFDM=True):
@@ -63,14 +64,14 @@ def plot_vel_KDEs(outLoc,field,df,plotRTA=True,plotLowField=True,plotFDM=True):
     if plotRTA:
         f_i = np.load(outLoc + 'f_1.npy')
         chi_1_i = utilities.f2chi(f_i,df,field)
-        velocity_distribution_kde(chi_1_i, df, title='RTA Chi {:.1e} V/m'.format(field))
+        velocity_distribution_kde(chi_1_i, df, title='RTA Chi {:.1e} V/m '.format(field) + pp.title_str)
     if plotLowField:
         f_i = np.load(outLoc + 'f_2.npy')
         chi_2_i = utilities.f2chi(f_i,df,field)
-        velocity_distribution_kde(chi_2_i, df, title='Low Field Iterative Chi {:.1e} V/m'.format(field))
+        velocity_distribution_kde(chi_2_i, df, title='Low Field Iterative Chi {:.1e} V/m '.format(field) + pp.title_str)
     if plotFDM:
         chi_3_i = np.load(outLoc + 'chi_3_{:.1e}.npy'.format(field))
-        velocity_distribution_kde(chi_3_i, df, title='FDM Iterative Chi {:.1e} V/m'.format(field))
+        velocity_distribution_kde(chi_3_i, df, title='FDM Iterative Chi {:.1e} V/m '.format(field) + pp.title_str)
 
 
 def plot_noise(outLoc,fieldVector,df,plotRTA=True,plotFDM=True):
@@ -115,6 +116,7 @@ def plot_noise(outLoc,fieldVector,df,plotRTA=True,plotFDM=True):
 
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Non-equilibrium diffusion coefficient [m^2/s]')
+    plt.title(pp.title_str)
     plt.legend()
 
     plt.figure()
@@ -126,6 +128,7 @@ def plot_noise(outLoc,fieldVector,df,plotRTA=True,plotFDM=True):
 
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Noise Temperature [K]')
+    plt.title(pp.title_str)
     plt.legend()
 
 
@@ -186,6 +189,7 @@ def driftvel_mobility_vs_field(outLoc,df,fieldVector,plotRTA=True,plotLowField=T
         plt.plot(kvcm, vd_3, linewidth=2, label='FDM Iterative')
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Drift velocity [m/s]')
+    plt.title(pp.title_str)
     plt.legend()
 
     plt.figure()
@@ -197,6 +201,7 @@ def driftvel_mobility_vs_field(outLoc,df,fieldVector,plotRTA=True,plotLowField=T
         plt.plot(kvcm, n_3, linewidth=2, label='FDM Iterative')
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Carrier population [m^-3]')
+    plt.title(pp.title_str)
     plt.legend()
 
     plt.figure()
@@ -208,6 +213,7 @@ def driftvel_mobility_vs_field(outLoc,df,fieldVector,plotRTA=True,plotLowField=T
         plt.plot(kvcm, meanE_3, linewidth=2, label='FDM Iterative')
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Mean energy [eV]')
+    plt.title(pp.title_str)
     plt.legend()
 
     plt.figure()
@@ -219,6 +225,7 @@ def driftvel_mobility_vs_field(outLoc,df,fieldVector,plotRTA=True,plotLowField=T
         plt.plot(kvcm, mu_3, linewidth=2, label='FDM Iterative')
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Mobility [$cm^2 V^{-1} s^{-1}$]')
+    plt.title(pp.title_str)
     plt.legend()
 
     plt.figure()
@@ -233,10 +240,11 @@ def driftvel_mobility_vs_field(outLoc,df,fieldVector,plotRTA=True,plotLowField=T
         plt.plot(kvcm, nl_3, linewidth=2, label='FDM Iterative L')
     plt.xlabel('Field [kV/cm]')
     plt.ylabel(r'Carrier Population [m^-3]$]')
+    plt.title(pp.title_str)
     plt.legend()
 
 
-def plot_scattering_rates(inLoc,df,applyscmFac=False):
+def plot_scattering_rates(inLoc,df,applyscmFac=False,simplelin=True):
     """Takes chi solutions which are already calculated and plots drift velocity vs field
     Parameters:
         inLoc (str): String containing the location of the directory containing the scattering matrix, assumed simple
@@ -254,11 +262,19 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
         scmfac = 1
     nkpts = len(df)
     scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    rates = (-1) * np.diag(scm) * scmfac * 1E-12
+    if simplelin:
+        rates = (-1) * np.diag(scm) * scmfac * 1E-12
+        #inds = np.where(np.asarray(rates==0))
+        #print(inds)
+    else:
+        chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
+        rates = (-1) * np.diag(scm) * scmfac * 1E-12 / chi2psi
     plt.figure()
     plt.plot(df['energy'], rates, '.', MarkerSize=3)
+    #plt.plot(df.loc[inds[0],['energy']], rates[inds[0]], '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
+    plt.title(pp.title_str)
 
 
 if __name__ == '__main__':
@@ -267,25 +283,28 @@ if __name__ == '__main__':
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
+    utilities.load_electron_df(in_Loc)
     utilities.read_problem_params(in_Loc)
     electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Specify fields to plot over
-    fields = np.array([1e1,2e1,3e1,4e1,5e1,6e1,7e1,8e1,9e1,1e2,2e2,3e2,4e2,5e2,6e2,7e2,8e2,9e2,2e3,4e3,6e3,8e3,1e4,2e4,4e4,6e4,8e4,1.1e5,1.2e5,1.3e5,1.4e5,1.5e5,1.6e5,1.7e5,1.8e5,1.9e5,2e5])
-    KDEField = 1.8e5
+    # fields = np.array([1e1,2e1,3e1,4e1,5e1,6e1,7e1,8e1,9e1,1e2,2e2,3e2,4e2,5e2,6e2,7e2,8e2,9e2,2e3,4e3,6e3,8e3,1e4,2e4,4e4,6e4,8e4,1.1e5,1.2e5,1.3e5,1.4e5,1.5e5,1.6e5,1.7e5,1.8e5,1.9e5,2e5])
+    fields = np.logspace(0,5,5)
+    KDEField = fields[8]
     plotTransport = True
     plotKDE = True
     plotScattering = True
     plotNoise = True
     applySCMFac = pp.scmBool
+    simpleLin = pp.simpleBool
 
     if plotTransport:
         driftvel_mobility_vs_field(out_Loc, electron_df, fields)
     if plotKDE:
         plot_vel_KDEs(out_Loc, KDEField, electron_df, plotRTA=True, plotLowField=True, plotFDM=True)
     if plotScattering:
-        plot_scattering_rates(in_Loc, electron_df, applySCMFac)
+        plot_scattering_rates(in_Loc, electron_df, applySCMFac,simpleLin)
     if plotNoise:
         plot_noise(out_Loc, fields, electron_df, plotRTA=True, plotFDM=True)
     plt.show()
