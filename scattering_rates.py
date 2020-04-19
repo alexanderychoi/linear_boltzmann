@@ -6,102 +6,9 @@ from functools import partial
 import os
 import pandas as pd
 import time
-import re
-
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-
-import plotly.offline as py
-import plotly.graph_objs as go
-import plotly
-
-
-def coupling_matrix_calc(g_df):
-    """
-    This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.
-    Parameters:
-    -----------
-
-    abs_g_df : pandas dataframe containing:
-
-        k_inds : vector_like, shape (n,1)
-        Index of k point (pre-collision)
-
-        q_inds : vector_like, shape (n,1)
-        Index of q point
-
-        k+q_inds : vector_like, shape (n,1)
-        Index of k point (post-collision)
-
-        m_band : vector_like, shape (n,1)
-        Band index of post-collision state
-
-        n_band : vector_like, shape (n,1)
-        Band index of pre-collision state
-
-        im_mode : vector_like, shape (n,1)
-        Polarization of phonon mode
-
-        g_element : vector_like, shape (n,1)
-        E-ph matrix element
-
-        k_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of pre collision state
-
-        k+q_fermi_dist : vector_like, shape (n,1)
-        Fermi distribution of post collision state
-
-        k_energy : vector_like, shape (n,1)
-        Energy of the pre collision state
-
-        k+q_energy : vector_like, shape (n,1)
-        Energy of the post collision state
-
-
-    T : scalar
-    Lattice temperature in Kelvin
-
-    Returns:
-    --------
-
-    """
-    # Physical constants
-    e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
-    kb = 1.38064852 * 10 ** (-23);  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    h = 1.0545718 * 10 ** (-34)
-
-    g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
-    g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
-
-    g_df_ems['weight'] = np.multiply(
-        np.multiply((g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values), g_df_ems['g_element'].values),
-        g_df_ems['gaussian']) / 13.6056980659
-    g_df_abs['weight'] = np.multiply(
-        np.multiply((g_df_abs['BE'].values + g_df_abs['k+q_FD'].values), g_df_abs['g_element'].values),
-        g_df_abs['gaussian']) / 13.6056980659
-
-    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
-    summed_abs_df = abs_sr.to_frame().reset_index()
-
-    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
-    summed_ems_df = ems_sr.to_frame().reset_index()
-
-    return summed_abs_df, summed_ems_df
-
-
-def check_symmetric(a, rtol=1e-05, atol=1e-08):
-    return np.allclose(a, a.T, rtol=rtol, atol=atol)
-
-
-def calc_sparsity():
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
-    nelperrow = np.zeros(nkpts)
-    for ik in range(nkpts):
-        nelperrow[ik] = np.count_nonzero(matrix[ik, :])
-        print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
-    return sparsity, nelperrow
+import constants as c
 
 
 def relaxation_times_parallel(k, nlambda):
@@ -144,80 +51,28 @@ def parse_scatteringrates():
         os.remove('k{:05d}.rate'.format(thisk))
         if thisk % 100 == 0:
             print('Done with k={:d}'.format(thisk))
-
-    # f = open('rates.out')
-    # alltext = f.read()
-    #
-    # matches = re.findall(r'For k=(\d+), the scattering rate \(1\/ps\) is (\d+\.\d+E.\d+)', alltext)
-    #
-    # rates = np.zeros(nkpts)
-    # for match in matches:
-    #     thisk = np.int(match[0])
-    #     thisrate = np.float(match[1])
-    #     rates[thisk-1] = thisrate
-
     return rates
 
 
-def relaxation_times(g_df, cart_kpts_df):
-    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
-    Also returns the off-diagonal scattering term.
-
-    CHECK THE FORMULAS FROM MAHAN"""
-    g_df['ems_weight'] = np.multiply(
-        np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-        g_df['ems_gaussian']) / 13.6056980659
-    g_df['abs_weight'] = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                                     g_df['abs_gaussian']) / 13.6056980659
-
-    g_df['weight'] = g_df['ems_weight'].values + g_df['abs_weight'].values
-
-    sr = g_df.groupby(['k_inds'])['weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
-        np.unique(g_df['q_id'].values))
-
-    scattering = sr.to_frame().reset_index()
-    scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    scattering_array[scattering['k_inds'].values-1] = scattering['weight'].values
-
-    g_df['OD_abs_weight'] = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k_FD'].values,
-                                                    g_df['abs_gaussian'].values), g_df['g_element']) / 13.6056980659
-    g_df['OD_ems_weight'] = np.multiply(np.multiply(g_df['BE'].values + g_df['k_FD'].values,
-                                                    g_df['ems_gaussian'].values), ['g_element']) / 13.6056980659
-
-    g_df['OD_weight'] = g_df['OD_ems_weight'].values + g_df['OD_abs_weight'].values
-    OD_sr = g_df.groupby(['k_inds'])['OD_weight'].agg('sum') * 2 * np.pi * 2.418 * 10 ** (17) * 10 ** (-12) / len(
-        np.unique(g_df['q_id'].values))
-
-    OD_scattering = OD_sr.to_frame().reset_index()
-    OD_scattering_array = np.zeros(len(np.unique(cart_kpts_df['k_inds'])))
-    OD_scattering_array[OD_scattering['k_inds'].values-1] = OD_scattering['weight'].values
-
-    return scattering_array
-
-
 def rta_mobility(datadir, enk, vels):
-    """Calculate mobility using RTA and near equilibrium approximation"""
+    """Calculate mobility using RTA and near equilibrium approximation.
+    Parameters:
+        datadir (str): String location containing the scattering_rates.npy
+        enk (nparray): Array containing the energy of each electron in eV
+        vels (nparray): Array containing the group velocity in the transport direction in m/s
+    Returns:
+        mobility (dbl): Value of the RTA mobility in m^2/V-s
+    """
     os.chdir(datadir)
     rates = np.load('scattering_rates.npy') * 36.5  # arbitrary factor to test if I can get the mobility
     taus = 1 / rates * 1E-12  # in seconds
-        
     npts = 4000  # number of points in the KDE
     ssigma = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     # Need to define the energy range that I'm doing integration over
-    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
     en_axis = np.linspace(enk.min(), enk.max(), npts)
     dx = (en_axis.max() - en_axis.min()) / npts
-
-    vuc = 1E-30 * np.dot(np.cross(con.a1, con.a2), con.a3)  # volume of the unit cell in m^3
-    
-    e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
-    # kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
-    kb = 8.617333 * (10**-5)  # Boltzmann constant in eV / K
-    temperature = 300  # Kelvin
-    beta = 1 / (kb * temperature)
-    fermi = con.mu  # Fermi level
-    # fermi = con.mu + 0.3  # Fermi level
-    # fermi = enk.min() - (1.424 / 2)  # Fermi level
+    beta = 1 / (c.kb_ev * c.T)
+    fermi = c.mu  # Fermi level
     spread = 100*dx
 
     def dfde(x):
@@ -226,36 +81,38 @@ def rta_mobility(datadir, enk, vels):
 
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
-
     # Calculating carrier concentration using Eqn 22 in W. Li PRB 92 (2015)
-    nc = 2E18  # the conc (m^-3) that makes the calculation work for a midgap fermi level
-    nc = (2 / len(enk) / vuc) * np.sum((np.exp((enk - fermi) * beta) + 1) ** -1)
+    nc = (2 / len(enk) / c.Vuc) * np.sum((np.exp((enk - fermi) * beta) + 1) ** -1)
     print('The carrier concentration is {:.3E} in m^-3'.format(nc))
 
     for k in range(len(enk)):
         istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
         iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
         ssigma[istart:iend] += vels[k]**2 * taus[k] * gaussian(en_axis[istart:iend], enk[k])
-
-    ssigma = ssigma * 2 / vuc
-    conductivity = (e**2) / e * np.trapz(np.multiply(ssigma, -1 * dfde(en_axis)), en_axis)  # divided by e for eV to J
+    ssigma = ssigma * 2 / c.Vuc
+    conductivity = (c.e**2) / c.e * np.trapz(np.multiply(ssigma, -1 * dfde(en_axis)), en_axis)  # divided by e for eV to J
     print('Conductivity is {:.3E}'.format(conductivity))
     print('dF/dE is {:.3E}'.format(np.sum(-1 * dfde(en_axis))))
-    mobility = conductivity / nc / e * 1E4 / len(enk)  # 1E4 to get from m^2 to cm^2
+    mobility = conductivity / nc / c.e * 1E4 / len(enk)  # 1E4 to get from m^2 to cm^2
     print('Mobility is {:.3E}'.format(mobility))
-
     font = {'size': 14}
     mpl.rc('font', **font)
     plt.plot(en_axis, np.multiply(ssigma, -1 * dfde(en_axis)), '.')
     plt.xlabel('Energy (eV)')
     plt.ylabel('TDF * dF/dE (a.u.)')
     plt.show()
-
     return mobility
 
 
 def assemble_full_matrix(mat_row_dir):
-    """Once all of the rows have been created, can put them all together."""
+    """Once all of the rows have been created, can put them all together. This function enters the mat_row_dir and reads
+    the memmaps written by matrixrows_par and assembles a full memmaped array.
+    Parameters:
+        mat_row_dir (str): String location containing the row-by-row matrix memmaps.
+
+    Returns:
+        Writes scattering_matrix.mmap to file.
+    """
     matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
     for k in range(nkpts):
         kind = k + 1
@@ -266,12 +123,13 @@ def assemble_full_matrix(mat_row_dir):
 
 
 def matrixrows_par(k, nlambda, nk):
-    """Calculate the full scattering matrix row by row and in parallel
-    
-    We do this because the data is chunked by kpoint, so the most efficient way to do this is by calculating each row
-    of the scattering matrix since the information required for each row is contained in each kpoint chunk. This allows 
-    the calculation to be done in parallel. For each kpoint, will input the row data into a memmap. Afterwards, the 
-    full matrix can be assembled quickly in serial.
+    """Calculate the full scattering matrix row by row and in parallel. We do this because the data is chunked by
+    kpoint, so the most efficient way to do this is by calculating each row of the scattering matrix since the
+    information required for each row is contained in each kpoint chunk. This allows the calculation to be done in
+    parallel. For each kpoint, will input the row data into a memmap. Afterwards, the full matrix can be assembled
+    quickly in serial.
+    Parameters:
+        k
     """
     # Create memmap of the row
     istart = time.time()
@@ -328,29 +186,6 @@ def matrix_check_colsum(sm):
         # print(k)
         # print('Finished k={:d}'.format(k+1))
     return colsum
-
-
-def renormalize_matrix(matrix):
-    nk = matrix.shape[0]
-    prevcolsum = np.ones(nk)
-    normcolsum = np.ones(nk)
-    for i in range(nk):
-        col = matrix[:, i]
-        diag = col[i]
-        offdiaginds = [j != i for j in range(nk)]
-        normalized_offd = col[offdiaginds] / np.sum(col[offdiaginds]) * -1 * diag
-        normcolsum[i] = np.sum(normalized_offd) + diag
-        prevcolsum[i] = np.sum(col)
-        print('For k={:d}:'.format(i+1))
-        print('The previous column sum was {:.6E}'.format(prevcolsum[i]))
-        print('The normalized column sum is now {:.6E}\n'.format(normcolsum[i]))
-    if np.any(prevcolsum == 1) or np.any(normcolsum == 1):
-        exit('Some columns did not get fixed?')
-    else:
-        print('The norm of the vector of OLD column sums is {:.6E}'.format(np.linalg.norm(prevcolsum)))
-        print('The norm of the vector of NEW column sums is {:.6E}'.format(np.linalg.norm(normcolsum)))
-        print('The max old colsum is {:.6E}'.format(prevcolsum.max()))
-        print('The max new colsum is {:.6E}'.format(normcolsum.max()))
 
 
 if __name__ == '__main__':
