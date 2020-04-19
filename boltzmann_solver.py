@@ -102,7 +102,8 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
     # Do not  flush the memmap it will overwrite consecutively.
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
-    step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m
+    step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+    # step_size = 0.0070675 * 1E10  # 1/Angstrom to 1/m
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
@@ -416,7 +417,8 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Steady state solutions
-    fields = np.array([5])
+    # fields = np.array([1e1,2e1,3e1,4e1,5e1,6e1,7e1,8e1,9e1,1e2,2e2,3e2,4e2,5e2,6e2,7e2,8e2,9e2,2e3,4e3,6e3,8e3,1e4,2e4,4e4,6e4,8e4,1.1e5,1.2e5,1.3e5,1.4e5,1.5e5,1.6e5,1.7e5,1.8e5,1.9e5,2e5])
+    fields = np.logspace(0,5,5)
     applySCMFac = pp.scmBool
     simpleLin = pp.simpleBool
     writeLowfield = True
