@@ -304,12 +304,13 @@ def plot_bandstructure(kpts, enk):
 
 
 def plot_scattering_rates(data_dir, energies, kpts):
-    rates = np.load(data_dir + 'scattering_rates_direct.npy')
-    rates = rates * (2*np.pi)**2
+    factor = 1E-12 / 3043002 * (13.605693122994**2) * (2*np.pi)**2
+    factor = 1E-12 / 42433 * (13.605693122994**2)
+    rates = np.load(data_dir + 'scattering_rates.npy') * factor
 
-    scm = np.memmap(data_dir + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(42433, 42433))
+    # scm = np.memmap(data_dir + 'scattering_matrix_5.87_simple.mmap', dtype='float64', mode='r', shape=(42433, 42433))
     # f0 = np.squeeze(kpts['k_FD'])
-    rates = (-1) * np.diag(scm) * (2*np.pi)**2 * 1E-12
+    # rates = (-1) * np.diag(scm) * 1E-12 * factor
 
     plt.plot(energies, rates, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
@@ -663,7 +664,7 @@ def main():
 
     # bz_3dscatter(con, cart_kpts_df, enk_df)
     # fo = bz_3dscatter(con, fbzcartkpts, enk_df)
-    # plot_scattering_rates(data_loc, enk, cartkpts)
+    plot_scattering_rates(data_loc, enk, cartkpts)
 
     field = 2E5
 
@@ -684,11 +685,11 @@ def main():
     print('Percent difference between FDM iterative chi and low field iterative chi = {:.4f}%'
           .format(diff / np.linalg.norm(chi_iter) * 100))
 
-    plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field iterative', 'FDM'],
-                     fbzcartkpts, plotf0=False, summed=True)
+    # plot_solns_vs_kx([chi_iter, chi_fullfield], ['low field iterative', 'FDM'],
+    #                  fbzcartkpts, plotf0=False, summed=True)
 
     convergedfields = [1E3, 1E4, 5E4, 1E5, 1.5E5, 2E5]
-    driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
+    # driftvel_mobility_vs_field(data_loc, cartkpts, convergedfields, f_iter)
 
     # chi = f2chi(f_rta,  noise_power.fermi_distribution(cart_kpts_df), con, 1e1)
     # np.save(data_loc+'chiRTA_1e1', chi)

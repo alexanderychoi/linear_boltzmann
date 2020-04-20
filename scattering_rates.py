@@ -6,9 +6,102 @@ from functools import partial
 import os
 import pandas as pd
 import time
+<<<<<<< HEAD
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import constants as c
+=======
+import re
+import matplotlib.pyplot as plt
+
+
+def coupling_matrix_calc(g_df):
+    """This function takes a list of k-point indices and returns the Fermi-distributions and energies associated with each
+    k-point on that list. The Fermi distributions are calculated with respect to a particular chemical potential.
+
+    Parameters:
+    -----------
+
+    abs_g_df : pandas dataframe containing:
+
+        k_inds : vector_like, shape (n,1)
+        Index of k point (pre-collision)
+
+        q_inds : vector_like, shape (n,1)
+        Index of q point
+
+        k+q_inds : vector_like, shape (n,1)
+        Index of k point (post-collision)
+
+        m_band : vector_like, shape (n,1)
+        Band index of post-collision state
+
+        n_band : vector_like, shape (n,1)
+        Band index of pre-collision state
+
+        im_mode : vector_like, shape (n,1)
+        Polarization of phonon mode
+
+        g_element : vector_like, shape (n,1)
+        E-ph matrix element
+
+        k_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of pre collision state
+
+        k+q_fermi_dist : vector_like, shape (n,1)
+        Fermi distribution of post collision state
+
+        k_energy : vector_like, shape (n,1)
+        Energy of the pre collision state
+
+        k+q_energy : vector_like, shape (n,1)
+        Energy of the post collision state
+
+
+    T : scalar
+    Lattice temperature in Kelvin
+
+    Returns:
+    --------
+
+    """
+    # Physical constants
+    e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
+    kb = 1.38064852 * 10 ** (-23);  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
+    h = 1.0545718 * 10 ** (-34)
+
+    g_df_ems = g_df.loc[(g_df['collision_state'] == -1)].copy(deep=True)
+    g_df_abs = g_df.loc[(g_df['collision_state'] == 1)].copy(deep=True)
+
+    g_df_ems['weight'] = np.multiply(
+        np.multiply((g_df_ems['BE'].values + 1 - g_df_ems['k+q_FD'].values), g_df_ems['g_element'].values),
+        g_df_ems['gaussian']) / 13.6056980659
+    g_df_abs['weight'] = np.multiply(
+        np.multiply((g_df_abs['BE'].values + g_df_abs['k+q_FD'].values), g_df_abs['g_element'].values),
+        g_df_abs['gaussian']) / 13.6056980659
+
+    abs_sr = g_df_abs.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
+    summed_abs_df = abs_sr.to_frame().reset_index()
+
+    ems_sr = g_df_ems.groupby(['k_inds', 'k+q_inds'])['weight'].agg('sum')
+    summed_ems_df = ems_sr.to_frame().reset_index()
+
+    return summed_abs_df, summed_ems_df
+
+
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+
+
+def calc_sparsity():
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
+    nelperrow = np.zeros(nkpts)
+    for ik in range(nkpts):
+        nelperrow[ik] = np.count_nonzero(matrix[ik, :])
+        print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
+    return sparsity, nelperrow
+>>>>>>> 7cb41ec26fb589c276f566fe7e3ea2787a8d302c
 
 
 def relaxation_times_parallel(k, nlambda):
@@ -20,17 +113,17 @@ def relaxation_times_parallel(k, nlambda):
     # divisor = 121904  # number of unique q_ids for k100
     # divisor = 3043002  # number of unique q_ids for k200
     prefactor = 13.6056980659
+    ryd2ev = 13.605693122994
+    hbar_ev = 6.582119569 * 1E-16
 
     g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
 
-    ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-                             g_df['ems_gaussian'])
-    abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                             g_df['abs_gaussian'])
+    ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * (g_df['g_element']) * g_df['ems_gaussian']
+    abs_weight = (g_df['BE'] + g_df['k+q_FD']) * (g_df['g_element']) * g_df['abs_gaussian']
+
     g_df['weight'] = ems_weight + abs_weight
 
-    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda * prefactor**2
-    # sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / (6.582119 * 10 ** -16) * (10 ** -12) / nlambda
+    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / hbar_ev / nlambda * ryd2ev**2
 
     print(r'For k={:d}, the scattering rate (1/ps) is {:.24E}'.format(k, sr))
 
@@ -95,8 +188,12 @@ def rta_mobility(datadir, enk, vels):
     print('dF/dE is {:.3E}'.format(np.sum(-1 * dfde(en_axis))))
     mobility = conductivity / nc / c.e * 1E4 / len(enk)  # 1E4 to get from m^2 to cm^2
     print('Mobility is {:.3E}'.format(mobility))
+<<<<<<< HEAD
     font = {'size': 14}
     mpl.rc('font', **font)
+=======
+
+>>>>>>> 7cb41ec26fb589c276f566fe7e3ea2787a8d302c
     plt.plot(en_axis, np.multiply(ssigma, -1 * dfde(en_axis)), '.')
     plt.xlabel('Energy (eV)')
     plt.ylabel('TDF * dF/dE (a.u.)')
@@ -105,6 +202,7 @@ def rta_mobility(datadir, enk, vels):
 
 
 def assemble_full_matrix(mat_row_dir):
+<<<<<<< HEAD
     """Once all of the rows have been created, can put them all together. This function enters the mat_row_dir and reads
     the memmaps written by matrixrows_par and assembles a full memmaped array.
     Parameters:
@@ -114,6 +212,10 @@ def assemble_full_matrix(mat_row_dir):
         Writes scattering_matrix.mmap to file.
     """
     matrix = np.memmap('scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+=======
+    """Once all of the rows have been created, can put them all together."""
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+>>>>>>> 7cb41ec26fb589c276f566fe7e3ea2787a8d302c
     for k in range(nkpts):
         kind = k + 1
         krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), dtype='float64', mode='r', shape=nkpts)
@@ -140,16 +242,14 @@ def matrixrows_par(k, nlambda, nk):
 
     ryd2ev = 13.605693122994
     hbar_ev = 6.582119569 * 1E-16
-    # # Diagonal term
-    # # In canonical scattering matrix, the diagonal element is not the scattering rate
-    # krow[k-1] = scattering_rates[k-1]
+    # Diagonal term
+    # In canonical scattering matrix, the diagonal element is not the scattering rate
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
 
-    diag_abs_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-        g_df['k_FD'].values, 1 - g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['abs_gaussian'])
-
-    diag_ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-        1 - g_df['k_FD'].values, g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['ems_gaussian'])
+    # diag_abs_weight = (g_df['BE'] + g_df['k+q_FD']) * g_df['g_element'] * g_df['abs_gaussian']
+    # diag_ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * g_df['g_element'] * g_df['ems_gaussian']
+    diag_abs_weight = g_df['k_FD'] * (1 - g_df['k+q_FD']) * g_df['BE'] * g_df['g_element'] * g_df['abs_gaussian']
+    diag_ems_weight = (1 - g_df['k_FD']) * g_df['k+q_FD'] * g_df['BE'] * g_df['g_element'] * g_df['ems_gaussian']
 
     diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / hbar_ev / nlambda * ryd2ev**2
     krow[k-1] = (-1) * diagterm
@@ -159,18 +259,12 @@ def matrixrows_par(k, nlambda, nk):
     for kp in np.nditer(nkprime):
         kpi = int(kp)
         kp_rows = g_df[g_df['k+q_inds'] == kpi]
-        # Commented out section below is the scattering matrix with simple linearization
-        # abs_weight = np.multiply(np.multiply((kp_rows['BE'].values + 1 - kp_rows['k_FD'].values),
-        #                                      kp_rows['g_element'].values), kp_rows['abs_gaussian'])
-        # ems_weight = np.multiply(np.multiply(kp_rows['BE'].values + kp_rows['k_FD'].values,
-        #                                      kp_rows['g_element'].values), kp_rows['ems_gaussian'])
-        abs_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-            kp_rows['k_FD'].values, 1 - kp_rows['k+q_FD'].values), kp_rows['BE'].values), kp_rows['g_element']),
-            kp_rows['abs_gaussian'])
-
-        ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-            1 - kp_rows['k_FD'].values, kp_rows['k+q_FD'].values), kp_rows['BE'].values), kp_rows['g_element']),
-            kp_rows['ems_gaussian'])
+        # Scattering matrix with simple linearization
+        # abs_weight = (kp_rows['BE'] + 1 - kp_rows['k_FD']) * kp_rows['g_element'] * kp_rows['abs_gaussian']
+        # ems_weight = (kp_rows['BE'] + kp_rows['k_FD']) * kp_rows['g_element'] * kp_rows['ems_gaussian']
+        # Scattering matrix with canonical (symmetric) linearization
+        abs_weight = kp_rows['k_FD'] * (1 - kp_rows['k+q_FD']) * kp_rows['BE'] * kp_rows['g_element'] * kp_rows['abs_gaussian']
+        ems_weight = (1 - kp_rows['k_FD']) * kp_rows['k+q_FD'] * kp_rows['BE'] * kp_rows['g_element'] * kp_rows['ems_gaussian']
         tot_weight = abs_weight + ems_weight
         krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / hbar_ev / nlambda * ryd2ev**2
 
@@ -183,7 +277,7 @@ def matrix_check_colsum(sm):
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
-        # print(k)
+        print(k)
         # print('Finished k={:d}'.format(k+1))
     return colsum
 
@@ -209,8 +303,8 @@ if __name__ == '__main__':
     n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
 
-    operatingsystem = 'windows'  # NOTE: Change this to windows if you need
-    calc_scattering_rates = False
+    operatingsystem = 'linux'  # NOTE: Change this to windows if you need
+    calc_scattering_rates = True
     if calc_scattering_rates:
         os.chdir(chunk_loc)
         scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
@@ -225,7 +319,7 @@ if __name__ == '__main__':
             sr = parse_scatteringrates()
             np.save(data_loc + 'scattering_rates', sr)
         elif operatingsystem is 'linux':
-            pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes, opsys='linux'), kinds)
+            pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
             scattering_rates = np.array(scattering_rates)
             np.save(data_loc + 'scattering_rates', scattering_rates)
         else:
@@ -252,15 +346,13 @@ if __name__ == '__main__':
         end = time.time()
         print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
 
-    # rta_rates = np.load('scattering_rates.npy')
-    # os.chdir(data_loc)
     # NOTE: The assemble_full_matrix function will overwrite previous matrix. Be careful
     # assemble_full_matrix(data_loc + 'mat_rows/')
 
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-    cs = matrix_check_colsum(matrix)
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest column sum is {:E}'.format(cs.max()))
+    # matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    # cs = matrix_check_colsum(matrix)
+    # print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
+    # print('The largest column sum is {:E}'.format(cs.max()))
     # a = check_symmetric(matrix)
     # print('Result of check symmetric is ' + str(a))
 

@@ -27,7 +27,7 @@ def fermi_distribution(df, fermilevel=6.03, temp=300, testboltzmann=False):
     return df
 
 
-def steady_state_solns(matrix, numkpts, fullkpts_df, field):
+def direct_solver(matrix, numkpts, fullkpts_df, field):
     """Get steady state solutions"""
     e = 1.602 * 10 ** (-19)  # fundamental electronic charge [C]
     kb = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
@@ -233,10 +233,12 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
     step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m
-
+    
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
-    kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
-                                 kptdata['kz [1/A]'].values**2)
+    print('Columns of kptdata are')
+    print(kptdata.columns)
+
+    kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]']**2 + kptdata['ky [1/A]']**2 + kptdata['kz [1/A]']**2)
     kptdata['ingamma'] = kptdata['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
 
     uniq_yz = np.unique(kptdata[['ky [1/A]', 'kz [1/A]']].values, axis=0)
@@ -307,10 +309,15 @@ def apply_centraldiff_matrix(matrix, fullkpts_df, E, cons, step_size=1):
 
 def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=False):
     # field input should be in Volts/meter
-    # scmfac = 1E12 * (2 * np.pi)**2
-    scmfac = (2 * np.pi)**2
+    if field == 0:
+        print('Field is 0. The deviational term must be 0. Returned directly')
+        x_next, x_0 = 0, 0
+        return x_next, x_0
 
     _, icinds, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
+
+    # scmfac = 1E12 * (2 * np.pi)**2
+    scmfac = (2 * np.pi)**2
 
     b = (-1)*c.e*field/c.kb_joule/c.T * np.squeeze(kptdf['vx [m/s]'] * kptdf['k_FD']) * (1 - kptdf['k_FD'])
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
@@ -326,7 +333,6 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     counter = 0
     x_prev = x_0
 
-    from scipy.linalg import get_blas_funcs
     print('Starting convergence loop')
     loopstart = time.time()
     while errpercent > convergence and counter < 40:
@@ -371,14 +377,15 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, c, fie
     return x_next, x_0
 
 
-def eff_distr_g_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=True):
+def g_eff_distr_iterative_solver(matrix_sc, matrix_fd, kptdf, c, field, convergence=5E-4, simplelin=True):
     """DEFAULT IS TO RETURN CHI"""
     _, _, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field, c)
     # Will only be able to run if you have a precalculated psi stored on file
     psi = np.load(data_loc + '/psi/psi_iter_{:.1E}_field.npy'.format(field))
     chi = plotting.psi2chi(psi, kptdf)
+    print('Average abs val of chi is {:.3E}'.format(np.average(np.abs(chi))))
     vd = drift_velocity(chi, kptdf, c)
-    f0 = kptdf['k_FD'].values
+    f0 = kptdf['k_FD']
     f = chi + f0
     b = (-1) * ((kptdf['vx [m/s]'] - vd) * f)
     # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
@@ -482,11 +489,14 @@ if __name__ == '__main__':
     cgcalc = False
     approach = 'iterative'
     if approach is 'matrix' and lowfieldsolns:
-        # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(scm, fbzcartkpts, field, con)
-        edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
-        fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
-        plotting.highlighted_points(fo, edgepoints, con)
-        f, f_star = steady_state_solns(modified_matrix, nkpts, cartkpts, 1)
+        print('This code is not active')
+        # field = 1E2  # Volts per meter
+        # fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+        # _, edgepoints, lpts, modified_matrix = apply_centraldiff_matrix(fdm, fbzcartkpts, field, con)
+        # edgepoints = fbzcartkpts[np.isin(fbzcartkpts['k_inds'], np.array(edgepoints))]
+        # fo = plotting.bz_3dscatter(con, fbzcartkpts, enk_df)
+        # plotting.highlighted_points(fo, edgepoints, con)
+        # f, f_star = direct_solver(modified_matrix, nkpts, cartkpts, field)
     elif approach is 'iterative' and lowfieldsolns:
         if itsoln:
             start = time.time()
@@ -517,11 +527,11 @@ if __name__ == '__main__':
         print('The percent difference is {:.3E}'.format(np.linalg.norm(f_iter-f_cg)/np.linalg.norm(f_iter)))
 
     solve_full_steadystatebte = False
-    fields = [0, 1E3, 2E3, 4E3, 6E3, 8E3, 1.5E4, 2E4]
-    # field = 1E4
+    fields = [0]
+    field = 0
     if solve_full_steadystatebte:
         for field in fields:
-            print('\n Doing field = {:.2E} V/m'.format(field))
+            print('\nDoing field = {:.2E} V/m'.format(field))
             fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
             psi_fulldrift, psi_rta = steady_state_full_drift_iterative_solver(scm, fdm, fbzcartkpts, con, field,
                                                                               simplelin=simplelinearization)
@@ -531,7 +541,7 @@ if __name__ == '__main__':
     if solve_eff_distr:
         for field in fields:
             fdm = np.memmap(data_loc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-            g = eff_distr_g_iterative_solver(scm, fdm, fbzcartkpts, con, field, simplelin=True)
+            g, g_0 = g_eff_distr_iterative_solver(scm, fdm, fbzcartkpts, con, field, simplelin=True)
             np.save(data_loc + 'g_eff_distr/g_{:.1E}_field'.format(field), g)
 
     f_cg = np.load('f_conjgrad.npy')
@@ -569,14 +579,14 @@ if __name__ == '__main__':
     print('\nFDM iterative drift velocity')
     drift_velocity(chi_full, cartkpts, con)
 
-    print('\nLow field RTA mean energy')
-    mean_energy(chi_rta, cartkpts, con)
-    print('\nLow field iterative mean energy')
-    mean_energy(chi_iter, cartkpts, con)
-    print('\nFDM iterative mean energy')
-    mean_energy(chi_full, cartkpts, con)
-    print('\nEquilbrium mean energy')
-    mean_energy(0*nkpts, cartkpts, con)
+    # print('\nLow field RTA mean energy')
+    # mean_energy(chi_rta, cartkpts, con)
+    # print('\nLow field iterative mean energy')
+    # mean_energy(chi_iter, cartkpts, con)
+    # print('\nFDM iterative mean energy')
+    # mean_energy(chi_full, cartkpts, con)
+    # print('\nEquilbrium mean energy')
+    # mean_energy(0*nkpts, cartkpts, con)
 
     # plt.figure()
     # plt.title('Solns unsorted')
@@ -597,7 +607,7 @@ if __name__ == '__main__':
     if processRTAchis:
         process_RTA_chis(data_loc, fbzcartkpts, con)
 
-    calcNoise = True
+    calcNoise = False
     g_low = np.load(data_loc +'g_eff_distr/' + 'g_1.0E+02_field.npy')
     g_high = np.load(data_loc +'g_eff_distr/' + 'g_1.0E+05_field.npy')
 
