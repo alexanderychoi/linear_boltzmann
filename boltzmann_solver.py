@@ -102,8 +102,9 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
     # Do not  flush the memmap it will overwrite consecutively.
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
-    step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 200^3)
-    # step_size = 0.0070675 * 1E10  # 1/Angstrom to 1/m
+    step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
+    step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
