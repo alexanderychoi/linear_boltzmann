@@ -1,42 +1,13 @@
 import numpy as np
-import problemparameters as pp
 import constants as c
 import os
 import pandas as pd
 
 
-def load_electron_df(inLoc):
-    """Loads the electron dataframe from the .VEL output from Perturbo, transforms into cartesian coordinates, and
-    translates the points back into the FBZ.
-    Parameters:
-        inLoc (str): String containing the location of the directory containing the input text file.
-    Returns:
-        None. Just prints the values of the problem parameters.
-    """
-
-    os.chdir(inLoc)
-    kvel = np.loadtxt('gaas.vel', skiprows=3)
-    kvel_df = pd.DataFrame(data=kvel,
-                           columns=['k_inds', 'bands', 'energy', 'kx [2pi/alat]', 'ky [2pi/alat]', 'kz [2pi/alat]',
-                                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
-    kvel_df[['k_inds']] = kvel_df[['k_inds']].astype(int)
-    cart_kpts = kvel_df.copy(deep=True)
-    cart_kpts['kx [2pi/alat]'] = cart_kpts['kx [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts['ky [2pi/alat]'] = cart_kpts['ky [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts['kz [2pi/alat]'] = cart_kpts['kz [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
-                         'vz_dir', 'v_mag [m/s]']
-    cart_kpts['vx [m/s]'] = np.multiply(cart_kpts['vx_dir'].values, cart_kpts['v_mag [m/s]'])
-    cart_kpts = cart_kpts.drop(['bands'], axis=1)
-    cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir'], axis=1)
-
-    cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * c.e - c.mu * c.e)
-                              / (c.kb_joule * pp.T)) + 1) ** (-1)
-    reciplattvecs = np.concatenate((c.b1[np.newaxis, :], c.b2[np.newaxis, :], c.b3[np.newaxis, :]), axis=0)
-    fbzcartkpts = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
-    fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
-    fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
-    fbzcartkpts.to_pickle(in_Loc + 'electron_df.pkl')
+def load_el_ph_data(inputLoc):
+    if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
+        exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
+    return np.load(inputLoc + 'gaas_full_electron_data.parquet'), np.load(inputLoc + 'gaas_enq.parquet')
 
 
 def translate_into_fbz(coords, rlv):
@@ -143,21 +114,6 @@ def translate_into_fbz(coords, rlv):
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
     print('Done bringing points into FBZ!')
     return fbzcoords
-
-
-def read_problem_params(inLoc):
-    """Reads the problem parameters that are loaded from the constants.py module
-    Parameters:
-        inLoc (str): String containing the location of the directory containing the input text file.
-    Returns:
-        None. Just prints the values of the problem parameters.
-    """
-    print('Physical constants loaded from' + inLoc)
-    print('Temperature is {:.1e} K'.format(pp.T))
-    print('Fermi Level is {:.1e} eV'.format(pp.mu))
-    print('Gaussian broadening is {:.1e} eV'.format(pp.b))
-    print('Grid density is {:.1e} cubed'.format(pp.gD))
-
 
 # The following set of functions calculate quantities based on the kpt DataFrame
 def fermi_distribution(df, testboltzmann=False):
@@ -333,6 +289,6 @@ def f2chi(f, df, field):
 
 
 if __name__ == '__main__':
+    import problem_parameters as pp
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc
-    read_problem_params(in_Loc)

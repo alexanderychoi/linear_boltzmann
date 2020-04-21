@@ -405,14 +405,13 @@ if __name__ == '__main__':
     # an argument. I kind of lean towards the argument, because it would force you to change the name each time you ran
     # with a new scattering matrix, which is probably good so we don't mess up.
 
+    import problem_parameters as pp
     # Point to inputs and outputs
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
-    utilities.load_electron_df(in_Loc)
-    utilities.read_problem_params(in_Loc)
-    electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
+    electron_df, phonon_df = utilities.load_el_ph_data(in_Loc)
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Steady state solutions
