@@ -7,6 +7,7 @@ import multiprocessing as mp
 import time
 from functools import partial
 import constants as c
+import utilities
 
 
 def load_optional_data(data_dir):
@@ -44,26 +45,25 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
         exit('The dataframes already exist and you did not explicitly request an overwrite.')
 
     # Phonon energies
-    enq_array = np.loadtxt('gaas.enq')
+    enq_array = np.loadtxt(data_dir + 'gaas.enq')
     enq = pd.DataFrame(data=enq_array, columns=['q_inds', 'im_mode', 'energy [Ryd]'])
     enq[['q_inds', 'im_mode']] = enq[['q_inds', 'im_mode']].astype(int)
     enq['energy [eV]'] = enq['energy [Ryd]'] * c.ryd2ev
-    enq.to_parquet('gaas_enq.parquet')
+    enq.to_parquet(data_dir + 'gaas_enq.parquet')
 
     # Electron data
-    alldat = np.loadtxt('gaas_fullgrd.kpt', skiprows=4)
+    alldat = np.loadtxt(data_dir + 'gaas_fullgrid.kpt', skiprows=4)
     colheadings = ['k_inds', 'bands', 'energy [eV]', 'kx [frac]', 'ky [frac]', 'kz [frac]',
                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
     electron_df = pd.DataFrame(data=alldat, columns=colheadings)
-    kvel_df['k_inds'] = kvel_df['k_inds'].astype(int)
-    cart_kpts = kvel_df.copy(deep=True)
-    cart_kpts['kx [1/A]'] = cart_kpts['frac'] * 2 * np.pi / c.a
-    cart_kpts['ky [1/A]'] = cart_kpts['frac'] * 2 * np.pi / c.a
-    cart_kpts['kz [1/A]'] = cart_kpts['frac'] * 2 * np.pi / c.a
-    cart_kpts['vx [m/s]'] = cart_kpts['vx_dir'] * cart_kpts['v_mag [m/s]']
+    electron_df['k_inds'] = electron_df['k_inds'].astype(int)
+    electron_df['kx [1/A]'] = electron_df['kx [frac]'] * 2 * np.pi / c.a
+    electron_df['ky [1/A]'] = electron_df['ky [frac]'] * 2 * np.pi / c.a
+    electron_df['kz [1/A]'] = electron_df['kz [frac]'] * 2 * np.pi / c.a
+    electron_df['vx [m/s]'] = electron_df['vx_dir'] * electron_df['v_mag [m/s]']
     # Drop band indces since only one band
-    cart_kpts = cart_kpts.drop(['bands', 'vx_dir', 'vy_dir', 'vz_dir'], axis=1)
-    cart_kpts.to_parquet('gaas_full_electron_data.parquet')
+    electron_df = electron_df.drop(['bands'], axis=1)
+    electron_df.to_parquet(data_dir + 'gaas_full_electron_data.parquet')
 
 
 def recip2memmap_par(kq, reciploc, data, nl_tot):
@@ -142,12 +142,12 @@ def chunk_linebyline(dataloc, chunkloc):
         nGB += 1
 
     print('Total number of lines is {:d}'.format(nlines))
-    ln = open(dataloc'totallines', 'w')
+    ln = open(dataloc + 'totallines', 'w')
     ln.write('Total number of lines is {:d}'.format(nlines))
     # For the k160-0.4eV matrix, it should have 628241287 lines including the header
 
 
-chunk_and_pop_recips(data_dir, n_th, el_df):
+def chunk_and_pop_recips(data_dir, n_th, el_df):
     """Split matrix elements by kpoint and populate reciprocal matrix elements.
     
     Parameters:
@@ -170,7 +170,7 @@ chunk_and_pop_recips(data_dir, n_th, el_df):
     # After chunking the matrix elements, need to populate each one with the reciprocal data. 
     # Doing this using memmap arrays for each kpoint since they are really fast.
     print('\nGenerating reciprocal matrix elements into memmapped files')  
-    if hasttr(pp, 'scratchLoc'):
+    if pp.scratchLoc:
         recip_loc = pp.scratchLoc
         print('A scratch location is specified. Reciprocal elements stored in {:s}'.format(scratch_loc))
     else:
@@ -181,11 +181,12 @@ chunk_and_pop_recips(data_dir, n_th, el_df):
 
     # Create memory mapped arrays which can be opened and have data added to them later
     for k in range(1, nkpts+1):
-        kmap = np.memmap(recip_loc + 'k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(nl, 4))
+        kmap = np.memmap(recip_loc + 'k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(mmaplines, 4))
         del kmap
     # Populate the memmaps by using matrix elements from original .eph_matrix file
     # recip_line_key keeps track of where the next line should go for each memmap array.
     pool = mp.Pool(n_th)
+    global recip_line_key
     recip_line_key = mp.Array('i', [0]*nkpts, lock=False)
     counter = 1
     f = open(data_dir + 'gaas.eph_matrix')
@@ -317,14 +318,15 @@ if __name__ == '__main__':
     out_loc = pp.outputLoc
     nthreads = 24
 
-    electron_df, phonon_df = utilities.load_el_ph_data(in_Loc)
-
     create_dataframes = False
-    chunk_mat_pop_recips = False
-    occ_func_and_delta_weights = False
+    chunk_mat_pop_recips = True
+    occ_func_and_delta_weights = True
 
     if create_dataframes:
         create_el_ph_dataframes(in_loc, overwrite=False)
+
+    electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
+
     if chunk_mat_pop_recips:
         chunk_and_pop_recips(in_loc, nthreads, electron_df)
     if occ_func_and_delta_weights:
