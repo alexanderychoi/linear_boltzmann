@@ -7,7 +7,10 @@ import pandas as pd
 def load_el_ph_data(inputLoc):
     if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
         exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
-    return np.load(inputLoc + 'gaas_full_electron_data.parquet'), np.load(inputLoc + 'gaas_enq.parquet')
+    else:
+        el_df = pd.read_parquet(inputLoc + 'gaas_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + 'gaas_enq.parquet')
+    return el_df, ph_df
 
 
 def translate_into_fbz(coords, rlv):
