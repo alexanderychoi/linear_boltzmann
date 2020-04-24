@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 import utilities
-import noise_solver
+# import noise_solver
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import problemparameters as pp
+import problem_parameters as pp
 
 def velocity_distribution_kde(chi, df,title=[]):
     """Takes chi solutions which are already calculated and plots the KDE of the distribution in velocity space
@@ -248,15 +248,15 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
         Nothing. Just the plots.
     """
     if applyscmFac:
-        scmfac = (2*np.pi)**2
+        scmfac = 2* (2*np.pi)**2
         print('Applying 2 Pi-squared factor.')
     else:
         scmfac = 1
     nkpts = len(df)
-    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    rates = (-1) * np.diag(scm) * scmfac * 1E-12
+    rates = np.load(inLoc + 'scattering_rates.npy')
+    rates = scmfac * rates
     plt.figure()
-    plt.plot(df['energy'], rates, '.', MarkerSize=3)
+    plt.plot(df['energy [eV]'], rates, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
 
@@ -267,18 +267,17 @@ if __name__ == '__main__':
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
-    utilities.read_problem_params(in_Loc)
-    electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
+    electron_df, ph_df = utilities.load_el_ph_data(in_Loc)
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Specify fields to plot over
     fields = np.array([1e1,2e1,3e1,4e1,5e1,6e1,7e1,8e1,9e1,1e2,2e2,3e2,4e2,5e2,6e2,7e2,8e2,9e2,2e3,4e3,6e3,8e3,1e4,2e4,4e4,6e4,8e4,1.1e5,1.2e5,1.3e5,1.4e5,1.5e5,1.6e5,1.7e5,1.8e5,1.9e5,2e5])
     KDEField = 1.8e5
-    plotTransport = True
-    plotKDE = True
+    plotTransport = False
+    plotKDE = False
     plotScattering = True
-    plotNoise = True
-    applySCMFac = pp.scmBool
+    plotNoise = False
+    applySCMFac = True
 
     if plotTransport:
         driftvel_mobility_vs_field(out_Loc, electron_df, fields)

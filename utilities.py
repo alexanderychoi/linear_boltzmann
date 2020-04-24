@@ -2,12 +2,16 @@ import numpy as np
 import constants as c
 import os
 import pandas as pd
+import problem_parameters as pp
 
 
 def load_el_ph_data(inputLoc):
     if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
         exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
-    return np.load(inputLoc + 'gaas_full_electron_data.parquet'), np.load(inputLoc + 'gaas_enq.parquet')
+    else:
+        el_df = pd.read_parquet(inputLoc + 'gaas_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + 'gaas_enq.parquet')
+    return el_df, ph_df
 
 
 def translate_into_fbz(coords, rlv):
@@ -128,7 +132,7 @@ def fermi_distribution(df, testboltzmann=False):
         df (dataframe): Edited electron DataFrame containing the new columns with equilibrium distribution functions.
     """
 
-    df['k_FD'] = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
+    df['k_FD'] = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
     if testboltzmann:
         boltzdist = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
         partfunc = np.sum(boltzdist)
