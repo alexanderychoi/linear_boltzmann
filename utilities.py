@@ -6,6 +6,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+def calc_sparsity(matrix):
+    nkpts = len(matrix)
+    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
+    # nelperrow = np.zeros(nkpts)
+    # for ik in range(nkpts):
+    #     nelperrow[ik] = np.count_nonzero(matrix[ik, :])
+    #     print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
+    return sparsity
+
+def matrix_check_colsum(sm,nkpts):
+    colsum = np.zeros(nkpts)
+    for k in range(nkpts):
+        colsum[k] = np.sum(sm[:, k])
+        # print(k)
+        # print('Finished k={:d}'.format(k+1))
+    return colsum
+
+
 def load_electron_df(inLoc):
     """Loads the electron dataframe from the .VEL output from Perturbo, transforms into cartesian coordinates, and
     translates the points back into the FBZ.
@@ -41,6 +59,7 @@ def load_electron_df(inLoc):
     #plt.show()
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
     fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
+    # fbzcartkpts['vx [m/s]'] = fbzcartkpts['vx [m/s]']*5
     fbzcartkpts.to_pickle(inLoc + 'electron_df.pkl')
     print('Wrote electron DF')
 
@@ -317,7 +336,7 @@ def calc_L_Gamma_pop(chi, df):
     Nuc = len(df)
     n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
     n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
-    return n_g, n_l
+    return n_g, n_l, g_inds, l_inds
 
 
 def f2chi(f, df, field):
