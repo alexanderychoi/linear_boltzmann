@@ -58,7 +58,7 @@ def load_electron_df(inLoc):
     #plt.plot(d1)
     #plt.show()
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
-    fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy']], fbzcartkpts], axis=1)
+    fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy','v_mag [m/s]']], fbzcartkpts], axis=1)
     # fbzcartkpts['vx [m/s]'] = fbzcartkpts['vx [m/s]']*5
     fbzcartkpts.to_pickle(inLoc + 'electron_df.pkl')
     print('Wrote electron DF')

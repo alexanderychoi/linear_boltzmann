@@ -1,16 +1,17 @@
 import pandas
+import numpy as np
 
 # Change this directory to point at the problem-specific input folder (containing 'ProblemParameters.txt')
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
 
-inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/3_Problem/0_Data/'
-outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/3_Problem/1_Pipeline/Output/'
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/3_Problem/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/3_Problem/1_Pipeline/Output/'
 
 
-# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/0_Data/'
-# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/1_Pipeline/Output/'
+inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/0_Data/'
+outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/1_Pipeline/Output/'
 
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/1_Problem/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/1_Problem/1_Pipeline/Output/'
@@ -23,10 +24,14 @@ simpleBool = True
 scmBool = True
 
 # What's the name of the matrix?
-# scmName = 'scattering_matrix.mmap'
-scmName = 'scattering_matrix_simple.mmap'
-# scmName = 'scattering_matrix_simple_2.mmap'
+# scmName = 'scattering_matrix_hdd.mmap'
+# scmName = 'scattering_matrix_simple.mmap'
+scmName = 'scattering_matrix_simple_2.mmap'
 # scmName = 'scattering_matrix_5.87_simple.mmap'
+
+# scmVal = (2*np.pi)**2*2  # Problem 4
+# scmVal = (2*np.pi)**2 * 0.01      # Problem 3
+scmVal = (2*np.pi)**2    # Problem 2
 
 # Load the problem parameters (these change depending on which calc we're doing)
 df = pandas.read_csv(inputLoc+'ProblemParameters.txt')
@@ -34,7 +39,7 @@ T = df.iloc[0]['LatticeT(K)']
 mu = df.iloc[0]['FermiLevel(eV)']
 b = df.iloc[0]['GaussianBroadening(eV)']
 gD = df.iloc[0]['GridDensity(k)']
-cutoff = 0.4
+cutoff = 0.45
 
 title_str = 'Grid {:.0f}'.format(gD) + '^3,' + ' {:3f}'.format(mu) + 'eV,' + ' {:.1f}'.format(T) + ' K,' + ' {:.1f}'.format(cutoff) + ' eV'
 print(title_str)

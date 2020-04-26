@@ -21,7 +21,7 @@ def lowfreq_diffusion(g, df):
     return D
 
 
-def noiseT(inLoc,D,mobility,df):
+def noiseT(inLoc,D,mobility,df, applyscmFac = False):
     """Calculates the noise temperature using the Price relationship.
     Parameters:
         inLoc (str): String containing the location of the directory containing the scattering matrix, assumed simple
@@ -36,7 +36,10 @@ def noiseT(inLoc,D,mobility,df):
     """
     nkpts = len(df)
     scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    scmfac = (2*np.pi)**2
+    if applyscmFac:
+        scmfac = pp.scmVal
+    else:
+        scmfac = 1
     invdiag = (np.diag(scm) * scmfac) ** (-1)
     f0 = df['k_FD'].values
     tau = -np.sum(f0 * invdiag) / np.sum(f0)
