@@ -2,6 +2,7 @@ import numpy as np
 import constants as c
 import os
 import pandas as pd
+import problem_parameters as pp
 
 
 def load_el_ph_data(inputLoc):
@@ -131,7 +132,7 @@ def fermi_distribution(df, testboltzmann=False):
         df (dataframe): Edited electron DataFrame containing the new columns with equilibrium distribution functions.
     """
 
-    df['k_FD'] = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
+    df['k_FD'] = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
     if testboltzmann:
         boltzdist = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
         partfunc = np.sum(boltzdist)
@@ -292,6 +293,5 @@ def f2chi(f, df, field):
 
 
 if __name__ == '__main__':
-    import problem_parameters as pp
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc

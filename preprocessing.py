@@ -312,6 +312,34 @@ def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
     print('Calc. delta function weight using gaussian took {:.2f} seconds'.format(end - start))
 
 
+def process_perturbo_matrix(data_dir,el_df):
+    """Take the scattering matrix created by perturbo and puts it into a memmap array"""
+    nk = len(el_df['k_inds'])
+    matrix = np.memmap(data_dir + 'scatt_mat_pert.mmap', dtype='float64', mode='w+', shape=(nk, nk))
+
+    hbar_evs = 6.582119569E-16
+    ryd2ev = 13.605698
+
+    counter = 1
+    f = open(data_dir + 'gaas.scatt_mat')
+    for chunkStart, chunkSize in chunk_iterator(data_dir + 'gaas.scatt_mat', size=512*(1024**2)):
+        f.seek(chunkStart)
+        all_lines = np.array([float(i) for i in f.read(chunkSize).split()])
+        print('Finished READ IN for {:d} chunk of {:2E} bits.'.format(counter, chunkSize))
+        chunkdata = np.reshape(all_lines, (-1, 3), order='C')
+        inds = chunkdata[:, :2].astype(int) - 1
+        matrix[inds[:,0], inds[:,1]] = chunkdata[:, 2] * ryd2ev / hbar_evs
+        counter += 1
+
+    # The diagonal is empty. Put the scattering rates into it.
+    # data = np.loadtxt(data_dir + 'gaas.rates', skiprows=5)
+    # rates = data[:, 3] / 1000 / hbar_evs  # in 1/s
+    # diag = np.arange(nk)
+    # matrix[diag, diag] = rates
+    
+    print('Scattering matrix constructed directly from perturbo')
+
+
 if __name__ == '__main__':
     import problem_parameters as pp
     in_loc = pp.inputLoc
@@ -319,14 +347,17 @@ if __name__ == '__main__':
     nthreads = 24
 
     create_dataframes = False
-    chunk_mat_pop_recips = True
-    occ_func_and_delta_weights = True
+    create_pert_scatt_mat = True
+    chunk_mat_pop_recips = False
+    occ_func_and_delta_weights = False
 
     if create_dataframes:
         create_el_ph_dataframes(in_loc, overwrite=False)
 
     electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
 
+    if create_pert_scatt_mat:
+        process_perturbo_matrix(in_loc, electron_df)
     if chunk_mat_pop_recips:
         chunk_and_pop_recips(in_loc, nthreads, electron_df)
     if occ_func_and_delta_weights:
