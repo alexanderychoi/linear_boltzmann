@@ -77,7 +77,7 @@ def recip2memmap_par(kq, reciploc, data, nl_tot):
     startind = recip_line_key[kqi-1]
     if startind + nlines > nl_tot:
         exit('There were more than {:d} lines for k+q={:d} than lines allocated in the memmap.\n'
-             .format(kqi, int(nl_tot)) + 'Increase the number in the chunk_and_pop_recips function.')
+             .foreat(kqi, int(nl_tot)) + 'Increase the number in the chunk_and_pop_recips function.')
     else:
         kmap[startind:startind+nlines, :] = flipped
         del kmap
@@ -177,7 +177,9 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
         recip_loc = data_dir + 'recips/'
         if not os.path.isdir(recip_loc):
             os.mkdir(recip_loc)
-        print('A scratch location was NOT specified. Creating recip folder in {:s}'.format(data_dir))
+            print('A scratch location was NOT specified. Creating recip folder in {:s}'.format(data_dir))
+        else:
+            print('A scratch location was NOT specified. Using the recip folder in {:s}'.format(data_dir))
 
     # Create memory mapped arrays which can be opened and have data added to them later
     for k in range(1, nkpts+1):
@@ -186,8 +188,6 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
     # Populate the memmaps by using matrix elements from original .eph_matrix file
     # recip_line_key keeps track of where the next line should go for each memmap array.
     pool = mp.Pool(n_th)
-    global recip_line_key
-    recip_line_key = mp.Array('i', [0]*nkpts, lock=False)
     counter = 1
     f = open(data_dir + 'gaas.eph_matrix')
     for chunkStart, chunkSize in chunk_iterator(data_dir + 'gaas.eph_matrix', size=512*(1024**2)):
@@ -208,14 +208,18 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
     for i in range(nkpts):
         k = i + 1
         kmap = np.memmap(recip_loc+'k{:05d}.mmap'.format(k), dtype='float64', mode='r+', shape=(mmaplines, 4))
-        kdf = pd.read_parquet(chunk_loc+'k{:05d}.parquet'.format(k))
         inds = kmap[:, 0] != 0
-        recipdf = pd.DataFrame(data=kmap[inds, :], columns=kdf.columns)
-        fulldf = pd.concat([kdf, recipdf])
+        labels = ['q_inds', 'k+q_inds', 'im_mode', 'g_element']
+        recipdf = pd.DataFrame(data=kmap[inds, :], columns=labels)
+        if os.path.isfile(chunk_loc+'k{:05d}.parquet'.format(k)):
+            kdf = pd.read_parquet(chunk_loc+'k{:05d}.parquet'.format(k))
+            fulldf = pd.concat([kdf, recipdf])
+        else:
+            fulldf = recipdf 
         fulldf.to_parquet(chunk_loc+'k{:05d}.parquet'.format(k))
         if k % 100 == 0:
             print('Added memmap data for k={:d}'.format(k))
-        print('Finished adding memmap data into parquet chunks.')
+    print('Finished adding memmap data into parquet chunks.')
 
 
 def occupation_functions_par(k_ind, ph_energies, nb, el_energies, chunkdir):
@@ -234,19 +238,19 @@ def occupation_functions_par(k_ind, ph_energies, nb, el_energies, chunkdir):
     if not np.any(df_k.columns == 'k_inds'):
         df_k['k_inds'] = k_ind * np.ones(len(df_k.index))
     # Phonon occupations: Bose Einstein distribution
-    qindex = ((g_df['q_inds'] - 1) * nb + g_df['im_mode']).astype(int) - 1
-    g_df['q_en [eV]'] = enq_key[qindex]
-    g_df['BE'] = (np.exp(df['q_en [eV]'] * c.e / c.kb_joule / pp.T) - 1) ** (-1)
+    qindex = ((df_k['q_inds'] - 1) * nb + df_k['im_mode']).astype(int) - 1
+    df_k['q_en [eV]'] = ph_energies[qindex]
+    df_k['BE'] = (np.exp(df_k['q_en [eV]'] * c.e / c.kb_joule / pp.T) - 1) ** (-1)
     # Electron occupations: Fermi Dirac distribution
-    g_df['k_en [eV]'] = enk_key[np.array(g_df['k_inds']).astype(int) - 1]
-    g_df['k+q_en [eV]'] = enk_key[np.array(g_df['k+q_inds']).astype(int) - 1]
-    df['k_FD'] = (np.exp((df['k_en [eV]'] - fermilevel)*c.e / c.kb_joule / pp.T) + 1) ** -1
-    df['k+q_FD'] = (np.exp((df['k+q_en [eV]'] - fermilevel)*c.e / c.kb_joule / pp.T) + 1) ** -1
+    df_k['k_en [eV]'] = el_energies[np.array(df_k['k_inds']).astype(int) - 1]
+    df_k['k+q_en [eV]'] = el_energies[np.array(df_k['k+q_inds']).astype(int) - 1]
+    df_k['k_FD'] = (np.exp((df_k['k_en [eV]'] - pp.mu)*c.e / c.kb_joule / pp.T) + 1) ** -1
+    df_k['k+q_FD'] = (np.exp((df_k['k+q_en [eV]'] - pp.mu)*c.e / c.kb_joule / pp.T) + 1) ** -1
 
-    df_k.to_parquet('k{:05d}.parquet'.format(int(k_ind)))
+    df_k.to_parquet(chunkdir + 'k{:05d}.parquet'.format(int(k_ind)))
 
 
-def delta_weight_par(k_ind):
+def delta_weight_par(k_ind, chunkdir):
     """Multithreaded calculation of value of delta function approximated as a gaussian
 
     Parameters:
@@ -260,15 +264,14 @@ def delta_weight_par(k_ind):
     # eta = np.sqrt(2) * sigma  # Gaussian broadening parameter which is equal to sqrt(2) * sigma (the stddev) in [eV]
     eta = 5
 
-    df = pd.read_parquet('k{:05d}.parquet'.format(k_ind))
+    df = pd.read_parquet(chunkdir + 'k{:05d}.parquet'.format(k_ind))
     energy_delta_ems = df['k_en [eV]'] - df['k+q_en [eV]'] - df['q_en [eV]']
     energy_delta_abs = df['k_en [eV]'] - df['k+q_en [eV]'] + df['q_en [eV]']
 
     df['abs_gaussian'] = 1 / np.sqrt(np.pi) * 1 / eta * np.exp(-1 * (energy_delta_abs / eta) ** 2)
     df['ems_gaussian'] = 1 / np.sqrt(np.pi) * 1 / eta * np.exp(-1 * (energy_delta_ems / eta) ** 2)
 
-    df.to_parquet('k{:05d}.parquet'.format(k_ind))
-    del df
+    df.to_parquet(chunkdir + 'k{:05d}.parquet'.format(k_ind))
 
 
 def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
@@ -288,10 +291,12 @@ def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
     if not os.path.isdir(chunk_loc):
         os.mkdir(chunk_loc)
 
+    nkpts = len(el_df['k_inds'])
     k_inds = [k0 + 1 for k0 in range(nkpts)]
     
     # Create nkpts by 1 vector of electron energies
-    k_en_key = np.array(el_df['energy'].sort_values(by=['k_inds']))
+    el_df.sort_values(by=['k_inds'], inplace=True)
+    k_en_key = np.array(el_df['energy [eV]'])
     # Create a nqpts by 1 vector of phonon energies where nqpts is total number of phonon modes.
     # This is useful because now to figure out what the phonon energies are, all you need to do 
     # is make a single index where (q_ind - 1)*(n_bands) + im_mode = the index into this en_q_key
@@ -307,19 +312,48 @@ def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
     print('Calc. occupation functions for el and ph took {:.2f} seconds'.format(end - start))
 
     start = time.time()
-    pool.map(delta_weight_par, k_inds)
+    pool.map(partial(delta_weight_par, chunkdir=chunk_loc), k_inds)
     end = time.time()
     print('Calc. delta function weight using gaussian took {:.2f} seconds'.format(end - start))
+
+
+def process_perturbo_matrix(data_dir,el_df):
+    """Take the scattering matrix created by perturbo and puts it into a memmap array"""
+    nk = len(el_df['k_inds'])
+    matrix = np.memmap(data_dir + 'scatt_mat_pert.mmap', dtype='float64', mode='w+', shape=(nk, nk))
+
+    hbar_evs = 6.582119569E-16
+    ryd2ev = 13.605698
+
+    counter = 1
+    f = open(data_dir + 'gaas.scatt_mat')
+    for chunkStart, chunkSize in chunk_iterator(data_dir + 'gaas.scatt_mat', size=512*(1024**2)):
+        f.seek(chunkStart)
+        all_lines = np.array([float(i) for i in f.read(chunkSize).split()])
+        print('Finished READ IN for {:d} chunk of {:2E} bits.'.format(counter, chunkSize))
+        chunkdata = np.reshape(all_lines, (-1, 3), order='C')
+        inds = chunkdata[:, :2].astype(int) - 1
+        matrix[inds[:,0], inds[:,1]] = chunkdata[:, 2] * ryd2ev / hbar_evs
+        counter += 1
+
+    # The diagonal is empty. Put the scattering rates into it.
+    # data = np.loadtxt(data_dir + 'gaas.rates', skiprows=5)
+    # rates = data[:, 3] / 1000 / hbar_evs  # in 1/s
+    # diag = np.arange(nk)
+    # matrix[diag, diag] = rates
+    
+    print('Scattering matrix constructed directly from perturbo')
 
 
 if __name__ == '__main__':
     import problem_parameters as pp
     in_loc = pp.inputLoc
     out_loc = pp.outputLoc
-    nthreads = 24
+    nthreads = 8
 
     create_dataframes = False
-    chunk_mat_pop_recips = True
+    create_pert_scatt_mat = False
+    chunk_mat_pop_recips = False
     occ_func_and_delta_weights = True
 
     if create_dataframes:
@@ -327,7 +361,11 @@ if __name__ == '__main__':
 
     electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
 
+    if create_pert_scatt_mat:
+        process_perturbo_matrix(in_loc, electron_df)
     if chunk_mat_pop_recips:
+        global recip_line_key
+        recip_line_key = mp.Array('i', [0]*len(electron_df['k_inds']), lock=False)
         chunk_and_pop_recips(in_loc, nthreads, electron_df)
     if occ_func_and_delta_weights:
         add_occ_and_delta_weights(in_loc, nthreads, electron_df, phonon_df)

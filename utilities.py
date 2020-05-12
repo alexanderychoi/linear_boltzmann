@@ -14,7 +14,7 @@ def load_el_ph_data(inputLoc):
     return el_df, ph_df
 
 
-def translate_into_fbz(coords, rlv):
+def translate_into_fbz(df):
     """Manually translate coordinates back into first Brillouin zone
 
     The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
@@ -24,14 +24,11 @@ def translate_into_fbz(coords, rlv):
     back into the FBZ.
 
     Args:
-        rlv: numpy array of vectors where the rows are the reciprocal lattice vectors given in Cartesian basis
-        coords: numpy array of coordinates where each row is a point. For N points, coords is N x 3
-
-    Returns:
-        fbzcoords:
+        df (dataframe): Electron dataframe containing the kpoints. Will have their data translated back into FBZ 
     """
     # First, find all the vectors defining the boundary
-    b1, b2, b3 = rlv[0, :], rlv[1, :], rlv[2, :]
+    coords = df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    b1, b2, b3 = c.b1, c.b2, c.b3
     b1pos = 0.5 * b1[:, np.newaxis]
     b2pos = 0.5 * b2[:, np.newaxis]
     b3pos = 0.5 * b3[:, np.newaxis]
@@ -71,7 +68,7 @@ def translate_into_fbz(coords, rlv):
                         [0, 1, 0],
                         [1, 0, 1]])
 
-    fbzcoords = np.copy(coords)
+    fbzcoords = coords.copy(deep=True).values
     exitvector = np.zeros((8, 1))
     iteration = 0
     while not np.all(exitvector):  # don't exit until all octants have points inside
@@ -116,8 +113,10 @@ def translate_into_fbz(coords, rlv):
     for kxi in np.nditer(np.nonzero(smalldkx)):
         kx = uniqkx[kxi]
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+
+    df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
-    return fbzcoords
+
 
 # The following set of functions calculate quantities based on the kpt DataFrame
 def fermi_distribution(df, testboltzmann=False):
@@ -134,10 +133,9 @@ def fermi_distribution(df, testboltzmann=False):
 
     df['k_FD'] = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
     if testboltzmann:
-        boltzdist = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
+        boltzdist = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
         partfunc = np.sum(boltzdist)
         df['k_MB'] = boltzdist/partfunc
-    return df
 
 
 def calculate_density(df):
@@ -204,7 +202,7 @@ def mean_energy(chi, df):
     f0 = df['k_FD'].values
     f = chi + df['k_FD'].values
     n = calculate_density(df)
-    meanE = np.sum(f * df['energy']) / np.sum(f0)
+    meanE = np.sum(f * df['energy [eV]']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
