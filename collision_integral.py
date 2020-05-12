@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import preprocessing_largegrid_comet as preprocessing_largegrid
+# import preprocessing_largegrid_comet as preprocessing_largegrid
 import numpy as np
 import multiprocessing as mp
 from functools import partial
@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import time
 import constants as c
+import problemparameters as pp
 
 
 def relaxation_times_parallel(k, nlambda):
@@ -26,7 +27,7 @@ def relaxation_times_parallel(k, nlambda):
         """This function is designed to take a Pandas DataFrame containing e-ph data and return
         the Bose-Einstein distribution associated with the mediating phonon mode."""
 
-        df['BE'] = (np.exp((df['q_en [eV]'].values * c.e) / (c.kb_joule * c.T)) - 1) ** (-1)
+        df['BE'] = (np.exp((df['q_en [eV]'].values * c.e) / (c.kb_joule * pp.T)) - 1) ** (-1)
         return df
 
     def fermi_distribution(df):
@@ -35,8 +36,8 @@ def relaxation_times_parallel(k, nlambda):
         The distribution is calculated with respect to a given chemical potential, mu"""
 
         # Physical constants
-        df['k_FD'] = (np.exp((df['k_en [eV]'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T)) + 1) ** (-1)
-        df['k+q_FD'] = (np.exp((df['k+q_en [eV]'].values * c.e - c.mu * c.e) / (c.kb_joule * c.T)) + 1) ** (-1)
+        df['k_FD'] = (np.exp((df['k_en [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
+        df['k+q_FD'] = (np.exp((df['k+q_en [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
         return df
 
     g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
@@ -117,8 +118,8 @@ def rta_mobility(datadir, enk, vels):
     # Need to define the energy range that I'm doing integration over
     en_axis = np.linspace(enk.min(), enk.max(), npts)
     dx = (en_axis.max() - en_axis.min()) / npts
-    beta = 1 / (c.kb_ev * c.T)
-    fermi = c.mu  # Fermi level
+    beta = 1 / (c.kb_ev * pp.T)
+    fermi = pp.mu  # Fermi level
     spread = 100*dx
 
     def dfde(x):
@@ -235,7 +236,7 @@ def matrixrows_par(k, nlambda, nk, simpleLin=True):
     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
 
 
-def matrix_check_colsum(sm):
+def matrix_check_colsum(sm,df):
     """We know that the matrix should have columns that sum to zero by the conservation of particle number. This function
     calculates the sum of each column and writes it out.
     Parameters:
@@ -244,6 +245,7 @@ def matrix_check_colsum(sm):
     Returns:
         colsum (dbl): array containing the column sum
     """
+    nkpts = len(df)
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
@@ -352,7 +354,7 @@ if __name__ == '__main__':
 
     # Run printout checks on the matrix
     matrix = np.memmap(data_loc + mat_str, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    cs = matrix_check_colsum(matrix)
+    cs = matrix_check_colsum(matrix,kpts_df)
     print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
     print('The largest column sum is {:E}'.format(cs.max()))
 
