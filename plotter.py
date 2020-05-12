@@ -358,7 +358,7 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
         Nothing. Just the plots.
     """
     if applyscmFac:
-        scmfac = 1
+        scmfac = (2 * np.pi)**2
         print('Applying 2 Pi-squared factor.')
     else:
         scmfac = 1
