@@ -3,25 +3,85 @@ import problemparameters as pp
 import constants as c
 import os
 import pandas as pd
+import matrix_plotter
 import matplotlib.pyplot as plt
 
 
+def split_valleys(df,get_X = True, plot_Valleys = True):
+    """Hardcoded for GaAs, obtains the indices for Gamma valley, the 8 L valleys, and the 6 X valleys and returns these
+    as zero-indexed vectors.
+    Parameters:
+        df (DataFrame): Dataframe that has coordinates that have already been shifted back into the FBZ.
+        get_X (Bool): Boolean signifying whether the calculation should also return X valley indices. Not every grid
+        contains the X valleys. True -> Get X valley inds
+        plot_Valleys (Bool): Boolean signifying whether to generate plots of the three distinct valley types.
+    Returns:
+        g_inds (nparray): Numpy array containing the zero-indexed Gamma valley indices.
+        l_inds (nparray): Numpy array containing the zero-indexed L valley indices.
+        x_inds (nparray): Numpy array containing the zero-indexed X valley inds. If get_X = False, return an empty array
+    """
+    kmag = np.sqrt(df['kx [1/A]'].values ** 2 + df['ky [1/A]'].values ** 2 + df['kz [1/A]'].values ** 2)
+    kx = df['kx [1/A]'].values
+    valley_key_L = np.array(kmag > 0.3) & np.array(abs(kx) > 0.25) & np.array(abs(kx) < 0.75)
+    valley_key_G = np.array(kmag < 0.3)
+
+    if get_X:
+        valley_key_X = np.invert(valley_key_L) & np.invert(valley_key_G)
+        x_df = df.loc[valley_key_X]
+    else:
+        valley_key_X = np.empty([1])
+
+    g_df = df.loc[valley_key_G]
+    l_df = df.loc[valley_key_L]
+    print(r'There are {:d} kpoints in the $\Gamma$ valley'.format(np.count_nonzero(valley_key_G)))
+    print('There are {:d} kpoints in the L valley'.format(np.count_nonzero(valley_key_L)))
+
+    if plot_Valleys:
+        matrix_plotter.bz_3dscatter(g_df, True, False)
+        matrix_plotter.bz_3dscatter(l_df, True, False)
+        if get_X:
+            matrix_plotter.bz_3dscatter(x_df, True, False)
+            print('There are {:d} kpoints in the X valley'.format(np.count_nonzero(valley_key_X)))
+
+    return valley_key_G, valley_key_L, valley_key_X
+
+
 def calc_sparsity(matrix):
+    """Count the number of non-zero elements in the matrix and return sparsity, normalized to 1.
+    Parameters:
+        matrix (nparray): Matrix on which sparsity is to be calculated.
+    Returns:
+        sparsity (dbl): Value of the sparsity, normalized to unity.
+    """
     nkpts = len(matrix)
     sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
-    # nelperrow = np.zeros(nkpts)
-    # for ik in range(nkpts):
-    #     nelperrow[ik] = np.count_nonzero(matrix[ik, :])
-    #     print('For row {:d}, the number of nozero elements is {:f}'.format(ik+1, nelperrow[ik]))
     return sparsity
 
+
 def matrix_check_colsum(sm,nkpts):
+    """Calculates the column sums of the given matrix.
+    Parameters:
+        matrix (nparray): NxN matrix on which colsums are to be calculated.
+    Returns:
+        colsum (nparray): NX1 vector containing the column sums.
+    """
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
-        # print(k)
-        # print('Finished k={:d}'.format(k+1))
     return colsum
+
+
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+
+
+def check_matrix_properties(matrix):
+    cs = matrix_check_colsum(matrix,len(matrix))
+    print('The average absolute value of SCM column sum is {:E}'.format(np.average(np.abs(cs))))
+    print('The largest SCM column sum is {:E}'.format(cs.max()))
+    print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
+    print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
+    print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
 
 
 def load_electron_df(inLoc):
@@ -53,15 +113,12 @@ def load_electron_df(inLoc):
                               / (c.kb_joule * pp.T)) + 1) ** (-1)
     reciplattvecs = np.concatenate((c.b1[np.newaxis, :], c.b2[np.newaxis, :], c.b3[np.newaxis, :]), axis=0)
     fbzcartkpts, delta_kx = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
-    #d1 = delta_kx[(delta_kx <0.05) & (delta_kx>0.001)]
-    #print(np.mean(d1))
-    #plt.plot(d1)
-    #plt.show()
+
     fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
     fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy','v_mag [m/s]']], fbzcartkpts], axis=1)
-    # fbzcartkpts['vx [m/s]'] = fbzcartkpts['vx [m/s]']*5
     fbzcartkpts.to_pickle(inLoc + 'electron_df.pkl')
     print('Wrote electron DF')
+
 
 def translate_into_fbz(coords, rlv):
     """Manually translate coordinates back into first Brillouin zone
@@ -232,10 +289,30 @@ def drift_velocity(chi, df):
     f0 = df['k_FD'].values
     f = chi + f0
     n = calculate_density(df)
-    vd = np.sum(f * df['vx [m/s]']) / np.sum(f)
-    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
-    print('Drift velocity is {:.10E} [m/s]'.format(vd))
+    vd = np.sum(f * df['vx [m/s]']) / np.sum(f0)
+    # vd = np.sum(f * df['vx [m/s]']) / np.sum(f0) / 2
+    # vd = 2*np.sum(f * df['vx [m/s]']) / np.sum(f0)
+    Nuc = len(df)
+    # vd = 1 / Nuc / c.Vuc * np.sum(f*df['vx [m/s]']) / calculate_noneq_density(chi,df)  # Need to check if this is right
+    # Took the above from Gantsevitch review Eqn. 1.20
+    # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    # print('Drift velocity is {:.10E} [m/s]'.format(vd))
     return vd
+
+def mean_velocity(chi, df):
+    """Function that calculates the mean velocity given a Chi solution through moment of group velocity in BZ. Note that
+    this makes use of the equilibrium carrier density.
+    Parameters:
+        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
+        df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
+
+    Returns:
+        v_ave (double): The value of the average velocity for a given steady-state solution of the BTE in m/s.
+    """
+    f0 = df['k_FD'].values
+    f = chi + f0
+    v_ave = np.sum(f * df['vx [m/s]']) / np.sum(f0)
+    return v_ave
 
 
 def calculate_noneq_density(chi, df):
@@ -251,7 +328,7 @@ def calculate_noneq_density(chi, df):
     f = chi + f0
     Nuc = len(df)
     n = 2 / Nuc / c.Vuc * np.sum(f)
-    print('Non-eq carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    # print('Non-eq carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     return n
 
 
@@ -269,8 +346,8 @@ def mean_energy(chi, df):
     f = chi + df['k_FD'].values
     n = calculate_density(df)
     meanE = np.sum(f * df['energy']) / np.sum(f0)
-    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
-    print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
+    # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    # print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
 
 
@@ -289,8 +366,8 @@ def calc_mobility(F, df):
     conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
     n = calculate_density(df)
     mobility = conductivity / c.e / n
-    print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
-    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
+    # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
 
@@ -311,8 +388,8 @@ def calc_diff_mobility(chi, df,field):
     prefactor = 2 *c.e / c.Vuc / Nuc /field
     conductivity = prefactor * np.sum(df['vx [m/s]'] * chi)
     mobility = conductivity / c.e / n
-    print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
-    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
+    # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
 
@@ -331,12 +408,46 @@ def calc_L_Gamma_pop(chi, df):
     df['kpt_mag'] = np.sqrt(df['kx [1/A]'].values**2 + df['ky [1/A]'].values**2 +
                                  df['kz [1/A]'].values**2)
     df['ingamma'] = df['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
-    g_inds = df.loc[df['ingamma'] == 1].index - 1
-    l_inds = df.loc[df['ingamma'] == 0].index - 1
+    g_inds = df.loc[df['ingamma'] == 1].index
+    l_inds = df.loc[df['ingamma'] == 0].index
+    # g_inds = df.loc[df['ingamma'] == 1].index-1+1
+    # l_inds = df.loc[df['ingamma'] == 0].index-1+1
+    # l_inds = df.loc[df['ingamma']==0,'k_inds']-1
+    # g_inds = df.loc[df['ingamma']==1,'k_inds']-1
     Nuc = len(df)
     n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
     n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
     return n_g, n_l, g_inds, l_inds
+
+
+def calc_popsplit(chi, df, get_X = True):
+    """Function that calculates the carrrier populations in the Gamma, L, and X valleys given a Chi solution.
+    Parameters:
+        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
+        df (dataframe): Electron DataFrame indexed by kpt
+        get_X (Bool): Boolean signifying whether the calculation should also return X valley indices. Not every grid
+        contains the X valleys. True -> Get X valley inds
+    Returns:
+        ng (double): The value of the gamma carrier population in m^-3.
+        nl (double): The value of the L carrier population in m^-3.
+        nx (dobule): The value of the X carrier population in m^-3.
+    """
+    f0 = df['k_FD'].values
+    f = chi + f0
+    g_inds,l_inds,x_inds = split_valleys(df,get_X,False)
+    # g_inds = df.loc[df['ingamma'] == 1].index-1+1
+    # l_inds = df.loc[df['ingamma'] == 0].index-1+1
+    # l_inds = df.loc[df['ingamma']==0,'k_inds']-1
+    # g_inds = df.loc[df['ingamma']==1,'k_inds']-1
+    Nuc = len(df)
+    n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
+    n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
+    if get_X:
+        n_x = 2 / Nuc / c.Vuc * np.sum(f[x_inds])
+    else:
+        n_x = 0
+    n = 2 / Nuc / c.Vuc * np.sum(f)
+    return n_g, n_l, n_x, n
 
 
 def f2chi(f, df, field):
