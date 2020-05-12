@@ -155,17 +155,18 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
         n_th (int): number of multiprocessing threads
         el_df (dataframe): contains electron energies, velocities and cartesian kpoints
     """
+    print('\nChunking the big text file of all matrix elements, and populating reciprocal elements')
     nkpts = len(el_df['k_inds'])
     mmaplines = 100000
 
+    # Creation of chunks by kpoint. Delete if they exist beforehand to prevent issues
     chunk_loc = data_dir + 'chunked/'
-    if not os.path.isdir(chunk_loc):
-        os.mkdir(chunk_loc)
-    # Creation of matrix chunks
-    if len([name for name in os.listdir(chunk_loc) if os.path.isfile(chunk_loc + name)]) == nkpts:
-        print('\nData already chunked (probably). Not running chunking code.')
-    else:
-        chunk_linebyline(data_dir, chunk_loc)
+    if os.path.isdir(chunk_loc):
+        print('Existing folder of chunks found. Removing to prevent unintended appending.')
+        import shutil
+        shutil.rmtree(chunk_loc)    
+    os.mkdir(chunk_loc)
+    chunk_linebyline(data_dir, chunk_loc)
 
     # After chunking the matrix elements, need to populate each one with the reciprocal data. 
     # Doing this using memmap arrays for each kpoint since they are really fast.
@@ -180,7 +181,6 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
             print('A scratch location was NOT specified. Creating recip folder in {:s}'.format(data_dir))
         else:
             print('A scratch location was NOT specified. Using the recip folder in {:s}'.format(data_dir))
-
     # Create memory mapped arrays which can be opened and have data added to them later
     for k in range(1, nkpts+1):
         kmap = np.memmap(recip_loc + 'k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=(mmaplines, 4))
@@ -284,7 +284,7 @@ def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
         el_df (dataframe): contains electron energies, velocities, Cartesian kpointss
         ph_df (dataframe): contains phonon energies
     """
-    print('Processing auxillary information for each kpoint file')
+    print('\nProcessing auxillary information for each kpoint file')
     print('Adding electron and phonon occupations corresponding to T={:.1f} K'.format(pp.T) )
 
     chunk_loc = data_dir + 'chunked/'

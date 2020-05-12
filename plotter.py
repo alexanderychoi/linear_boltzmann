@@ -1,10 +1,120 @@
 #!/usr/bin/python3
 import utilities
-import noise_solver
+# import noise_solver
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import problemparameters as pp
+import problem_parameters as pp
+import constants as c
+
+import matplotlib
+font = {'size'   : 12}
+matplotlib.rc('font', **font)
+
+import plotly.offline as py
+import plotly.graph_objs as go
+import plotly
+
+
+def bz_3dscatter(df):
+    if np.any(df['energy [eV]']):
+        colors = df['energy [eV]']
+    else:
+        colors = 'k'
+    trace1 = go.Scatter3d(
+        x=df['kx [1/A]'].values / (2 * np.pi / c.a),
+        y=df['ky [1/A]'].values / (2 * np.pi / c.a),
+        z=df['kz [1/A]'].values / (2 * np.pi / c.a),
+        mode='markers',
+        marker=dict(size=2, color=colors, colorscale='Rainbow', showscale=True, opacity=1)
+    )
+
+    b1edge = 0.5 * c.b1 / (2 * np.pi / c.a)
+    vector1 = go.Scatter3d(x=[0, b1edge[0]], y=[0, b1edge[1]], z=[0, b1edge[2]],
+                           marker=dict(size=1,color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    b2edge = 0.5 * c.b2 / (2 * np.pi / c.a)
+    vector2 = go.Scatter3d(x=[0, b2edge[0]], y=[0, b2edge[1]], z=[0, b2edge[2]],
+                           marker=dict(size=1,color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    b3edge = 0.5 * c.b3 / (2 * np.pi / c.a)
+    vector3 = go.Scatter3d(x=[0, b3edge[0]], y=[0, b3edge[1]], z=[0, b3edge[2]],
+                           marker=dict(size=1,color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    xedge = -0.5 * (c.b1 + c.b3) / (2 * np.pi / c.a)
+    vector4 = go.Scatter3d(x=[0, xedge[0]], y=[0, xedge[1]], z=[0, xedge[2]],
+                           marker=dict(size=1, color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    yedge = 0.5 * (c.b2 + c.b3) / (2 * np.pi / c.a)
+    vector5 = go.Scatter3d(x=[0, yedge[0]], y=[0, yedge[1]], z=[0, yedge[2]],
+                           marker=dict(size=1, color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    zedge = 0.5 * (c.b1 + c.b2) / (2 * np.pi / c.a)
+    vector6 = go.Scatter3d(x=[0, zedge[0]], y=[0, zedge[1]], z=[0, zedge[2]],
+                           marker=dict(size=1, color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+    ledge = 0.5 * (c.b1 + c.b2 + c.b3) / (2 * np.pi / c.a)
+    vector7 = go.Scatter3d(x=[0, ledge[0]], y=[0, ledge[1]], z=[0, ledge[2]],
+                           marker=dict(size=1, color="rgb(84,48,5)"),
+                           line=dict(color="rgb(84,48,5)", width=5))
+
+    data = [trace1, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
+    layout = go.Layout(
+        scene=dict(
+            xaxis=dict(
+                title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
+            yaxis=dict(
+                title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
+            zaxis=dict(
+                title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
+    fig = go.Figure(data=data, layout=layout)
+    py.plot(fig, filename='bz_scatter.html')
+    return fig
+
+
+def occupation_v_energy(field, outloc, el_df):
+    chi = np.load(outloc + 'chi_3_gmres_{:.1e}.npy'.format(field))
+    npts = 1000  # number of points in the KDE
+    chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    ftot = np.zeros(npts)
+    f0ax = np.zeros(npts)
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    enk = el_df['energy [eV]'] - el_df['energy [eV]'].min()
+    en_axis = np.linspace(enk.min(), enk.max(), npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    f0 = np.squeeze(el_df['k_FD'])
+    vmags = el_df['v_mag [m/s]']
+    spread = 46 * dx
+
+    # def gaussian(x, mu, sigma=spread):
+    #     return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
+
+    for k in range(len(enk)):
+        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4*spread/dx), 0))
+        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4*spread/dx), npts - 1))
+        ftot[istart:iend] += (chi[k] + f0[k]) * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+        f0ax[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+        chiax[istart:iend] += chi[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+
+    ftot = f0ax + chiax
+
+    plt.figure(figsize=(5, 4.8))
+    ax = plt.axes([0.22, 0.15, 0.73, 0.73])
+    plt.plot(en_axis, f0ax, '--', linewidth=1.5, label='Equilibrium (FD)', color='C1')
+    plt.plot(en_axis, ftot, '-', linewidth=1.5, label='full iterative {:.1E} V/m'.format(field), color='C1')
+    # plt.plot(enax, ftot_iter_enax, label='low field iterative {:.1E} V/m'.format(field))
+    # plt.plot(enax, ftot_rta_enax, label='low field rta {:.1E} V/m'.format(field))
+    plt.xlabel('Energy above CBM (eV)')
+    plt.ylabel(r'Total occupation ($f^0_{\mathbf{k}} + \chi_{\mathbf{k}}$)')
+    # plt.ylim([0, 0.35])
+    # plt.xlim([0, 0.475])
+
 
 def velocity_distribution_kde(chi, df,title=[]):
     """Takes chi solutions which are already calculated and plots the KDE of the distribution in velocity space
@@ -25,7 +135,7 @@ def velocity_distribution_kde(chi, df,title=[]):
     v_ax = np.linspace(vel.min(), vel.max(), npts)
     dx = (v_ax.max() - v_ax.min()) / npts
     f0 = np.squeeze(df['k_FD'].values)
-    spread = 22 * dx
+    spread = 30 * dx
 
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
@@ -42,7 +152,7 @@ def velocity_distribution_kde(chi, df,title=[]):
     ax.plot(v_ax, vdist_f0, '--', linewidth=2, label='Equilbrium')
     ax.plot(v_ax, vdist_tot, linewidth=2, label='Hot electron distribution')
     # plt.fill(v_ax, vdist, label='non-eq distr', color='red')
-    ax.fill(v_ax, vdist, '--', linewidth=2, label='Non-equilibrium deviation', color='C1')
+    ax.fill(v_ax, vdist, '--', linewidth=2, label='Non-equilibrium deviation', color='orange')
     ax.set_xlabel(r'Velocity [ms$^{-1}$]')
     ax.set_ylabel(r'Occupation [arb.]')
     plt.legend()
@@ -69,7 +179,7 @@ def plot_vel_KDEs(outLoc,field,df,plotRTA=True,plotLowField=True,plotFDM=True):
         chi_2_i = utilities.f2chi(f_i,df,field)
         velocity_distribution_kde(chi_2_i, df, title='Low Field Iterative Chi {:.1e} V/m'.format(field))
     if plotFDM:
-        chi_3_i = np.load(outLoc + 'chi_3_{:.1e}.npy'.format(field))
+        chi_3_i = np.load(outLoc + 'chi_3_gmres_{:.1e}.npy'.format(field))
         velocity_distribution_kde(chi_3_i, df, title='FDM Iterative Chi {:.1e} V/m'.format(field))
 
 
@@ -248,15 +358,15 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
         Nothing. Just the plots.
     """
     if applyscmFac:
-        scmfac = (2*np.pi)**2
+        scmfac = (2 * np.pi)**2
         print('Applying 2 Pi-squared factor.')
     else:
         scmfac = 1
     nkpts = len(df)
-    scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    rates = (-1) * np.diag(scm) * scmfac * 1E-12
+    rates = np.load(inLoc + 'scattering_rates.npy')
+    rates = scmfac * rates
     plt.figure()
-    plt.plot(df['energy'], rates, '.', MarkerSize=3)
+    plt.plot(df['energy [eV]'], rates, '.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
 
@@ -267,23 +377,28 @@ if __name__ == '__main__':
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
-    utilities.read_problem_params(in_Loc)
-    electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
-    electron_df = utilities.fermi_distribution(electron_df)
+    electron_df, ph_df = utilities.load_el_ph_data(in_Loc)
+    utilities.fermi_distribution(electron_df)
 
     # Specify fields to plot over
-    fields = np.array([1e1,2e1,3e1,4e1,5e1,6e1,7e1,8e1,9e1,1e2,2e2,3e2,4e2,5e2,6e2,7e2,8e2,9e2,2e3,4e3,6e3,8e3,1e4,2e4,4e4,6e4,8e4,1.1e5,1.2e5,1.3e5,1.4e5,1.5e5,1.6e5,1.7e5,1.8e5,1.9e5,2e5])
-    KDEField = 1.8e5
-    plotTransport = True
-    plotKDE = True
+    fields = np.array([1E4, 2.5E4, 5E4, 7.5E4, 1E5])
+    KDEField = 3E5
+    plotTransport = False
+    plotKDE = False
     plotScattering = True
-    plotNoise = True
-    applySCMFac = pp.scmBool
+    plotNoise = False
+    plot_vs_energy = False
+    applySCMFac = True
+
+    # utilities.translate_into_fbz(electron_df)
+    # bz_3dscatter(electron_df)
 
     if plotTransport:
         driftvel_mobility_vs_field(out_Loc, electron_df, fields)
     if plotKDE:
-        plot_vel_KDEs(out_Loc, KDEField, electron_df, plotRTA=True, plotLowField=True, plotFDM=True)
+        plot_vel_KDEs(out_Loc, KDEField, electron_df, plotRTA=False, plotLowField=False, plotFDM=True)
+    if plot_vs_energy:
+        occupation_v_energy(KDEField, out_Loc, electron_df)
     if plotScattering:
         plot_scattering_rates(in_Loc, electron_df, applySCMFac)
     if plotNoise:
