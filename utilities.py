@@ -291,6 +291,5 @@ def f2chi(f, df, field):
 
 
 if __name__ == '__main__':
-    import problem_parameters as pp
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc

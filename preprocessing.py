@@ -239,7 +239,7 @@ def occupation_functions_par(k_ind, ph_energies, nb, el_energies, chunkdir):
         df_k['k_inds'] = k_ind * np.ones(len(df_k.index))
     # Phonon occupations: Bose Einstein distribution
     qindex = ((df_k['q_inds'] - 1) * nb + df_k['im_mode']).astype(int) - 1
-    df_k['q_en [eV]'] = ph_energies[qindex]
+    df_k['q_en [eV]'] = ph_energies[qindex.values]
     df_k['BE'] = (np.exp(df_k['q_en [eV]'] * c.e / c.kb_joule / pp.T) - 1) ** (-1)
     # Electron occupations: Fermi Dirac distribution
     df_k['k_en [eV]'] = el_energies[np.array(df_k['k_inds']).astype(int) - 1]

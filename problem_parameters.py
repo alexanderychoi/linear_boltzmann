@@ -25,11 +25,11 @@ if scratchLoc:
 	print('Scratch location is \'' + scratchLoc + '\'')
 
 # Is the matrix in the inputLoc canonical or simple? False = Canonical linearization.
-simpleBool = False
+simpleBool = True
 # Should we apply the (2*Pi)**2 factor to the scattering rates as a correction? False = Don't apply factor.
 scmBool = True
 # What's the name of the matrix?
-scmName = 'scattering_matrix_canonical.mmap'
+scmName = 'scattering_matrix.mmap'
 
 print('\nIs matrix is presumed to be in simple linearization? {:s}'.format(str(simpleBool)))
 print('Will an arbitrary correction factor be applied to the matrix? {:s}'.format(str(scmBool)))
