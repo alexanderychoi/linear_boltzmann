@@ -15,7 +15,7 @@ mu = float(re.findall(r"\s*FermiLevel\s*=\s*(.+)\n", alltext)[0])
 b = float(re.findall(r"\s*GaussianBroadening\s*=\s*(.+)\n", alltext)[0])
 gD = float(re.findall(r"\s*GridDensity\s*=\s*(\d+)\n", alltext)[0])
 
-print('\nProblem parameters loaded from \'' + inputLoc + '\'')
+print('\nData for this run loaded from \'' + inputLoc + '\'')
 print('Lattice temperature is {:.1f} K'.format(T))
 print('Fermi Level is {:.5f} eV'.format(mu))
 print('Gaussian broadening is {:.1e} eV'.format(b))
