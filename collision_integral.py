@@ -164,7 +164,7 @@ def scattering_rates(data_loc, el_df, ph_df, n_th)
     print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
 
 
-def scattering_matrix(data_loc, el_df, n_th)
+def scattering_matrix(data_loc, el_df, n_th, simplebool)
     print('\nCalculating the scattering matrix row by row...')
     nkpts = len(np.unique(el_df['k_inds']))
     n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
@@ -173,7 +173,7 @@ def scattering_matrix(data_loc, el_df, n_th)
     mat_row_dir = data_loc + 'mat_rows/'
 
     start = time.time()
-    pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, row_dir=mat_row_dir), kinds)
+    pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, row_dir=mat_row_dir, simple=simplebool), kinds)
     end = time.time()
     print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
     print('\nCreating scattering matrix using the rows. Prior matrices of same name overwritten.')
@@ -198,5 +198,5 @@ if __name__ == '__main__':
     if calc_rta_mobility:
         rta_tdf_mobility(in_loc, electron_df)
     if build_scattering_matrix:
-        scattering_matrix(in_loc, electron_df, nthreads)
+        scattering_matrix(in_loc, electron_df, nthreads, pp.simpleBool)
         matrix_check_colsum(in_loc, electron_df)
