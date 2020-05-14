@@ -336,12 +336,6 @@ def process_perturbo_matrix(data_dir,el_df):
         matrix[inds[:,0], inds[:,1]] = chunkdata[:, 2] * ryd2ev / hbar_evs
         counter += 1
 
-    # The diagonal is empty. Put the scattering rates into it.
-    # data = np.loadtxt(data_dir + 'gaas.rates', skiprows=5)
-    # rates = data[:, 3] / 1000 / hbar_evs  # in 1/s
-    # diag = np.arange(nk)
-    # matrix[diag, diag] = rates
-    
     print('Scattering matrix constructed directly from perturbo')
 
 
@@ -352,9 +346,9 @@ if __name__ == '__main__':
     nthreads = 8
 
     create_dataframes = False
-    create_pert_scatt_mat = False
+    create_pert_scatt_mat = True
     chunk_mat_pop_recips = False
-    occ_func_and_delta_weights = True
+    occ_func_and_delta_weights = False
 
     if create_dataframes:
         create_el_ph_dataframes(in_loc, overwrite=False)
