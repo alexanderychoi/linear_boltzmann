@@ -1,10 +1,10 @@
 import numpy as np
-import problemparameters as pp
 import constants as c
 import os
 import pandas as pd
 import matrix_plotter
 import matplotlib.pyplot as plt
+import problem_parameters as pp
 
 
 def split_valleys(df,get_X = True, plot_Valleys = True):
@@ -84,43 +84,16 @@ def check_matrix_properties(matrix):
     print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
 
 
-def load_electron_df(inLoc):
-    """Loads the electron dataframe from the .VEL output from Perturbo, transforms into cartesian coordinates, and
-    translates the points back into the FBZ.
-    Parameters:
-        inLoc (str): String containing the location of the directory containing the input text file.
-    Returns:
-        None. Just prints the values of the problem parameters.
-    """
-
-    os.chdir(inLoc)
-    kvel = np.loadtxt('gaas.vel', skiprows=3)
-    kvel_df = pd.DataFrame(data=kvel,
-                           columns=['k_inds', 'bands', 'energy', 'kx [2pi/alat]', 'ky [2pi/alat]', 'kz [2pi/alat]',
-                                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]'])
-    kvel_df[['k_inds']] = kvel_df[['k_inds']].astype(int)
-    cart_kpts = kvel_df.copy(deep=True)
-    cart_kpts['kx [2pi/alat]'] = cart_kpts['kx [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts['ky [2pi/alat]'] = cart_kpts['ky [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts['kz [2pi/alat]'] = cart_kpts['kz [2pi/alat]'].values * 2 * np.pi / c.a
-    cart_kpts.columns = ['k_inds', 'bands', 'energy', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]', 'vx_dir', 'vy_dir',
-                         'vz_dir', 'v_mag [m/s]']
-    cart_kpts['vx [m/s]'] = np.multiply(cart_kpts['vx_dir'].values, cart_kpts['v_mag [m/s]'])
-    cart_kpts = cart_kpts.drop(['bands'], axis=1)
-    cart_kpts = cart_kpts.drop(['vx_dir', 'vy_dir', 'vz_dir'], axis=1)
-
-    cart_kpts['FD'] = (np.exp((cart_kpts['energy'].values * c.e - pp.mu * c.e)
-                              / (c.kb_joule * pp.T)) + 1) ** (-1)
-    reciplattvecs = np.concatenate((c.b1[np.newaxis, :], c.b2[np.newaxis, :], c.b3[np.newaxis, :]), axis=0)
-    fbzcartkpts, delta_kx = translate_into_fbz(cart_kpts.values[:, 2:5], reciplattvecs)
-
-    fbzcartkpts = pd.DataFrame(data=fbzcartkpts, columns=['kx [1/A]', 'ky [1/A]', 'kz [1/A]'])
-    fbzcartkpts = pd.concat([cart_kpts[['k_inds', 'vx [m/s]', 'energy','v_mag [m/s]']], fbzcartkpts], axis=1)
-    fbzcartkpts.to_pickle(inLoc + 'electron_df.pkl')
-    print('Wrote electron DF')
+def load_el_ph_data(inputLoc):
+    if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
+        exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
+    else:
+        el_df = pd.read_parquet(inputLoc + 'gaas_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + 'gaas_enq.parquet')
+    return el_df, ph_df
 
 
-def translate_into_fbz(coords, rlv):
+def translate_into_fbz(df):
     """Manually translate coordinates back into first Brillouin zone
 
     The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
@@ -130,14 +103,11 @@ def translate_into_fbz(coords, rlv):
     back into the FBZ.
 
     Args:
-        rlv: numpy array of vectors where the rows are the reciprocal lattice vectors given in Cartesian basis
-        coords: numpy array of coordinates where each row is a point. For N points, coords is N x 3
-
-    Returns:
-        fbzcoords:
+        df (dataframe): Electron dataframe containing the kpoints. Will have their data translated back into FBZ 
     """
     # First, find all the vectors defining the boundary
-    b1, b2, b3 = rlv[0, :], rlv[1, :], rlv[2, :]
+    coords = df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+    b1, b2, b3 = c.b1, c.b2, c.b3
     b1pos = 0.5 * b1[:, np.newaxis]
     b2pos = 0.5 * b2[:, np.newaxis]
     b3pos = 0.5 * b3[:, np.newaxis]
@@ -177,7 +147,7 @@ def translate_into_fbz(coords, rlv):
                         [0, 1, 0],
                         [1, 0, 1]])
 
-    fbzcoords = np.copy(coords)
+    fbzcoords = coords.copy(deep=True).values
     exitvector = np.zeros((8, 1))
     iteration = 0
     while not np.all(exitvector):  # don't exit until all octants have points inside
@@ -222,22 +192,8 @@ def translate_into_fbz(coords, rlv):
     for kxi in np.nditer(np.nonzero(smalldkx)):
         kx = uniqkx[kxi]
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+    df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
-    return fbzcoords, deltakx
-
-
-def read_problem_params(inLoc):
-    """Reads the problem parameters that are loaded from the constants.py module
-    Parameters:
-        inLoc (str): String containing the location of the directory containing the input text file.
-    Returns:
-        None. Just prints the values of the problem parameters.
-    """
-    print('Physical constants loaded from' + inLoc)
-    print('Temperature is {:.3e} K'.format(pp.T))
-    print('Fermi Level is {:.3e} eV'.format(pp.mu))
-    print('Gaussian broadening is {:.3e} eV'.format(pp.b))
-    print('Grid density is {:.3e} cubed'.format(pp.gD))
 
 
 # The following set of functions calculate quantities based on the kpt DataFrame
@@ -252,13 +208,11 @@ def fermi_distribution(df, testboltzmann=False):
     Returns:
         df (dataframe): Edited electron DataFrame containing the new columns with equilibrium distribution functions.
     """
-
-    df['k_FD'] = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
+    df['k_FD'] = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
     if testboltzmann:
-        boltzdist = (np.exp((df['energy'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
+        boltzdist = (np.exp((df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T))) ** (-1)
         partfunc = np.sum(boltzdist)
         df['k_MB'] = boltzdist/partfunc
-    return df
 
 
 def calculate_density(df):
@@ -298,6 +252,7 @@ def drift_velocity(chi, df):
     # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     # print('Drift velocity is {:.10E} [m/s]'.format(vd))
     return vd
+
 
 def mean_velocity(chi, df):
     """Function that calculates the mean velocity given a Chi solution through moment of group velocity in BZ. Note that
@@ -345,9 +300,9 @@ def mean_energy(chi, df):
     f0 = df['k_FD'].values
     f = chi + df['k_FD'].values
     n = calculate_density(df)
-    meanE = np.sum(f * df['energy']) / np.sum(f0)
-    # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
-    # print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
+    meanE = np.sum(f * df['energy [eV]']) / np.sum(f0)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     return meanE
 
 
@@ -451,7 +406,8 @@ def calc_popsplit(chi, df, get_X = True):
 
 
 def f2chi(f, df, field):
-    """Convert F_k from low field approximation iterative scheme into chi which is easy to plot. Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
+    """Convert F_k from low field approximation iterative scheme into chi which is easy to plot. 
+    Since the solution we obtain from cg and from iterative scheme is F_k where chi_k = eE/kT * f0(1-f0) * F_k
     then we need to bring these factors back in to get the right units
     Parameters:
         f (nparray): Numpy array containing a solution of the steady Boltzmann equation in f form.
@@ -469,4 +425,3 @@ def f2chi(f, df, field):
 if __name__ == '__main__':
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc
-    read_problem_params(in_Loc)

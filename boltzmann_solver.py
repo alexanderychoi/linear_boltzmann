@@ -3,7 +3,6 @@ import pandas as pd
 import time
 import constants as c
 import utilities
-import problemparameters as pp
 
 
 # The following set of functions calculate solutions to the steady Boltzmann Equation and write the solutions to file.
@@ -102,9 +101,9 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
     # Do not  flush the memmap it will overwrite consecutively.
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
-    step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
-    step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
 
+    # step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+    step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
@@ -182,8 +181,8 @@ def steady_state_full_drift_iterative_solver(matrix_sc, matrix_fd, kptdf, field,
     """
     print('Starting steady_state_full_drift_iterative solver for {:.3E}'.format(field))
     if applyscmFac:
-        scmfac = (2*np.pi)**2
-        print('Applying 2 Pi-squared factor.')
+        scmfac = 2 * (2*np.pi)**2
+        print('Applying 2 * 2 Pi-squared factor.')
     else:
         scmfac = 1
     _, icinds, _, matrix_fd = apply_centraldiff_matrix(matrix_fd, kptdf, field)
@@ -407,14 +406,13 @@ if __name__ == '__main__':
     # an argument. I kind of lean towards the argument, because it would force you to change the name each time you ran
     # with a new scattering matrix, which is probably good so we don't mess up.
 
+    import problem_parameters as pp
     # Point to inputs and outputs
     out_Loc = pp.outputLoc
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
-    utilities.load_electron_df(in_Loc)
-    utilities.read_problem_params(in_Loc)
-    electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
+    electron_df, phonon_df = utilities.load_el_ph_data(in_Loc)
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Steady state solutions
@@ -424,7 +422,7 @@ if __name__ == '__main__':
     simpleLin = pp.simpleBool
     writeLowfield = True
     writeFDM = True
-    writeEffective = True
+    writeEffective = False
 
     if writeLowfield:
         write_iterative_solver_lowfield(out_Loc, in_Loc, electron_df, simpleLin, applySCMFac)
