@@ -203,6 +203,7 @@ def scattering_matrix(data_loc, el_df, n_th, simplebool)
     print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
     print('\nCreating scattering matrix using the rows. Prior matrices of same name overwritten.')
     assemble_full_matrix(data_loc, nkpts, simple=simplebool)
+    matrix_check_colsum(data_loc, el_df)
 
 
 if __name__ == '__main__':
@@ -215,7 +216,6 @@ if __name__ == '__main__':
     calc_scattering_rates = True
     calc_rta_mobility = False
     build_scattering_matrix = False
-    check_column_sums = False
 
     if calc_scattering_rates:
         rates_array = mp.Array('d', [0] * len(np.unique(electron_df['k_inds'])), lock=False)
