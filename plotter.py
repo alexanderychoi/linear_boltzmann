@@ -366,7 +366,7 @@ def plot_scattering_rates(inLoc,df,applyscmFac=False):
     rates = np.load(inLoc + 'scattering_rates.npy')
     rates = scmfac * rates
     plt.figure()
-    plt.plot(df['energy [eV]'], rates, '.', MarkerSize=3)
+    plt.plot(df['energy [eV]'], rates, '.')
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
 

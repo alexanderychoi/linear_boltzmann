@@ -27,7 +27,7 @@ if scratchLoc:
 # Is the matrix in the inputLoc canonical or simple? False = Canonical linearization.
 simpleBool = True
 # Should we apply the (2*Pi)**2 factor to the scattering rates as a correction? False = Don't apply factor.
-scmBool = True
+scmBool = False
 # What's the name of the matrix?
 scmName = 'scattering_matrix.mmap'
 
