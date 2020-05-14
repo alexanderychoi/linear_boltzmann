@@ -359,7 +359,7 @@ if __name__ == '__main__':
         process_perturbo_matrix(in_loc, electron_df)
     if chunk_mat_pop_recips:
         global recip_line_key
-        recip_line_key = mp.Array('i', [0]*len(electron_df['k_inds']), lock=False)
+        recip_line_key = mp.Array('i', [0]*len(np.unique(electron_df['k_inds'])), lock=False)
         chunk_and_pop_recips(in_loc, nthreads, electron_df)
     if occ_func_and_delta_weights:
         add_occ_and_delta_weights(in_loc, nthreads, electron_df, phonon_df)
