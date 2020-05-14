@@ -143,8 +143,8 @@ def matrix_check_colsum(data_loc, el_df):
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest column sum is {:E}'.format(cs.max()))
+    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(colsum))))
+    print('The largest column sum is {:E}'.format(colsum.max()))
     return colsum
 
 
