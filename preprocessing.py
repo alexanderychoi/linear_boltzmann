@@ -38,6 +38,7 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
 
     Parameters:
         data_dir (str): absolute file path to the perturbo text files
+        overwrite (bool): True if you want to overwrite the existing dataframe
     """
     if not overwrite and \
        (os.path.isfile(data_dir + 'gaas_enq.parquet')

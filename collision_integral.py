@@ -11,9 +11,6 @@ import utilities
 
 def scattering_rates_parallel(k, nlambda, chunk_loc):
     """This function calculates the on-diagonal scattering rates, (inverse of the relaxation times)
-    
-    Uses Mahan's Eqn. 11.127. Also returns the off-diagonal scattering term. Calculates the Fermi Dirac
-    and Bose Einstein distributions on the fly
 
     Parameters:
         k (int): Index of the parquet to open and process
@@ -158,7 +155,6 @@ def matrix_check_colsum(data_loc, el_df):
 
     Parameters:
         data_loc (str): file location where the matrix can be found
-
     Returns:
         colsum (dbl): array containing the column sum
     """
@@ -173,7 +169,16 @@ def matrix_check_colsum(data_loc, el_df):
     return colsum
 
 
-def scattering_rates(data_loc, el_df, ph_df, n_th)
+def scattering_rates(data_loc, el_df, ph_df, n_th):
+    """Calculate the scattering rates (on-diagonal elements of the scattering matrix)
+    in a parallelized way.
+
+    Parameters:
+        data_loc (str): file location of the data
+        el_df (dataframe): contains electron energies, velocities
+        ph_df (dataframe): contains phonon energies
+        n_th (int): number of multiprocessing threads
+    """
     print('\nCalculating the scattering rates for each kpoint using {:d} threads'.format(n_th))
     nkpts = len(np.unique(el_df['k_inds']))
     n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
@@ -189,7 +194,17 @@ def scattering_rates(data_loc, el_df, ph_df, n_th)
     print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
 
 
-def scattering_matrix(data_loc, el_df, n_th, simplebool)
+def scattering_matrix(data_loc, el_df, ph_df, n_th, simplebool):
+    """Create scattering matrix from el-ph matrix elements by calculating the rows of the 
+    matrix in parallelized way.
+
+    Parameters:
+        data_loc (str): file location of the data
+        el_df (dataframe): contains electron energies, velocities
+        ph_df (dataframe): contains phonon energies
+        n_th (int): number of multiprocessing threads
+        simplebool (bool): True if the matrix is desired in simple linearization
+    """
     print('\nCalculating the scattering matrix row by row...')
     nkpts = len(np.unique(el_df['k_inds']))
     n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
@@ -223,4 +238,4 @@ if __name__ == '__main__':
     if calc_rta_mobility:
         rta_tdf_mobility(in_loc, electron_df)
     if build_scattering_matrix:
-        scattering_matrix(in_loc, electron_df, nthreads, pp.simpleBool)
+        scattering_matrix(in_loc, electron_df, phonon_df, nthreads, pp.simpleBool)
