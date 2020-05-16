@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# import preprocessing_largegrid_comet as preprocessing_largegrid
 import numpy as np
 import multiprocessing as mp
 from functools import partial
@@ -7,109 +6,36 @@ import os
 import pandas as pd
 import time
 import constants as c
-import problemparameters as pp
+import utilities
 
 
-def relaxation_times_parallel(k, nlambda):
-    """This function calculates the on-diagonal scattering rates, the relaxation times, as per Mahan's Eqn. 11.127.
-    Also returns the off-diagonal scattering term. Calculates the Fermi Dirac and Bose Einstein distributions on the fly
+def scattering_rates_parallel(k, nlambda, chunk_loc):
+    """This function calculates the on-diagonal scattering rates, (inverse of the relaxation times)
+
     Parameters:
         k (int): Index of the parquet to open and process
         nlambda (int): Number of phonon modes
-
-    Returns:
-        Writes the scattering rate to file as .rate. Updates a numpy array called scattering_rates to include the on-diag
-        elements.
     """
-    prefactor = c.rydberg_to_eV
+    g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
 
-    def bose_distribution(df):
-        """This function is designed to take a Pandas DataFrame containing e-ph data and return
-        the Bose-Einstein distribution associated with the mediating phonon mode."""
+    abs_weight = (g_df['BE'] + g_df['k+q_FD']) * g_df['g_element'] * g_df['abs_gaussian']
+    ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * g_df['g_element'] * g_df['ems_gaussian']
+    tot_weight = ems_weight + abs_weight
 
-        df['BE'] = (np.exp((df['q_en [eV]'].values * c.e) / (c.kb_joule * pp.T)) - 1) ** (-1)
-        return df
-
-    def fermi_distribution(df):
-        """This function is designed to take a Pandas DataFrame containing e-ph data and return
-        the Fermi-Dirac distribution associated with both the pre- and post- collision states.
-        The distribution is calculated with respect to a given chemical potential, mu"""
-
-        # Physical constants
-        df['k_FD'] = (np.exp((df['k_en [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
-        df['k+q_FD'] = (np.exp((df['k+q_en [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pp.T)) + 1) ** (-1)
-        return df
-
-    g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
-    g_df = fermi_distribution(g_df)
-    g_df = bose_distribution(g_df)
-    ems_weight = np.multiply(np.multiply(g_df['BE'].values + 1 - g_df['k+q_FD'].values, g_df['g_element'].values),
-                             g_df['ems_gaussian'])
-    abs_weight = np.multiply(np.multiply((g_df['BE'].values + g_df['k+q_FD'].values), g_df['g_element'].values),
-                             g_df['abs_gaussian'])
-    g_df['weight'] = ems_weight + abs_weight
-    sr = np.sum(g_df['weight'].to_numpy()) * 2 * np.pi / c.hbar_eV * (10 ** -12) / nlambda * prefactor**2
-    print(r'For k={:d}, the scattering rate (1/ps) is {:.24E}'.format(k, sr))
-    f = open('k{:05d}.rate'.format(k), 'w')
-    f.write('{:.24E}'.format(sr))
-    f.close()
-    scattering_rates[k-1] = sr
+    sr = np.sum(tot_weight) * 2*np.pi / c.hbar_ev / nlambda * c.ryd2ev**2 * 1E-12
+    rates_array[k-1] = sr
 
 
-def save_weights(k, nlambda):
-    """This function calculates and saves the absorption and emission weights from Eqn 11 in Peishi's write up. This
-    will allow us to evaluate whether energy is being conserved or not
-    Parameters:
-        k (int): Index of the parquet to open and process
-        nlambda (int): Number of phonon modes
-
-    Returns:
-        Writes the scattering rate to file as .rate. Updates a numpy array called scattering_rates to include the on-diag
-        elements.
-    """
-    g_df = pd.read_parquet('k{:05d}.parquet'.format(k))
-    simple_abs = np.multiply(np.multiply(g_df['BE'].values + g_df['k+q_FD'].values,g_df['k_FD'].values),1-g_df['k_FD'].values)
-    canonical_abs = np.multiply(np.multiply(1-g_df['k+q_FD'].values,g_df['k_FD'].values),g_df['BE'].values)
-    simple_ems = np.multiply(np.multiply(1-g_df['k_FD'].values,g_df['k_FD'].values),g_df['BE'].values+1-g_df['k+q_FD'].values)
-    canonical_ems = np.multiply(np.multiply(1-g_df['k_FD'].values,g_df['k+q_FD'].values),g_df['BE'].values)
-    wuli_ems = np.multiply(np.multiply(g_df['k_FD'].values,1-g_df['k+q_FD'].values),1+g_df['BE'].values)
-    abs_s[k-1] = np.sum(simple_abs)
-    abs_c[k-1] = np.sum(canonical_abs)
-    ems_s[k-1] = np.sum(simple_ems)
-    ems_c[k-1] = np.sum(canonical_ems)
-    ems_w[k-1] = np.sum(wuli_ems)
-
-
-def parse_scatteringrates():
-    """This function takes .rates located in the chunk_loc and aggregates the scattering rate into a single numpy array.
-    Parameters:
-        None. Chunk loc intrinsically loaded.
-
-    Returns:
-        rates: (nparray) Updates a numpy array called rates to include the on-diagonal elements.
-    """
-    os.chdir(chunk_loc)
-    rates = np.zeros(nkpts)
-    for k in range(nkpts):
-        thisk = k+1
-        f = open('k{:05d}.rate'.format(thisk), 'r')
-        rates[k] = float(f.read())
-        f.close()
-        os.remove('k{:05d}.rate'.format(thisk))
-        if thisk % 100 == 0:
-            print('Done with k={:d}'.format(thisk))
-    return rates
-
-
-def rta_mobility(datadir, enk, vels):
+def rta_tdf_mobility(datadir, el_df):
     """Calculate mobility using RTA and near equilibrium approximation and TDF from Jin Jian's paper.
     Parameters:
         datadir (str): String location containing the scattering_rates.npy
-        enk (nparray): Array containing the energy of each electron in eV
-        vels (nparray): Array containing the group velocity in the transport direction in m/s
+        el_df (dataframe): Dataframe containing electron energies and velocities
     Returns:
         mobility (dbl): Value of the RTA mobility in m^2/V-s
     """
+    enk = el_df['energy [eV]']
+    vels = el_df['vx [m/s]']
     os.chdir(datadir)
     rates = np.load('scattering_rates.npy') * 36.5  # arbitrary factor to test if I can get the mobility
     taus = 1 / rates * 1E-12  # in seconds
@@ -151,84 +77,71 @@ def rta_mobility(datadir, enk, vels):
     return mobility
 
 
-def assemble_full_matrix(mat_row_dir,simpleLin=True):
+def assemble_full_matrix(data_dir, nk, simple=True):
     """Once all of the rows have been created, can put them all together. This function enters the mat_row_dir and reads
     the memmaps written by matrixrows_par and assembles a full memmaped array.
     Parameters:
-        mat_row_dir (str): String location containing the row-by-row matrix memmaps.
+        data_dir (str): File location containing folder with the matrix rows
         simpleLin (bool): If "True", matrix will be written in simple linearization.
-
-    Returns:
-        Writes scattering_matrix.mmap to file.
     """
-    if simpleLin:
+    if simple:
         mat_str = '_simple'
     else:
         mat_str = '_canonical'
-    matrix = np.memmap('scattering_matrix'+mat_str+'.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+    matrix = np.memmap(data_dir+'scattering_matrix'+mat_str+'.mmap', dtype='float64', mode='w+', shape=(nk, nk))
+    mat_row_dir = data_dir + 'mat_rows/'
+    
     for k in range(nkpts):
         kind = k + 1
-        krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), dtype='float64', mode='r', shape=nkpts)
+        krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), dtype='float64', mode='r', shape=nk)
         matrix[k, :] = krow
         if kind % 100 == 0:
             print('Finished k={:d}'.format(kind))
 
 
-def matrixrows_par(k, nlambda, nk, simpleLin=True):
-    """Calculate the full scattering matrix row by row and in parallel. We do this because the data is chunked by
-    kpoint, so the most efficient way to do this is by calculating each row of the scattering matrix since the
-    information required for each row is contained in each kpoint chunk. This allows the calculation to be done in
-    parallel. For each kpoint, will input the row data into a memmap. Afterwards, the full matrix can be assembled
-    quickly in serial.
+def matrixrows_par(k, nlambda, nk, simple=True):
+    """Calculate the full scattering matrix row by row and in parallel.
+    
+    We do this because the data is chunked by kpoint, so the most efficient way to do this is by calculating each row
+    of the scattering matrix since the information required for each row is contained in each kpoint chunk. This allows 
+    the calculation to be done in parallel. For each kpoint, will input the row data into a memmap. Afterwards, the 
+    full matrix can be assembled quickly in serial.
+
     Parameters:
         k (int): Index of the parquet to open and process
         nlambda (int): Number of phonon modes
         nk (int): Number of total kpts
-        simpleLin (bool): If "True", matrix will be written in simple linearization.
+        simple (bool): If True, matrix will be written in simple linearization.
     """
-    # Create memmap of the row
     istart = time.time()
-    if os.path.isfile('k{:05d}.mmap'.format(k)):
-        krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='r+', shape=nk)
-    else:
-        krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nk)
-
-    ryd2ev = c.rydberg_to_eV  # Should probably make these originate from constants
-    hbar_ev = c.hbar_eV  # Should probably make these originate from constants
-    # # Diagonal term
-    # # In canonical scattering matrix, the diagonal element is not the scattering rate
+    # Create memmap of the row
+    krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nk)
     g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
-    if simpleLin:
+
+    # Diagonal term
+    if simple:
         diag_abs_weight = (g_df['BE'] + g_df['k+q_FD']) * g_df['g_element'] * g_df['abs_gaussian']
         diag_ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * g_df['g_element'] * g_df['ems_gaussian']
     else:
-        diag_abs_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-            g_df['k_FD'].values, 1 - g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['abs_gaussian'])
-
-        diag_ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-            1 - g_df['k_FD'].values, g_df['k+q_FD'].values), g_df['BE'].values), g_df['g_element']), g_df['ems_gaussian'])
-
-    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / hbar_ev / nlambda * ryd2ev**2
+        diag_abs_weight = g_df['k_FD'] * (1 - g_df['k+q_FD']) * g_df['BE'] * g_df['g_element'] * g_df['abs_gaussian']
+        diag_ems_weight = g_df['k_FD'] * (1 - g_df['k+q_FD']) * (g_df['BE'] + 1) * g_df['g_element'] * g_df['ems_gaussian']
+    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / c.hbar_ev / nlambda * cryd2ev**2
     krow[k-1] = (-1) * diagterm
+
     # Calculating nondiagonal terms
     nkprime = np.unique(g_df['k+q_inds'])
     for kp in np.nditer(nkprime):
         kpi = int(kp)
         kp_rows = g_df[g_df['k+q_inds'] == kpi]
-        # Commented out section below is the scattering matrix with simple linearization
-        if simpleLin:
-            abs_weight = np.multiply(np.multiply((kp_rows['BE'].values + 1 - kp_rows['k_FD'].values),
-                                                 kp_rows['g_element'].values), kp_rows['abs_gaussian'])
-            ems_weight = np.multiply(np.multiply(kp_rows['BE'].values + kp_rows['k_FD'].values,
-                                                 kp_rows['g_element'].values), kp_rows['ems_gaussian'])
+        if simple:
+            # Scattering matrix with simple linearization
+            abs_weight = (kp_rows['BE'] + 1 - kp_rows['k_FD']) * kp_rows['g_element'] * kp_rows['abs_gaussian']
+            ems_weight = (kp_rows['BE'] + kp_rows['k_FD']) * kp_rows['g_element'] * kp_rows['ems_gaussian']
         else:
-            abs_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-                kp_rows['k_FD'].values, 1 - kp_rows['k+q_FD'].values), kp_rows['BE'].values), kp_rows['g_element']),
-                kp_rows['abs_gaussian'])
+            # Scattering matrix with canonical (symmetric) linearization
+            abs_weight = kp_rows['k_FD'] * (1 - kp_rows['k+q_FD']) * kp_rows['BE'] * kp_rows['g_element'] * kp_rows['abs_gaussian']
+            ems_weight = kp_rows['k_FD'] * (1 - kp_rows['k+q_FD']) * (kp_rows['BE'] + 1) * kp_rows['g_element'] * kp_rows['ems_gaussian']
 
-            ems_weight = np.multiply(np.multiply(np.multiply(np.multiply(
-                1 - kp_rows['k_FD'].values, kp_rows['k+q_FD'].values), kp_rows['BE'].values), kp_rows['g_element']),
-                kp_rows['ems_gaussian'])
         tot_weight = abs_weight + ems_weight
         krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / hbar_ev / nlambda * ryd2ev**2
     del krow
@@ -236,125 +149,93 @@ def matrixrows_par(k, nlambda, nk, simpleLin=True):
     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
 
 
-def matrix_check_colsum(sm,df):
+def matrix_check_colsum(data_loc, el_df):
     """We know that the matrix should have columns that sum to zero by the conservation of particle number. This function
     calculates the sum of each column and writes it out.
-    Parameters:
-        sm (.mmap): scattering matrix
 
+    Parameters:
+        data_loc (str): file location where the matrix can be found
     Returns:
         colsum (dbl): array containing the column sum
     """
-    nkpts = len(df)
+    nkpts = len(np.unique(el_df['k_inds']))
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
         colsum[k] = np.sum(sm[:, k])
-        # print(k)
-        # print('Finished k={:d}'.format(k+1))
+    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(colsum))))
+    print('The largest column sum is {:E}'.format(colsum.max()))
     return colsum
 
 
-if __name__ == '__main__':
-    # Point to various directories
-    data_loc = '/home/alexchoi/storage/k160-0.4eV-200K/'
-    chunk_loc = '/home/alexchoi/storage/k160-0.4eV-200K/chunked/'
-    nthreads = 48  # The requested number of threads on cluster. Ensure consistency with ntasks in the batch file.
+def scattering_rates(data_loc, el_df, ph_df, n_th):
+    """Calculate the scattering rates (on-diagonal elements of the scattering matrix)
+    in a parallelized way.
 
-    # Set to true to return matrix in the simple linearization. Be sure to create directories for the matrix rows in
-    # data_loc. "mat_rows_simple" for simple and "mat_rows_canonical" for cannonical.
-    simplelinear = True
-
-    # Set calc_scattering_rates to "True" to calculate the on-diagonal elements in the simple linearization and save to
-    # scattering_rates.npy. Also calculates the off-diagonal elements. Will populate the chunk_loc with .rates for each
-    # parquet.
-    calc_scattering_rates = True
-
-    # Set calc_weights to "True" to output the sum over qpts of the canonical and simple emission and absoprtion scattering
-    # rates, indexed by kpt.
-    calc_weights = True
-
-    # Set calc_matrix_rows to True to calculate the scattering matrix row-by-row and store as .mmaps in a subdirectory.
-    # These rows can later be assembled.
-    calc_matrix_rows = True
-
-    # Set assemble_matrix to True to assemble the scattering matrix from the row parquets stored in mat_row_loc.
-    # NOTE: The assemble_full_matrix function will overwrite previous matrix. Be careful
-    assemble_matrix = True
-
-    if simplelinear:
-        mat_rows_loc = data_loc+'mat_rows_simple'
-        mat_str = 'scattering_matrix_simple.mmap'
-    else:
-        mat_rows_loc = data_loc+'mat_rows_canonical'
-        mat_str = 'scattering_matrix_canonical.mmap'
-
-    _, kpts_df, _, _, enq_df = preprocessing_largegrid.loadfromfile(data_loc, matrixel=False)
-    nkpts = len(np.unique(kpts_df['k_inds']))
-    n_ph_modes = len(np.unique(enq_df['q_inds'])) * len(np.unique(enq_df['im_mode']))
+    Parameters:
+        data_loc (str): file location of the data
+        el_df (dataframe): contains electron energies, velocities
+        ph_df (dataframe): contains phonon energies
+        n_th (int): number of multiprocessing threads
+    """
+    print('\nCalculating the scattering rates for each kpoint using {:d} threads'.format(n_th))
+    nkpts = len(np.unique(el_df['k_inds']))
+    n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
-    operatingsystem = 'linux'  # NOTE: Change this to windows if you need
+    pool = mp.Pool(n_th)
+    chunk_dir = data_loc + 'chunked/'
+
+    start = time.time()
+    pool.map(partial(scattering_rates_parallel, nlambda=n_ph_modes, chunk_loc=chunk_dir), kinds)
+    aggregated_rates = np.array(rates_array)
+    np.save(data_loc + 'scattering_rates', aggregated_rates)
+    end = time.time()
+    print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+
+
+def scattering_matrix(data_loc, el_df, ph_df, n_th, simplebool):
+    """Create scattering matrix from el-ph matrix elements by calculating the rows of the 
+    matrix in parallelized way.
+
+    Parameters:
+        data_loc (str): file location of the data
+        el_df (dataframe): contains electron energies, velocities
+        ph_df (dataframe): contains phonon energies
+        n_th (int): number of multiprocessing threads
+        simplebool (bool): True if the matrix is desired in simple linearization
+    """
+    print('\nCalculating the scattering matrix row by row...')
+    nkpts = len(np.unique(el_df['k_inds']))
+    n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
+    kinds = np.arange(1, nkpts + 1)
+    pool = mp.Pool(n_th)
+    mat_row_dir = data_loc + 'mat_rows/'
+
+    start = time.time()
+    pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, row_dir=mat_row_dir, simple=simplebool), kinds)
+    end = time.time()
+    print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
+    print('\nCreating scattering matrix using the rows. Prior matrices of same name overwritten.')
+    assemble_full_matrix(data_loc, nkpts, simple=simplebool)
+    matrix_check_colsum(data_loc, el_df)
+
+
+if __name__ == '__main__':
+    import problem_parameters as pp
+    in_loc = pp.inputLoc
+    out_loc = pp.outputLoc
+    electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
+    nthreads = 8
+
+    calc_scattering_rates = True
+    calc_rta_mobility = False
+    build_scattering_matrix = False
 
     if calc_scattering_rates:
-        os.chdir(chunk_loc)
-        scattering_rates = mp.Array('d', [0] * nkpts, lock=False)
-        nthreads = 48
-        pool = mp.Pool(nthreads)
-
-        start = time.time()
-        if operatingsystem is 'windows':
-            # NOTE: You also have to manually comment out the last line in relaxation_times_parallel because there's
-            # some weird bug I don't know how to fix yet.
-            pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
-            sr = parse_scatteringrates()
-            np.save(data_loc + 'scattering_rates', sr)
-        elif operatingsystem is 'linux':
-            pool.map(partial(relaxation_times_parallel, nlambda=n_ph_modes), kinds)
-            scattering_rates = np.array(scattering_rates)
-            np.save(data_loc + 'scattering_rates', scattering_rates)
-        else:
-            exit('No operating system specified. Don''t know how to aggregate scattering rates.')
-        end = time.time()
-        print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
-
-    if calc_weights:
-        os.chdir(chunk_loc)
-        abs_s = mp.Array('d', [0]*nkpts, lock=False)
-        abs_c = mp.Array('d', [0]*nkpts, lock=False)
-        ems_s = mp.Array('d', [0]*nkpts, lock=False)
-        ems_c = mp.Array('d', [0]*nkpts, lock=False)
-        ems_w = mp.Array('d', [0]*nkpts, lock=False)
-        pool = mp.Pool(nthreads)
-        start = time.time()
-        pool.map(partial(save_weights, nlambda=n_ph_modes), kinds)
-        abs_s = np.array(abs_s)
-        abs_c = np.array(abs_c)
-        ems_s = np.array(ems_s)
-        ems_c = np.array(ems_c)
-        ems_w = np.array(ems_w)
-        np.save(data_loc + 'abs_s',abs_s)
-        np.save(data_loc + 'abs_c',abs_c)
-        np.save(data_loc + 'ems_s',ems_s)
-        np.save(data_loc + 'ems_c',ems_c)
-        np.save(data_loc + 'ems_w',ems_w)
-        end = time.time()
-        print('Weight calc took {:.2f} seconds'.format(end-start))
-
-    if calc_matrix_rows:
-        os.chdir(data_loc)
-        # Multiprocessing version
-        os.chdir(mat_rows_loc)
-        pool = mp.Pool(nthreads)
-        start = time.time()
-        pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, simpleLin=simplelinear), kinds)
-        end = time.time()
-        print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
-
-    if assemble_matrix:
-        assemble_full_matrix(mat_rows_loc+'/',simplelinear)
-
-    # Run printout checks on the matrix
-    matrix = np.memmap(data_loc + mat_str, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    cs = matrix_check_colsum(matrix,kpts_df)
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest column sum is {:E}'.format(cs.max()))
-
+        rates_array = mp.Array('d', [0] * len(np.unique(electron_df['k_inds'])), lock=False)
+        scattering_rates(in_loc, electron_df, phonon_df, nthreads)
+    if calc_rta_mobility:
+        rta_tdf_mobility(in_loc, electron_df)
+    if build_scattering_matrix:
+        scattering_matrix(in_loc, electron_df, phonon_df, nthreads, pp.simpleBool)
