@@ -9,7 +9,7 @@ import constants as c
 import utilities
 
 
-def scattering_rates_parallel(k, nlambda, chunk_loc):
+def scattering_rates_parallel(k, nlambda, data_dir):
     """This function calculates the on-diagonal scattering rates, (inverse of the relaxation times)
     
     Uses Mahan's Eqn. 11.127. Also returns the off-diagonal scattering term. Calculates the Fermi Dirac
@@ -19,7 +19,8 @@ def scattering_rates_parallel(k, nlambda, chunk_loc):
         k (int): Index of the parquet to open and process
         nlambda (int): Number of phonon modes
     """
-    g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
+    chunk_dir = data_dir + 'chunked/'
+    g_df = pd.read_parquet(chunk_dir + 'k{:05d}.parquet'.format(k))
 
     abs_weight = (g_df['BE'] + g_df['k+q_FD']) * g_df['g_element'] * g_df['abs_gaussian']
     ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * g_df['g_element'] * g_df['ems_gaussian']
@@ -71,7 +72,9 @@ def rta_tdf_mobility(datadir, el_df):
     print('dF/dE is {:.3E}'.format(np.sum(-1 * dfde(en_axis))))
     mobility = conductivity / nc / c.e * 1E4 / len(enk)  # 1E4 to get from m^2 to cm^2
     print('Mobility is {:.3E}'.format(mobility))
-    font = {'size': 14}
+    font = {'size': 12}
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
     mpl.rc('font', **font)
     plt.plot(en_axis, np.multiply(ssigma, -1 * dfde(en_axis)), '.')
     plt.xlabel('Energy (eV)')
@@ -94,7 +97,7 @@ def assemble_full_matrix(data_dir, nk, simple=True):
     matrix = np.memmap(data_dir+'scattering_matrix'+mat_str+'.mmap', dtype='float64', mode='w+', shape=(nk, nk))
     mat_row_dir = data_dir + 'mat_rows/'
     
-    for k in range(nkpts):
+    for k in range(nk):
         kind = k + 1
         krow = np.memmap(mat_row_dir+'k{:05d}.mmap'.format(kind), dtype='float64', mode='r', shape=nk)
         matrix[k, :] = krow
@@ -102,7 +105,7 @@ def assemble_full_matrix(data_dir, nk, simple=True):
             print('Finished k={:d}'.format(kind))
 
 
-def matrixrows_par(k, nlambda, nk, simple=True):
+def matrixrows_par(k, nlambda, nk, data_dir, simple=True):
     """Calculate the full scattering matrix row by row and in parallel.
     
     We do this because the data is chunked by kpoint, so the most efficient way to do this is by calculating each row
@@ -114,12 +117,16 @@ def matrixrows_par(k, nlambda, nk, simple=True):
         k (int): Index of the parquet to open and process
         nlambda (int): Number of phonon modes
         nk (int): Number of total kpts
+        data_dir (str): absolute file path of the data for the calculation.
         simple (bool): If True, matrix will be written in simple linearization.
     """
+    mat_row_dir = data_dir + 'mat_rows/'
+    chunk_dir = data_dir + 'chunked/'
+
     istart = time.time()
     # Create memmap of the row
-    krow = np.memmap('k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nk)
-    g_df = pd.read_parquet(chunk_loc + 'k{:05d}.parquet'.format(k))
+    krow = np.memmap(mat_row_dir + 'k{:05d}.mmap'.format(k), dtype='float64', mode='w+', shape=nk)
+    g_df = pd.read_parquet(chunk_dir + 'k{:05d}.parquet'.format(k))
 
     # Diagonal term
     if simple:
@@ -128,7 +135,7 @@ def matrixrows_par(k, nlambda, nk, simple=True):
     else:
         diag_abs_weight = g_df['k_FD'] * (1 - g_df['k+q_FD']) * g_df['BE'] * g_df['g_element'] * g_df['abs_gaussian']
         diag_ems_weight = g_df['k_FD'] * (1 - g_df['k+q_FD']) * (g_df['BE'] + 1) * g_df['g_element'] * g_df['ems_gaussian']
-    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / c.hbar_ev / nlambda * cryd2ev**2
+    diagterm = np.sum(diag_ems_weight + diag_abs_weight) * 2*np.pi / c.hbar_ev / nlambda * c.ryd2ev**2
     krow[k-1] = (-1) * diagterm
 
     # Calculating nondiagonal terms
@@ -146,64 +153,46 @@ def matrixrows_par(k, nlambda, nk, simple=True):
             ems_weight = kp_rows['k_FD'] * (1 - kp_rows['k+q_FD']) * (kp_rows['BE'] + 1) * kp_rows['g_element'] * kp_rows['ems_gaussian']
 
         tot_weight = abs_weight + ems_weight
-        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / hbar_ev / nlambda * ryd2ev**2
+        krow[kpi - 1] = np.sum(tot_weight) * 2 * np.pi / c.hbar_ev / nlambda * c.ryd2ev**2
     del krow
     iend = time.time()
     print('Row calc for k={:d} took {:.2f} seconds'.format(k, iend - istart))
 
 
-def matrix_check_colsum(data_loc, el_df):
-    """We know that the matrix should have columns that sum to zero by the conservation of particle number. This function
-    calculates the sum of each column and writes it out.
-
-    Parameters:
-        data_loc (str): file location where the matrix can be found
-
-    Returns:
-        colsum (dbl): array containing the column sum
-    """
-    nkpts = len(np.unique(el_df['k_inds']))
-    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
-
-    colsum = np.zeros(nkpts)
-    for k in range(nkpts):
-        colsum[k] = np.sum(sm[:, k])
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(colsum))))
-    print('The largest column sum is {:E}'.format(colsum.max()))
-    return colsum
-
-
-def scattering_rates(data_loc, el_df, ph_df, n_th)
+def scattering_rates(data_loc, el_df, ph_df, n_th):
     print('\nCalculating the scattering rates for each kpoint using {:d} threads'.format(n_th))
     nkpts = len(np.unique(el_df['k_inds']))
     n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
     pool = mp.Pool(n_th)
-    chunk_dir = data_loc + 'chunked/'
 
     start = time.time()
-    pool.map(partial(scattering_rates_parallel, nlambda=n_ph_modes, chunk_loc=chunk_dir), kinds)
+    pool.map(partial(scattering_rates_parallel, nlambda=n_ph_modes, data_dir=data_loc), kinds)
     aggregated_rates = np.array(rates_array)
     np.save(data_loc + 'scattering_rates', aggregated_rates)
     end = time.time()
     print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
 
 
-def scattering_matrix(data_loc, el_df, n_th, simplebool)
+def scattering_matrix(data_loc, el_df, ph_df, n_th, simplebool):
     print('\nCalculating the scattering matrix row by row...')
     nkpts = len(np.unique(el_df['k_inds']))
     n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
     kinds = np.arange(1, nkpts + 1)
     pool = mp.Pool(n_th)
-    mat_row_dir = data_loc + 'mat_rows/'
 
     start = time.time()
-    pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, row_dir=mat_row_dir, simple=simplebool), kinds)
+    pool.map(partial(matrixrows_par, nlambda=n_ph_modes, nk=nkpts, data_dir=data_loc, simple=simplebool), kinds)
     end = time.time()
     print('Calc of scattering matrix rows took {:.2f} seconds'.format(end - start))
     print('\nCreating scattering matrix using the rows. Prior matrices of same name overwritten.')
     assemble_full_matrix(data_loc, nkpts, simple=simplebool)
-    matrix_check_colsum(data_loc, el_df)
+
+    matrix = np.memmap(data_loc + 'scattering_matrix.mmap', dtype='float64', mode='r', shape=(nkpts, nkpts))
+    cs = utilities.matrix_check_colsum(matrix, nkpts)
+    print('The average absolute value of the column sum is {:.3E}'.format(np.average(np.abs(cs))))
+    print('The largest column sum is {:E}'.format(cs.max()))
+    print('The average value of on-diagonal element is {:.3E}'.format(np.average(np.diag(matrix))))
 
 
 if __name__ == '__main__':
@@ -223,4 +212,4 @@ if __name__ == '__main__':
     if calc_rta_mobility:
         rta_tdf_mobility(in_loc, electron_df)
     if build_scattering_matrix:
-        scattering_matrix(in_loc, electron_df, nthreads, pp.simpleBool)
+        scattering_matrix(in_loc, electron_df, phonon_df, nthreads, pp.simpleBool)
