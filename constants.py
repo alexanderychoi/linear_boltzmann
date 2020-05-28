@@ -16,4 +16,4 @@ a3 = np.array([-2.7781803, 2.7781803, 0.0000000])
 b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
 b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
 b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
-Vuc = np.dot(np.cross(b1, b2), b3) * 1E-30  # unit cell volume in m^3
+Vuc = np.dot(np.cross(a1, a2), a3) * 1E-30  # unit cell volume in m^3

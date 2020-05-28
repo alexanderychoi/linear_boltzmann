@@ -2,7 +2,7 @@ import numpy as np
 import constants as c
 import os
 import pandas as pd
-import matrix_plotter
+# import matrix_plotter
 import matplotlib.pyplot as plt
 import problem_parameters as pp
 
@@ -58,16 +58,17 @@ def calc_sparsity(matrix):
     return sparsity
 
 
-def matrix_check_colsum(sm,nkpts):
+def matrix_check_colsum(matrix, nkpts):
     """Calculates the column sums of the given matrix.
     Parameters:
-        matrix (nparray): NxN matrix on which colsums are to be calculated.
+        matrix (array): NxN matrix on which colsums are to be calculated.
+        nkpts (int): The size of the matrix (N)
     Returns:
-        colsum (nparray): NX1 vector containing the column sums.
+        colsum (array): NX1 vector containing the column sums.
     """
     colsum = np.zeros(nkpts)
     for k in range(nkpts):
-        colsum[k] = np.sum(sm[:, k])
+        colsum[k] = np.sum(matrix[:, k])
     return colsum
 
 
@@ -76,11 +77,11 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 
 def check_matrix_properties(matrix):
-    cs = matrix_check_colsum(matrix,len(matrix))
+    cs = matrix_check_colsum(matrix, len(matrix))
     print('The average absolute value of SCM column sum is {:E}'.format(np.average(np.abs(cs))))
     print('The largest SCM column sum is {:E}'.format(cs.max()))
-    print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
-    print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
+    # print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
+    # print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
     print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
 
 
@@ -224,8 +225,9 @@ def calculate_density(df):
         n (double): The value of the carrier density specified by the equilibrium FD distribution.
     """
     f0 = df['k_FD'].values
-    Nuc = len(df)
-    n = 2 / Nuc / c.Vuc * np.sum(f0)
+    Nuc = pp.kgrid ** 3
+    normalization = 1 / Nuc / c.Vuc
+    n = 2 * np.sum(f0) * normalization
     return n
 
 
@@ -281,8 +283,9 @@ def calculate_noneq_density(chi, df):
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    Nuc = len(df)
-    n = 2 / Nuc / c.Vuc * np.sum(f)
+    Nuc = pp.kgrid ** 3
+    normalization = 1 / Nuc / c.Vuc
+    n = 2 * np.sum(f) * normalization
     # print('Non-eq carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     return n
 
@@ -423,5 +426,10 @@ def f2chi(f, df, field):
 
 
 if __name__ == '__main__':
-    out_Loc = pp.outputLoc
-    in_Loc = pp.inputLoc
+    out_loc = pp.outputLoc
+    in_loc = pp.inputLoc
+
+    eldf, phdf = load_el_ph_data(in_loc)
+    fermi_distribution(eldf)
+    conc = calculate_density(eldf)
+    print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))

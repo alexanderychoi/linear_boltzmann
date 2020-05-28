@@ -13,13 +13,14 @@ scratchLoc = re.findall(r"\s*scratchLoc\s*=\s*'(.+)'\n", alltext)
 T = float(re.findall(r"\s*Temperature\s*=\s*(.+)\n", alltext)[0])
 mu = float(re.findall(r"\s*FermiLevel\s*=\s*(.+)\n", alltext)[0])
 b = float(re.findall(r"\s*GaussianBroadening\s*=\s*(.+)\n", alltext)[0])
-gD = float(re.findall(r"\s*GridDensity\s*=\s*(\d+)\n", alltext)[0])
+kgrid = float(re.findall(r"\s*GridDensity\s*=\s*(\d+)\n", alltext)[0])
+cutoff = float(re.findall(r"\s*EnergyWindow\s*=\s*(.+)\n", alltext)[0])
 
-print('\nData for this run loaded from \'' + inputLoc + '\'')
+print('\nData for this run loaded from "{:s}"\n'.format(inputLoc))
 print('Lattice temperature is {:.1f} K'.format(T))
 print('Fermi Level is {:.5f} eV'.format(mu))
 print('Gaussian broadening is {:.1e} eV'.format(b))
-print('Grid density is {:.1f} cubed'.format(gD))
+print('Grid density is {:.1f} cubed'.format(kgrid))
 if scratchLoc:
 	scratchLoc = scratchLoc[0]
 	print('Scratch location is \'' + scratchLoc + '\'')
@@ -31,8 +32,8 @@ scmBool = False
 # What's the name of the matrix?
 scmName = 'scattering_matrix.mmap'
 # String for title of plots
-title_str = 'Grid {:.0f}'.format(gD) + '^3,' + ' {:3f}'.format(mu) + 'eV,' + ' {:.3f}'.format(T) + ' K,' + ' {:.3f}'.format(cutoff) + ' eV'
+title_str = 'Grid={:.0f}^3, mu={:.4f} eV, {:.1f} K, Emax={:.3f} eV'.format(kgrid, mu, T, cutoff)
 
 print('\nIs matrix is presumed to be in simple linearization? {:s}'.format(str(simpleBool)))
 print('Will an arbitrary correction factor be applied to the matrix? {:s}'.format(str(scmBool)))
-print('The name of the scattering matrix to be loaded is {:s}'.format(scmName))
+print('The name of the scattering matrix to be loaded is "{:s}"\n'.format(scmName))
