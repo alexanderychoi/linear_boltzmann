@@ -1,7 +1,7 @@
 import numpy as np
 import constants as c
 import utilities
-import problemparameters as pp
+import problem_parameters as pp
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import numpy.linalg

@@ -1,7 +1,7 @@
 import numpy as np
 import constants as c
 import utilities
-import problemparameters as pp
+import problem_parameters as pp
 
 
 # The following set calculates the low-frequency diffusion based on solutions to effective Boltzmann equation
