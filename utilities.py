@@ -3,7 +3,6 @@ import constants as c
 import os
 import pandas as pd
 import occupation_plotter
-import matplotlib.pyplot as plt
 import problemparameters as pp
 
 
@@ -247,13 +246,6 @@ def drift_velocity(chi, df):
     f0 = df['k_FD'].values
     f = chi + f0
     vd = np.sum(f * df['vx [m/s]']) / np.sum(f)
-    # vd = np.sum(f * df['vx [m/s]']) / np.sum(f0) / 2
-    # vd = 2*np.sum(f * df['vx [m/s]']) / np.sum(f0)
-    Nuc = len(df)
-    # vd = 1 / Nuc / c.Vuc * np.sum(f*df['vx [m/s]']) / calculate_noneq_density(chi,df)  # Need to check if this is right
-    # Took the above from Gantsevitch review Eqn. 1.20
-    # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
-    # print('Drift velocity is {:.10E} [m/s]'.format(vd))
     return vd
 
 
@@ -318,7 +310,7 @@ def mean_energy(chi, df):
         meanE (double): The value of the mean carrier energy in eV.
     """
     f0 = df['k_FD'].values
-    f = chi + df['k_FD'].values
+    f = chi + f0
     n = calculate_density(df)
     meanE = np.sum(f * df['energy [eV]']) / np.sum(f)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
@@ -335,7 +327,7 @@ def calc_mobility(F, df):
     Returns:
         mobility (double): The value of the mobility carrier energy in m^2/V-s.
     """
-    Nuc = len(df)
+    Nuc = pp.kgrid ** 3
     print('Field not specified. Mobility calculated using linear in E formula.')
     prefactor = 2 * c.e ** 2 / (c.Vuc * c.kb_joule * pp.T * Nuc)
     conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
@@ -357,7 +349,7 @@ def calc_diff_mobility(chi, df,field):
     Returns:
         mobility (double): The value of the mobility carrier energy in m^2/V-s.
     """
-    Nuc = len(df)
+    Nuc = pp.kgrid ** 3
     print('Field specified. Mobility calculated using general definition of conductivity')
     n = calculate_density(df)
     prefactor = 2 *c.e / c.Vuc / Nuc /field
@@ -366,33 +358,6 @@ def calc_diff_mobility(chi, df,field):
     # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
     # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
-
-
-def calc_L_Gamma_pop(chi, df):
-    """Function that calculates the carrrier populations in the Gamma and L valleys given a Chi solution.
-    Parameters:
-        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
-        df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
-
-    Returns:
-        ng (double): The value of the gamma carrier population in m^-3.
-        nl (double): The value of the upper carrier population in m^-3.
-    """
-    f0 = df['k_FD'].values
-    f = chi + f0
-    df['kpt_mag'] = np.sqrt(df['kx [1/A]'].values**2 + df['ky [1/A]'].values**2 +
-                                 df['kz [1/A]'].values**2)
-    df['ingamma'] = df['kpt_mag'] < 0.3  # Boolean. In gamma if kpoint magnitude less than some amount
-    g_inds = df.loc[df['ingamma'] == 1].index
-    l_inds = df.loc[df['ingamma'] == 0].index
-    # g_inds = df.loc[df['ingamma'] == 1].index-1+1
-    # l_inds = df.loc[df['ingamma'] == 0].index-1+1
-    # l_inds = df.loc[df['ingamma']==0,'k_inds']-1
-    # g_inds = df.loc[df['ingamma']==1,'k_inds']-1
-    Nuc = len(df)
-    n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
-    n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
-    return n_g, n_l, g_inds, l_inds
 
 
 def calc_popsplit(chi, df):
@@ -410,11 +375,8 @@ def calc_popsplit(chi, df):
     f0 = df['k_FD'].values
     f = chi + f0
     g_inds,l_inds,x_inds = split_valleys(df,False)
-    # g_inds = df.loc[df['ingamma'] == 1].index-1+1
-    # l_inds = df.loc[df['ingamma'] == 0].index-1+1
-    # l_inds = df.loc[df['ingamma']==0,'k_inds']-1
-    # g_inds = df.loc[df['ingamma']==1,'k_inds']-1
-    Nuc = len(df)
+
+    Nuc = pp.kgrid ** 3
     n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
     n_l = 2 / Nuc / c.Vuc * np.sum(f[l_inds])
     if pp.getX:
@@ -425,22 +387,19 @@ def calc_popsplit(chi, df):
     return n_g, n_l, n_x, n
 
 
-def calc_popinds(chi, df,inds):
-    """Function that calculates the carrrier populations in the Gamma, L, and X valleys given a Chi solution.
+def calc_popinds(chi, df, inds):
+    """Function that calculates the carrrier populations in the given indices of a chi solution.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt
-        get_X (Bool): Boolean signifying whether the calculation should also return X valley indices. Not every grid
-        contains the X valleys. True -> Get X valley inds
+        inds (nparray): Indexing array that you want to calculate the population in.
     Returns:
-        ng (double): The value of the gamma carrier population in m^-3.
-        nl (double): The value of the L carrier population in m^-3.
-        nx (dobule): The value of the X carrier population in m^-3.
+        ng (double): The value carrier population contained in inds in m^-3.
+
     """
     f0 = df['k_FD'].values
     f = chi + f0
-
-    Nuc = len(df)
+    Nuc = pp.kgrid ** 3
     n = 2 / Nuc / c.Vuc * np.sum(f[inds])
 
     return n
@@ -466,7 +425,6 @@ def f2chi(f, df, field):
 if __name__ == '__main__':
     out_loc = pp.outputLoc
     in_loc = pp.inputLoc
-
     eldf, phdf = load_el_ph_data(in_loc)
     fermi_distribution(eldf)
     conc = calculate_density(eldf)

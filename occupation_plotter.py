@@ -242,8 +242,9 @@ def bz_3dscatter(points, useplotly=True, icind=False):
     if icind:
         icinds_l = np.load(pp.outputLoc+'left_icinds.npy')
         icinds_r = np.load(pp.outputLoc+'right_icinds.npy')
-        icinds = np.concatenate([icinds_l,icinds_r])
-        ic_df = points.loc[icinds]
+        icr_df = points.loc[icinds_r]
+        icl_df = points.loc[icinds_l]
+
     if useplotly:
         if np.any(points['energy [eV]']):
             colors = points['energy [eV]']
@@ -259,12 +260,21 @@ def bz_3dscatter(points, useplotly=True, icind=False):
         )
         if icind:
             trace2 = go.Scatter3d(
-                x=ic_df['kx [1/A]'].values / (2 * np.pi / c.a),
-                y=ic_df['ky [1/A]'].values / (2 * np.pi / c.a),
-                z=ic_df['kz [1/A]'].values / (2 * np.pi / c.a),
+                x=icr_df['kx [1/A]'].values / (2 * np.pi / c.a),
+                y=icr_df['ky [1/A]'].values / (2 * np.pi / c.a),
+                z=icr_df['kz [1/A]'].values / (2 * np.pi / c.a),
 
                 mode='markers',
-                marker=dict(size=2, color='black', colorscale='Rainbow', showscale=True, opacity=1)
+                marker=dict(size=2, color='black', opacity=1)
+            )
+
+            trace3 = go.Scatter3d(
+                x=icl_df['kx [1/A]'].values / (2 * np.pi / c.a),
+                y=icl_df['ky [1/A]'].values / (2 * np.pi / c.a),
+                z=icl_df['kz [1/A]'].values / (2 * np.pi / c.a),
+
+                mode='markers',
+                marker=dict(size=2, color='#7f7f7f', opacity=1)
             )
 
         b1edge = 0.5 * c.b1 / (2 * np.pi / c.a)
@@ -298,7 +308,7 @@ def bz_3dscatter(points, useplotly=True, icind=False):
 
         data = [trace1, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
         if icind:
-            data = [trace1, trace2, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
+            data = [trace1, trace2,trace3, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
 
         layout = go.Layout(
             scene=dict(

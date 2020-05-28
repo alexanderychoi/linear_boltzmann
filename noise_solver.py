@@ -4,23 +4,7 @@ import utilities
 import problemparameters as pp
 
 
-# The following set of functions calculate the low-frequency PSD based on solutions to effective Boltzmann equation
-def lowfreq_diffusion(g, df):
-    """Calculate the low-frequency non-eq diffusion coefficent as per Wu Li PRB 92, 2015. Effective distribution g must
-    be passed in as chi.
-    Parameters:
-        g (nparray): Effective distribution function passed as chi.
-        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
-
-    Returns:
-        D (double): The value of the non-eq diffusion coefficient in m^2/s.
-    """
-    n = utilities.calculate_density(df)
-    Nuc = len(df)
-    D = 2 / Nuc / c.Vuc * np.sum(g*df['vx [m/s]']) / n
-    return D
-
-
+# The following set calculates the low-frequency diffusion based on solutions to effective Boltzmann equation
 def thermal_diffusion(vd_vd,chi,df):
     """Calculate the low-frequency non-eq diffusion coefficent as per my derivation.
     Parameters:
@@ -86,11 +70,10 @@ def intervalley_diffusion_three_valley(ng_nl,ng_nx,nl_nx,chi,df):
     vd_g = utilities.mean_velocity(chi[g_inds],g_df)
     vd_l = utilities.mean_velocity(chi[l_inds],l_df)
     vd_x = utilities.mean_velocity(chi[x_inds],x_df)
-    D_tr = -(vd_g-vd_l)**2/np.sum(f)*np.sum(ng_nl[g_inds])-(vd_g-vd_x)**2/np.sum(f)*np.sum(ng_nx[g_inds])-(vd_l-vd_x)**2/np.sum(f)*np.sum(nl_nx[l_inds])
     D_tr_gl = -(vd_g-vd_l)**2/np.sum(f)*np.sum(ng_nl[g_inds])
     D_tr_gx = -(vd_g-vd_x)**2/np.sum(f)*np.sum(ng_nx[g_inds])
     D_tr_lx = -(vd_l-vd_x)**2/np.sum(f)*np.sum(nl_nx[l_inds])
-    # D_tr = -(vd_g-vd_l)**2/np.sum(f)*np.sum(ng_nl)-(vd_g-vd_x)**2/np.sum(f)*np.sum(ng_nx)-(vd_l-vd_x)**2/np.sum(f)*np.sum(nl_nx)
+    D_tr = D_tr_gl + D_tr_gx + D_tr_lx
 
     return D_tr,D_tr_gl,D_tr_gx,D_tr_lx
 

@@ -346,7 +346,6 @@ def plot_diffusion(df,fieldVector,freq):
     plt.legend()
 
 
-
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
