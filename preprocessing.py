@@ -280,7 +280,7 @@ def chunk_and_pop_recips(data_dir, n_th, el_df):
     print('\nGenerating reciprocal matrix elements into memmapped files')  
     if pp.scratchLoc:
         recip_loc = pp.scratchLoc
-        print('A scratch location is specified. Reciprocal elements stored in {:s}'.format(scratch_loc))
+        print('A scratch location is specified. Reciprocal elements stored in {:s}'.format(recip_loc))
     else:
         recip_loc = data_dir + 'recips/'
         if not os.path.isdir(recip_loc):
@@ -424,13 +424,10 @@ def add_occ_and_delta_weights(data_dir, n_th, el_df, ph_df):
     print('Calc. delta function weight using gaussian took {:.2f} seconds'.format(end - start))
 
 
-def process_perturbo_matrix(data_dir,el_df):
+def process_perturbo_matrix(data_dir, el_df):
     """Take the scattering matrix created by perturbo and puts it into a memmap array"""
     nk = len(el_df['k_inds'])
     matrix = np.memmap(data_dir + 'scatt_mat_pert.mmap', dtype='float64', mode='w+', shape=(nk, nk))
-
-    hbar_evs = 6.582119569E-16
-    ryd2ev = 13.605698
 
     counter = 1
     f = open(data_dir + 'gaas.scatt_mat')
@@ -440,7 +437,7 @@ def process_perturbo_matrix(data_dir,el_df):
         print('Finished READ IN for {:d} chunk of {:2E} bits.'.format(counter, chunkSize))
         chunkdata = np.reshape(all_lines, (-1, 3), order='C')
         inds = chunkdata[:, :2].astype(int) - 1
-        matrix[inds[:,0], inds[:,1]] = chunkdata[:, 2] * ryd2ev / hbar_evs
+        matrix[inds[:,0], inds[:,1]] = chunkdata[:, 2] * c.ryd2ev / c.hbar_ev
         counter += 1
 
     print('Scattering matrix constructed directly from perturbo')
