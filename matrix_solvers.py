@@ -7,6 +7,17 @@ import problemparameters as pp
 import matplotlib.pyplot as plt
 import numpy.linalg
 from scipy.sparse import linalg
+import inspect
+
+
+class gmres_counter(object):
+    def __init__(self, disp=True):
+        self._disp = disp
+        self.niter = 0
+    def __call__(self, rk=None):
+        self.niter += 1
+        if self._disp:
+            print('iter %3i\trk = %s' % (self.niter, str(rk)))
 
 
 def low_field_GMRES(df, scm, simplelin=True, applyscmFac=False, convergence=1e-6):
@@ -23,6 +34,7 @@ def low_field_GMRES(df, scm, simplelin=True, applyscmFac=False, convergence=1e-6
         f_next (nparray): Numpy array containing the (hopefully) converged GMRES solution as psi/(eE/kT).
         f_0 (nparray): Numpy array containing the RTA solution as psi_0/(eE/kT).
     """
+    counter = gmres_counter()
     if applyscmFac:
         scmfac = pp.scmVal
         print('Applying 2 Pi-squared factor.')
@@ -34,7 +46,7 @@ def low_field_GMRES(df, scm, simplelin=True, applyscmFac=False, convergence=1e-6
     invdiag = (np.diag(scm) * scmfac) ** (-1)
     f_0 = b * invdiag
     loopstart = time.time()
-    f_next, criteria = linalg.gmres(scm*scmfac, b,x0=f_0,tol=convergence)
+    f_next, criteria = linalg.gmres(scm*scmfac, b,x0=f_0,tol=convergence,callback=counter)
     print('Convergence? 0 = Successful')
     print(criteria)
     loopend = time.time()
@@ -68,6 +80,7 @@ def write_lowfield_GMRES(outLoc,inLoc,df,simplelin2=True,applyscmFac2=False,conv
     """
     nkpts = len(np.unique(df['k_inds']))
     scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    utilities.check_matrix_properties(scm)
     f_next, f_0 = low_field_GMRES(df, scm, simplelin=simplelin2, applyscmFac=applyscmFac2,convergence=convergence2)
     np.save(outLoc +'f_' + '1_gmres', f_0)
     np.save(outLoc +'f_' + '2_gmres', f_next)
@@ -99,6 +112,8 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
         step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
     if pp.gD == 200:
         step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+    if pp.gD == 80:
+        step_size = 0.0070675528500652425*2*1E10 #1/Angstron for 1/m (for 80^3)
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
@@ -130,8 +145,8 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
             # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
             subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
             ordered_inds = subset['k_inds'].values - 1  # indices of matrix (zero indexed)
-            l_icinds.append(ordered_inds[0] + 1)  # +1 to get the k_inds values (one indexed)
-            r_icinds.append(ordered_inds[-1] +1)
+            l_icinds.append(ordered_inds[0])  # +1 to get the k_inds values (one indexed)
+            r_icinds.append(ordered_inds[-1])
             # Set the "initial condition" i.e. the point with the most negative kx value is treated as being zero
             # (and virtual point below)
             matrix[ordered_inds[0], ordered_inds[1]] += 1/(2*step_size)*c.e*E/c.hbar_joule
@@ -174,6 +189,7 @@ def steady_state_full_drift_GMRES(matrix_sc, matrix_fd, kptdf, field, canonical=
         x_next (nparray): Numpy array containing the (hopefully) converged iterative solution as chi.
         x_0 (nparray): Numpy array containing the RTA solution as chi.
     """
+    counter = gmres_counter()
     print('Starting steady_state_full_drift_iterative solver for {:.3E}'.format(field))
     if applyscmFac:
         scmfac = pp.scmVal
@@ -187,8 +203,15 @@ def steady_state_full_drift_GMRES(matrix_sc, matrix_fd, kptdf, field, canonical=
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
     x_0 = b * invdiag
+
+    # M2 = linalg.spilu(matrix_sc * scmfac - matrix_fd)
+    # M_x = lambda x: M2.solve(x)
+    # M = linalg.LinearOperator((len(kptdf), len(kptdf)), M_x)
+    # print('Obtained preconditioner')
+    # x_0 = np.load(pp.outputLoc + 'chi_3_gmres_{:.1e}.npy'.format(7.5e4))
+
     loopstart = time.time()
-    x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=convergence)
+    x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=convergence,callback=counter)
     print('Convergence?')
     print(criteria)
     loopend = time.time()
@@ -226,7 +249,7 @@ def write_fdm_GMRES(outLoc, inLoc, fieldVector, df, canonical2=False, applyscmFa
     scm = np.memmap(inLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     error = []
     for i in range(len(fieldVector)):
-        fdm = np.memmap(inLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+        fdm = np.memmap(inLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
         x_next, _, temp_error, icinds_l, icinds_r = steady_state_full_drift_GMRES(scm, fdm, df, EField, canonical2, applyscmFac2, convergence2)
         error.append(temp_error)
@@ -291,6 +314,7 @@ def eff_distr_GMRES(chi, matrix_sc, matrix_fd, df, field, simplelin=True, applys
     error = np.linalg.norm(b_check - b)/np.linalg.norm(b)
     print('Residual error is {:3E}'.format(error))
     return g_next, g_0,error
+
 
 
 def eff_distr_RTA(chi,matrix_sc,df,simplelin=True,applyscmFac=False):
@@ -378,31 +402,38 @@ if __name__ == '__main__':
     in_Loc = pp.inputLoc
 
     # Read problem parameters and specify electron DataFrame
-    utilities.load_electron_df(in_Loc)
+    # utilities.load_electron_df(in_Loc)
     utilities.read_problem_params(in_Loc)
     electron_df = pd.read_pickle(in_Loc+'electron_df.pkl')
     electron_df = utilities.fermi_distribution(electron_df)
 
     # Steady state solutions
-    fields = np.array([1])
+    # fields = np.array([1])
     # fields = np.array([1e2,1e3,1e4,2.5e4,5e4,7.5e4,1e5,2e5,3e5])
+    # fields = np.array([1e2,1e3,1e4,2.5e4,5e4,7.5e4,1e5])
+    # fields = np.array([1e2, 1e3, 1e4, 2e4, 3e4, 4e4, 5e4, 6e4, 7e4, 8e4, 9e4, 1e5])
     # fields = np.array([3.5e5,4e5,4.5e5,5e5,5.5e5,6e5])
+    # fields = np.geomspace(1e1,2.9e5,20)
+    # fields = np.array([1.5e4,2e4])
+    # fields = np.array([1.4e4])
+    fields = np.array([1e2, 1e3, 1e4, 2e4, 3e4, 4e4, 5e4, 6e4, 7e4, 8e4, 9e4, 1e5,2e5])
+
     applySCMFac = pp.scmBool
     simpleLin = pp.simpleBool
-    writeLowfield = True
+    writeLowfield = False
     writeFDM = True
-    writeEffective = True
+    writeEffective = False
 
     if writeLowfield:
-        write_lowfield_GMRES(out_Loc, in_Loc, electron_df, simpleLin, applySCMFac)
+        write_lowfield_GMRES(out_Loc, in_Loc, electron_df, simpleLin, applySCMFac,1E-8)
         print('Low field solutions written to file as Fs.')
 
     if writeFDM:
-        write_fdm_GMRES(out_Loc, in_Loc, fields, electron_df, not simpleLin, applySCMFac, 1E-6)
+        write_fdm_GMRES(out_Loc, in_Loc, fields, electron_df, not simpleLin, applySCMFac, 1E-5)
         print('FDM solutions written to file as chis.')
 
     if writeEffective:
-        write_g_GMRES(out_Loc, in_Loc, fields, electron_df, simpleLin, applySCMFac, 1E-6)
+        write_g_GMRES(out_Loc, in_Loc, fields, electron_df, simpleLin, applySCMFac, 1E-5)
         print('Effective distribution solutions written to file.')
 
 
