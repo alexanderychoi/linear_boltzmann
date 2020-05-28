@@ -113,7 +113,7 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
     if pp.gD == 200:
         step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
     if pp.gD == 80:
-        step_size = 0.0070675528500652425*2*1E10 #1/Angstron for 1/m (for 80^3)
+        step_size = 0.0070675528500652425*2*1E10 # 1/Angstron for 1/m (for 80^3)
 
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     kptdata['kpt_mag'] = np.sqrt(kptdata['kx [1/A]'].values**2 + kptdata['ky [1/A]'].values**2 +
