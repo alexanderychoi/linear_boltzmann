@@ -3,7 +3,8 @@ import constants as c
 import os
 import pandas as pd
 import occupation_plotter
-import problemparameters as pp
+import problem_parameters as pp
+import matplotlib.pyplot as plt
 
 
 def split_valleys(df, plot_Valleys = True):
@@ -41,6 +42,58 @@ def split_valleys(df, plot_Valleys = True):
             print('There are {:d} kpoints in the X valley'.format(np.count_nonzero(valley_key_X)))
 
     return valley_key_G, valley_key_L, valley_key_X
+
+
+def split_L_valleys(df, plot_Valleys = True):
+    """Hardcoded for GaAs, obtains the indices for the 8 L valleys and returns these as zero-indexed vectors. Vectors
+    are indexed with respect to the full valley df, not the L df.
+    Parameters:
+        df (DataFrame): Dataframe that has coordinates that have already been shifted back into the FBZ.
+        plot_Valleys (Bool): Boolean signifying whether to generate plots of the eight distinct L valleys.
+    Returns:
+        valley_key_L1 (nparray): Numpy array containing the zero-indexed L valley indices. (+,+,+) k-coords
+        valley_key_L2 (nparray): Numpy array containing the zero-indexed L valley indices. (+,+,-) k-coords
+        valley_key_L3 (nparray): Numpy array containing the zero-indexed L valley indices. (+,-,+) k-coords
+        valley_key_L4 (nparray): Numpy array containing the zero-indexed L valley indices. (+,-,-) k-coords
+        valley_key_L5 (nparray): Numpy array containing the zero-indexed L valley indices. (-,+,+) k-coords
+        valley_key_L6 (nparray): Numpy array containing the zero-indexed L valley indices. (-,+,-) k-coords
+        valley_key_L7 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,+) k-coords
+        valley_key_L8 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,-) k-coords
+    """
+    _, L_inds, _ = split_valleys(df, False)
+    print('There are {:d} kpoints in the L valley'.format(np.count_nonzero(L_inds)))
+    kx = df['kx [1/A]'].values
+    ky = df['ky [1/A]'].values
+    kz = df['kz [1/A]'].values
+
+    valley_key_L1 = np.array(kx>0) & np.array(ky>0) & np.array(kz>0) & np.array(L_inds)
+    valley_key_L2 = np.array(kx>0) & np.array(ky>0) & np.array(kz<0) & np.array(L_inds)
+    valley_key_L3 = np.array(kx>0) & np.array(ky<0) & np.array(kz>0) & np.array(L_inds)
+    valley_key_L4 = np.array(kx>0) & np.array(ky<0) & np.array(kz<0) & np.array(L_inds)
+    valley_key_L5 = np.array(kx<0) & np.array(ky>0) & np.array(kz>0) & np.array(L_inds)
+    valley_key_L6 = np.array(kx<0) & np.array(ky>0) & np.array(kz<0) & np.array(L_inds)
+    valley_key_L7 = np.array(kx<0) & np.array(ky<0) & np.array(kz>0) & np.array(L_inds)
+    valley_key_L8 = np.array(kx<0) & np.array(ky<0) & np.array(kz<0) & np.array(L_inds)
+
+    if plot_Valleys:
+        x = df['kx [1/A]'].values / (2 * np.pi / c.a)
+        y = df['ky [1/A]'].values / (2 * np.pi / c.a)
+        z = df['kz [1/A]'].values / (2 * np.pi / c.a)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(x[valley_key_L1], y[valley_key_L1], z[valley_key_L1])
+        ax.scatter(x[valley_key_L2], y[valley_key_L2], z[valley_key_L2])
+        ax.scatter(x[valley_key_L3], y[valley_key_L3], z[valley_key_L3])
+        ax.scatter(x[valley_key_L4], y[valley_key_L4], z[valley_key_L4])
+        ax.scatter(x[valley_key_L5], y[valley_key_L5], z[valley_key_L5])
+        ax.scatter(x[valley_key_L6], y[valley_key_L6], z[valley_key_L6])
+        ax.scatter(x[valley_key_L7], y[valley_key_L7], z[valley_key_L7])
+        ax.scatter(x[valley_key_L8], y[valley_key_L8], z[valley_key_L8])
+        ax.set_xlabel(r'$kx/2\pi a$')
+        ax.set_ylabel(r'$ky/2\pi a$')
+        ax.set_zlabel(r'$kz/2\pi a$')
+
+    return valley_key_L1, valley_key_L2, valley_key_L3, valley_key_L4, valley_key_L5, valley_key_L6, valley_key_L7, valley_key_L8
 
 
 def calc_sparsity(matrix):
@@ -429,3 +482,5 @@ if __name__ == '__main__':
     fermi_distribution(eldf)
     conc = calculate_density(eldf)
     print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))
+    split_L_valleys(eldf, plot_Valleys = True)
+    plt.show()

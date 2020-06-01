@@ -8,6 +8,7 @@ import numpy.linalg
 import plotly.offline as py
 import plotly.graph_objs as go
 import preprocessing
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def plot_steady_transient_difference(fieldVector, freq):
@@ -150,6 +151,7 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
     l_f0 = np.squeeze(kptsdf.loc[l_inds,'k_FD'].values)
     spread = 90 * dx
     spread = 120 * dx
+    spread = 200 * dx
 
     def gaussian(x, mu, vmag, stdev=spread):
         sigma = stdev - (vmag/1E6) * 0.9 * stdev
@@ -205,7 +207,6 @@ def plot_energy_sep(df,fields):
         if pp.getX:
             plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
     plt.xlabel('Energy above CBM (eV)')
-    plt.ylim([-0.05,0.05])
     plt.ylabel(r'FDM deviational occupation ($\delta f_{\mathbf{k}}$) [arb]')
     plt.title(pp.title_str)
 

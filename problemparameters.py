@@ -56,7 +56,7 @@ fieldVector = np.array([1e2, 1e3, 1e4, 2e4, 3e4, 4e4, 5e4, 6e4, 7e4, 8e4, 9e4, 1
 # fieldVector = np.array([2e5])
 # fieldVector = np.array([1e2, 1e3, 1e4, 2e4, 3e4, 4e4, 5e4, 6e4, 7e4, 8e4, 9e4, 1e5,2e5])
 
-freqGHz = 5
+freqGHz = 10
 getX = False
 
 
