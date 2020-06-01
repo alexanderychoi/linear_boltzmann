@@ -59,8 +59,8 @@ def plot_transport_moments(df,fieldVector,freq):
     icinds_l = np.load(pp.outputLoc + 'left_icinds.npy')
     icinds_r = np.load(pp.outputLoc + 'right_icinds.npy')
     for ee in fieldVector:
-        chi_1_i = utilities.f2chi(f_1,df,ee)
-        chi_2_i = utilities.f2chi(f_2,df,ee)
+        chi_1_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}.npy".format(ee))
+        chi_2_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
         chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,ee))
 
@@ -201,6 +201,13 @@ def plot_transport_moments(df,fieldVector,freq):
     plt.ylabel(r'Carrier Population [m$^-3$]')
     plt.title(pp.title_str)
     plt.legend()
+
+    x = df.loc[icinds_r,'kx [1/A]'].values / (2 * np.pi / c.a)
+    y = df.loc[icinds_r,'ky [1/A]'].values / (2 * np.pi / c.a)
+    z = df.loc[icinds_r,'kz [1/A]'].values / (2 * np.pi / c.a)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x, y, z)
 
     plt.figure()
     plt.plot(kvcm,ng_1,'o-', linewidth=2, label=r'RTA Gamma')
