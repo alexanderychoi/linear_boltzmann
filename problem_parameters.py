@@ -10,14 +10,18 @@ fieldVector = np.array([1e2, 1e3, 1e4, 2e4, 3e4, 4e4, 5e4, 6e4, 7e4, 8e4, 9e4, 1
 freqGHz = 5
 getX = False
 derL = True
+
+inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/2_Problem_PERT/0_Data/'
+outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/2_Problem_PERT/1_Pipeline/Output/'
+
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT/1_Pipeline/Output/'
 
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT_Lder/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT_Lder/1_Pipeline/Output/'
 
-inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/0_Data/'
-outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/1_Pipeline/Output/'
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/1_Pipeline/Output/'
 
 f = open(inputLoc+'problem_parameters.txt')
 alltext = f.read()

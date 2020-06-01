@@ -405,7 +405,7 @@ def calc_diff_mobility(chi, df,field):
     Nuc = pp.kgrid ** 3
     print('Field specified. Mobility calculated using general definition of conductivity')
     n = calculate_density(df)
-    prefactor = 2 *c.e / c.Vuc / Nuc /field
+    prefactor = 2 *c.e / c.Vuc / Nuc / field
     conductivity = prefactor * np.sum(df['vx [m/s]'] * chi)
     mobility = conductivity / c.e / n
     # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
@@ -470,7 +470,8 @@ def f2chi(f, df, field):
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
     """
     f0 = np.squeeze(df['k_FD'].values)
-    prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
+    # prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
+    prefactor = field * c.e / c.kb_joule / pp.T * f0
     chi = np.squeeze(f) * np.squeeze(prefactor)
     return chi
 
@@ -482,5 +483,5 @@ if __name__ == '__main__':
     fermi_distribution(eldf)
     conc = calculate_density(eldf)
     print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))
-    split_L_valleys(eldf, plot_Valleys = True)
+    split_L_valleys(eldf, plot_Valleys=True)
     plt.show()
