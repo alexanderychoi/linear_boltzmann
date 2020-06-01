@@ -276,13 +276,11 @@ def steady_low_field(df, scm):
         scmfac = 1
         print('Not applying correction factor to the scattering matrix.')
     loopstart = time.time()
-    chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
 
-    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     invdiag = (np.diag(scm) * scmfac) ** (-1)
     b = (-1) * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
     f_0 = b * invdiag
-    f_next, criteria = linalg.gmres(scm*scmfac, b,x0=f_0,tol=pp.relConvergence, atol=pp.absConvergence,
+    f_next, criteria = linalg.gmres(scm*scmfac, b, x0=f_0, tol=pp.relConvergence, atol=pp.absConvergence,
                                     callback=counter)
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     if pp.verboseError:
@@ -299,6 +297,7 @@ def steady_low_field(df, scm):
     if not pp.simpleBool:
         # Return chi in all cases so there's not confusion in plotting
         print('Converting psi to chi since matrix in canonical linearization')
+        chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
         f_next = f_next * chi2psi
         f_0 = f_0 * chi2psi
     return f_next, f_0, error, counter.niter
@@ -470,9 +469,9 @@ if __name__ == '__main__':
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     error = []
     iteration_count = []
-    f_next, f_0,_,_ = steady_low_field(electron_df, scm)
-    np.save(pp.outputLoc + 'Steady/' + 'f_1',f_0)
-    np.save(pp.outputLoc + 'Steady/' + 'f_2',f_next)
+    f_next, f_0, _, _ = steady_low_field(electron_df, scm)
+    np.save(pp.outputLoc + 'Steady/f_1', f_0)
+    np.save(pp.outputLoc + 'Steady/f_2', f_next)
 
     # writeTransient = True
     # writeSteady = True

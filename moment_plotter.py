@@ -5,6 +5,10 @@ import problem_parameters as pp
 import matplotlib.pyplot as plt
 import noise_solver
 
+import matplotlib as mpl
+font = {'size': 11}
+mpl.rc('font', **font)
+
 
 def plot_scattering_rates(df):
     """Plots the scattering rates by pulling them from the on-diagonal of the simple scattering matrix
@@ -59,8 +63,8 @@ def plot_transport_moments(df,fieldVector,freq):
     icinds_l = np.load(pp.outputLoc + 'left_icinds.npy')
     icinds_r = np.load(pp.outputLoc + 'right_icinds.npy')
     for ee in fieldVector:
-        chi_1_i = utilities.f2chi(f_1,df,ee)
-        chi_2_i = utilities.f2chi(f_2,df,ee)
+        chi_1_i = utilities.f2chi(f_1, df, ee)
+        chi_2_i = utilities.f2chi(f_2, df, ee)
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
         chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,ee))
 
@@ -358,7 +362,7 @@ if __name__ == '__main__':
     freq = pp.freqGHz
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    plot_scattering_rates(electron_df)
+    # plot_scattering_rates(electron_df)
     plot_transport_moments(electron_df, fields, freq)
     # plot_diffusion(electron_df, fields, freq)
 

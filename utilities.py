@@ -391,7 +391,7 @@ def calc_mobility(F, df):
     return mobility
 
 
-def calc_diff_mobility(chi, df,field):
+def calc_diff_mobility(chi, df, field):
     """Calculate differential mobility as per general definition of conductivity. Solution must be fed in as chi.
     I'm not sure that this formula is the right formula for differential mobility. I just used Wu Li's formula and modified
     to acept chi as an input, which I don't think is the same thing.
@@ -405,7 +405,7 @@ def calc_diff_mobility(chi, df,field):
     Nuc = pp.kgrid ** 3
     print('Field specified. Mobility calculated using general definition of conductivity')
     n = calculate_density(df)
-    prefactor = 2 *c.e / c.Vuc / Nuc / field
+    prefactor = 2 * c.e / c.Vuc / Nuc / field
     conductivity = prefactor * np.sum(df['vx [m/s]'] * chi)
     mobility = conductivity / c.e / n
     # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
