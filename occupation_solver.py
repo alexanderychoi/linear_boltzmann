@@ -276,10 +276,11 @@ def steady_low_field(df, scm):
         scmfac = 1
         print('Not applying correction factor to the scattering matrix.')
     loopstart = time.time()
-    b = (-1)* np.squeeze(df['vx [m/s]'])  # Forcing for F.
-    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
+
+    # chi2psi is used to give the finite difference matrix the right factors in front since substitution made
     invdiag = (np.diag(scm) * scmfac) ** (-1)
+    b = (-1) * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
     f_0 = b * invdiag
     f_next, criteria = linalg.gmres(scm*scmfac, b,x0=f_0,tol=pp.relConvergence, atol=pp.absConvergence,
                                     callback=counter)
@@ -465,13 +466,21 @@ if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
 
-    writeTransient = True
-    writeSteady = True
-    write_icinds(electron_df)
-    if writeTransient:
-        write_transient(fields, electron_df, freq)
-    if writeSteady:
-        write_steady(fields, electron_df)
+    nkpts = len(np.unique(electron_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    error = []
+    iteration_count = []
+    f_next, f_0,_,_ = steady_low_field(electron_df, scm)
+    np.save(pp.outputLoc + 'Steady/' + 'f_1',f_0)
+    np.save(pp.outputLoc + 'Steady/' + 'f_2',f_next)
 
-    occupation_plotter.bz_3dscatter(electron_df,True,True)
-    plt.show()
+    # writeTransient = True
+    # writeSteady = True
+    # write_icinds(electron_df)
+    # if writeTransient:
+    #     write_transient(fields, electron_df, freq)
+    # if writeSteady:
+    #     write_steady(fields, electron_df)
+    #
+    # occupation_plotter.bz_3dscatter(electron_df,True,True)
+    # plt.show()
