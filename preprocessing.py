@@ -14,7 +14,7 @@ def load_optional_data(data_dir):
     """Create dataframes for kpts and qpts in crystal coordinates and Ryd energy.
     Not typically used, so in a separate function."""
 
-     # Electron kpoints in crystal coordinates
+    # Electron kpoints in crystal coordinates
     kpts_array = np.loadtxt('gaas.kpts')
     kpts = pd.DataFrame(data=kpts_array, columns=['k_inds', 'b1', 'b2', 'b3'])
     kpts['k_inds'] = kpts['k_inds'].astype(int)
@@ -22,7 +22,7 @@ def load_optional_data(data_dir):
     # Electron energies
     enk_array = np.loadtxt('gaas.enk')
     enk_ryd = pd.DataFrame(data=enk_array, columns=['k_inds', 'band_inds', 'energy [Ryd]'])
-    enk_ryd[['k_inds', 'band_inds']] = enk[['k_inds', 'band_inds']].astype(int)
+    enk_ryd[['k_inds', 'band_inds']] = enk_ryd[['k_inds', 'band_inds']].astype(int)
 
     # Phonon qpoints in crystal coordinates
     qpts_array = np.loadtxt('gaas.qpts')
@@ -136,6 +136,7 @@ def translate_into_fbz(df):
     
     return df
 
+
 def create_el_ph_dataframes(data_dir, overwrite=False):
     """Create dataframes from text files output from perturbo. They contain information
     used later in the calculation. This should only have to be run once.
@@ -145,7 +146,7 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
         overwrite (bool): True if you want to overwrite the existing dataframe
     """
     if not overwrite and \
-       (os.path.isfile(data_dir + 'gaas_enq.parquet')
+        (os.path.isfile(data_dir + 'gaas_enq.parquet')
         or os.path.isfile('gaas_full_electron_data.parquet')):
         exit('The dataframes already exist and you did not explicitly request an overwrite.')
 
@@ -204,7 +205,7 @@ def chunk_iterator(fname, size=512 * 1024 * 1024):
     f = open(fname, 'rb')
     # Want to readline for first line with headings so that numpy doesn't try to convert it to float.
     headings = f.readline().decode('utf-8')
-    print('CHUNKING using chunkify function')
+    print('ITERATING over chunks of the large file.')
     chunkEnd = f.tell()
     while True:
         chunkStart = chunkEnd
@@ -446,12 +447,12 @@ if __name__ == '__main__':
     import problem_parameters as pp
     in_loc = pp.inputLoc
     out_loc = pp.outputLoc
-    nthreads = 8
+    nthreads = 6
 
     create_dataframes = False
-    create_pert_scatt_mat = True
+    create_pert_scatt_mat = False
     chunk_mat_pop_recips = False
-    occ_func_and_delta_weights = False
+    occ_func_and_delta_weights = True
 
     if create_dataframes:
         create_el_ph_dataframes(in_loc, overwrite=False)
