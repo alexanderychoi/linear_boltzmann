@@ -59,8 +59,8 @@ def plot_transport_moments(df,fieldVector,freq):
     icinds_l = np.load(pp.outputLoc + 'left_icinds.npy')
     icinds_r = np.load(pp.outputLoc + 'right_icinds.npy')
     for ee in fieldVector:
-        chi_1_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}.npy".format(ee))
-        chi_2_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
+        chi_1_i = utilities.f2chi(f_1,df,ee)
+        chi_2_i = utilities.f2chi(f_2,df,ee)
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
         chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,ee))
 
@@ -360,6 +360,6 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     plot_scattering_rates(electron_df)
     plot_transport_moments(electron_df, fields, freq)
-    plot_diffusion(electron_df, fields, freq)
+    # plot_diffusion(electron_df, fields, freq)
 
     plt.show()
