@@ -47,6 +47,9 @@ def ng_ng(chi, matrix_sc, matrix_fd, df, field, freq):
     print('Starting transient Gamma-Gamma population autocorrelation solver for {:.3E} V/m and {:E} GHz'.format(field,freq))
     freq_matrix = np.diag(np.ones(len(df))*1j*10**9*-1*2*np.pi*freq)
     _, _,_, _, matrix_fd = occupation_solver.apply_centraldiff_matrix(matrix_fd, df, field)
+    if pp.derL:
+        _,_,_,matrix_fd = occupation_solver.apply_centraldiff_matrix_L(matrix_fd, df, field)
+
     loopstart = time.time()
     # Will only be able to run if you have a precalculated chi stored on file
     b_chi = (-1) * c.e * field / c.kb_joule / pp.T * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
@@ -263,6 +266,8 @@ def vd_vd(chi, matrix_sc, matrix_fd, df, field, freq):
         scmfac = 1
         print('Not applying correction factor to the scattering matrix.')
     _, _,_, _, matrix_fd  = occupation_solver.apply_centraldiff_matrix(matrix_fd, df, field)
+    if pp.derL:
+        _,_,_,matrix_fd = occupation_solver.apply_centraldiff_matrix_L(matrix_fd, df, field)
     loopstart = time.time()
     # Will only be able to run if you have a precalculated chi stored on file
     b_chi = (-1) * c.e * field / c.kb_joule / pp.T * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
@@ -401,7 +406,8 @@ def write_ng_ng(fieldVector,df,freq):
     iteration_count = []
     for i in range(len(fieldVector)):
         EField = fieldVector[i]
-        chi = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,EField))
+        # chi = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,EField))
+        chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(EField))
         fdm = np.memmap(pp.inputLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         g_next, g_3_johnson,temp_error, iterations = ng_ng(chi, scm, fdm, df, EField, freq)
         error.append(temp_error)
@@ -443,7 +449,8 @@ def write_vd_vd(fieldVector,df,freq):
     iteration_count = []
     for i in range(len(fieldVector)):
         EField = fieldVector[i]
-        chi = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,EField))
+        # chi = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,EField))
+        chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(EField))
         fdm = np.memmap(pp.inputLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         g_next, g_3_johnson,temp_error, iterations = vd_vd(chi, scm, fdm, df, EField,freq)
         error.append(temp_error)
