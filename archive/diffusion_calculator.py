@@ -345,6 +345,7 @@ def vd_vd_GMRES(chi, matrix_sc, matrix_fd, df, field, guess, simplelin=True, app
 
     return g_next, g_0,error, counter.niter
 
+
 def write_ng_ng_GMRES(outLoc, inLoc, fieldVector, df, simplelin2=True, applyscmFac2 = False,get_X=True,plot_Valleys=False,
                                convergence2=1E-6):
     """Calls the iterative solver hard coded for solving the effective BTE w/FDM and writes the chis to file.
@@ -509,6 +510,7 @@ def plot_AC_DC_error(outLoc, fieldVector):
 
 
     plt.show()
+
 
 if __name__ == '__main__':
     # Right now, the functions are hardcoded to look for a scattering matrix named 'scattering_matrix_5.87_simple.mmap'

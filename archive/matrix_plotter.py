@@ -754,29 +754,29 @@ if __name__ == '__main__':
 
     # Read problem parameters and specify electron DataFrame
     # utilities.load_electron_df(in_Loc)
-    utilities.read_problem_params(in_Loc)
+    # utilities.read_problem_params(in_Loc)
     electron_df = pd.read_pickle(in_Loc + 'electron_df.pkl')
-    electron_df = utilities.fermi_distribution(electron_df)
-
+    # electron_df = utilities.fermi_distribution(electron_df)
+    # electron_df.to_pickle(in_Loc + 'electron_df.pkl')
     # Steady state solutions
     # fields = np.array([1e2, 1e3, 1e4, 2.5e4, 5e4, 7.5e4, 1e5, 2e5, 3e5])
-    # fields = np.geomspace(1e1,2.9e5,20)
+    fields = np.geomspace(1e1,2.9e5,20)
     # fields = np.array([1e2,1e3,1e4,2.5e4,5e4,7.5e4,1e5,2e5,3e5])
-    fields = np.array([1e2,1e3,1e4,2.5e4,5e4])
+    # fields = np.array([1e2,1e3,1e4,2.5e4,5e4])
     # fields = np.array([3.5e5,4e5,4.5e5,5e5,5.5e5,6e5])
     applySCMFac = pp.scmBool
     simpleLin = pp.simpleBool
-    utilities.split_valleys(electron_df,False,True)
+    utilities.split_valleys(electron_df,False)
 
     KDEField = fields[-4]
-    plotTransport = True
-    plotKDE = True
-    plotScattering = True
+    plotTransport = False
+    plotKDE = False
+    plotScattering = False
     plotNoise = False
     plots_vs_energy_separate_gamma_and_l = False
     # iv_diffusion(out_Loc, electron_df, fields)
     # plot_icinds(out_Loc, electron_df,fields)
-    # plot_drift_velocities(out_Loc, electron_df, fields)
+    plot_drift_velocities(out_Loc, electron_df, fields)
     # bz_3dscatter(electron_df, True, False)
 
     if plotTransport:
@@ -809,3 +809,5 @@ if __name__ == '__main__':
     # plt.xlabel('kz [1/A]')
     # plt.ylabel('kmag [1/A]')
     # print(len(electron_df))
+
+    plt.show()

@@ -133,7 +133,7 @@ def translate_into_fbz(df):
         fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
-    
+
     return df
 
 
