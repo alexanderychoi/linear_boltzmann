@@ -9,12 +9,13 @@ import constants as c
 import utilities
 
 
-def scattering_rates_parallel(k, nlambda, data_dir):
+def scattering_rates_parallel(k, nqpts, data_dir):
     """This function calculates the on-diagonal scattering rates, (inverse of the relaxation times)
 
     Parameters:
         k (int): Index of the parquet to open and process
-        nlambda (int): Number of phonon modes
+        nqpts (int): Number of points in the BZ. Equal to the grid density
+        data_dir (str): absolute file path to where the data is stored
     """
     chunk_dir = data_dir + 'chunked/'
     g_df = pd.read_parquet(chunk_dir + 'k{:05d}.parquet'.format(k))
@@ -23,7 +24,8 @@ def scattering_rates_parallel(k, nlambda, data_dir):
     ems_weight = (g_df['BE'] + 1 - g_df['k+q_FD']) * g_df['g_element'] * g_df['ems_gaussian']
     tot_weight = ems_weight + abs_weight
 
-    sr = np.sum(tot_weight) * 2*np.pi / c.hbar_ev / nlambda * c.ryd2ev**2 * 1E-12
+    # sr = np.sum(tot_weight) * 2*np.pi / c.hbar_ev / nlambda * c.ryd2ev**2 * 1E-12
+    sr = 1E-12 * np.sum(tot_weight) * 2*np.pi / c.hbar_ev * c.ryd2ev**2 / nqpts
     rates_array[k-1] = sr
 
 
@@ -165,18 +167,18 @@ def scattering_rates(data_loc, el_df, ph_df, n_th):
         ph_df (dataframe): contains phonon energies
         n_th (int): number of multiprocessing threads
     """
-    print('\nCalculating the scattering rates for each kpoint using {:d} threads'.format(n_th))
+    print('Calculating the scattering rates for each kpoint using {:d} threads'.format(n_th))
     nkpts = len(np.unique(el_df['k_inds']))
-    n_ph_modes = len(np.unique(ph_df['q_inds'])) * len(np.unique(ph_df['im_mode']))
+    npts = pp.kgrid**3
     kinds = np.arange(1, nkpts + 1)
     pool = mp.Pool(n_th)
 
     start = time.time()
-    pool.map(partial(scattering_rates_parallel, nlambda=n_ph_modes, data_dir=data_loc), kinds)
+    pool.map(partial(scattering_rates_parallel, nqpts=npts, data_dir=data_loc), kinds)
     aggregated_rates = np.array(rates_array)
     np.save(data_loc + 'scattering_rates', aggregated_rates)
     end = time.time()
-    print('Parallel relaxation time calc took {:.2f} seconds'.format(end - start))
+    print('Parallel relaxation time calc took {:.2f} seconds\n'.format(end - start))
 
 
 def scattering_matrix(data_loc, el_df, ph_df, n_th, simplebool):
@@ -209,20 +211,37 @@ def scattering_matrix(data_loc, el_df, ph_df, n_th, simplebool):
     print('The average value of on-diagonal element is {:.3E}'.format(np.average(np.diag(matrix))))
 
 
+def plot_scattering_rates(data_dir, el_df, ph_df):
+    rates = np.load(data_dir + 'scattering_rates.npy')
+    factor = 100
+    rates = rates * factor
+
+    import matplotlib.pyplot as plt
+    plt.figure()
+    plt.plot(el_df['energy [eV]'], rates, '.', MarkerSize=3, label='Parallel relaxation times')
+    plt.xlabel('Energy [eV]')
+    plt.ylabel(r'Scattering rate [ps$^{-1}$]')
+    plt.title(pp.title_str)
+    plt.show()
+
+
 if __name__ == '__main__':
     import problem_parameters as pp
     in_loc = pp.inputLoc
     out_loc = pp.outputLoc
     electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
-    nthreads = 8
+    nthreads = 6
 
     calc_scattering_rates = True
+    plot_rates = True
     calc_rta_mobility = False
     build_scattering_matrix = False
 
     if calc_scattering_rates:
         rates_array = mp.Array('d', [0] * len(np.unique(electron_df['k_inds'])), lock=False)
         scattering_rates(in_loc, electron_df, phonon_df, nthreads)
+    if plot_rates:
+        plot_scattering_rates(in_loc, electron_df, phonon_df)
     if calc_rta_mobility:
         rta_tdf_mobility(in_loc, electron_df)
     if build_scattering_matrix:
