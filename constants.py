@@ -1,4 +1,5 @@
 import numpy as np
+import problem_parameters as pp
 
 # Physical parameters (these will typically not change)
 a = 5.5563606  # Lattice constant for GaAs [Angstrom]
@@ -10,10 +11,28 @@ hbar_ev = 6.582119569 * 10 ** (-16)  # Reduced Planck's constant [eV/s]
 ryd2ev = 13.605693122994  # CODATA value. Different from perturbo at 8th sigfig
 
 # Lattice vectors
-a1 = np.array([-2.7781803, 0.0000000, 2.7781803])
-a2 = np.array([+0.0000000, 2.7781803, 2.7781803])
-a3 = np.array([-2.7781803, 2.7781803, 0.0000000])
-b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
-b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
-b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
-Vuc = np.dot(np.cross(a1, a2), a3) * 1E-30  # unit cell volume in m^3
+if pp.prefix == 'gaas':
+    alat = 5.556360705  # lattice parameter in Angstrom consistent with what perturbo uses
+    a1 = alat * np.array([-0.5, 0.0, 0.5])
+    a2 = alat * np.array([+0.0, 0.5, 0.5])
+    a3 = alat * np.array([-0.5, 0.5, 0.0])
+
+    b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
+    b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
+    b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
+    Vuc = np.dot(np.cross(a1, a2), a3) * 1E-30  # unit cell volume in m^3
+
+elif pp.prefix == 'si':
+    alat = 5.431474883  # lattice parameter in Angstrom consistent with what perturbo uses
+    a1 = alat * np.array([-0.5, 0.0, 0.5])
+    a2 = alat * np.array([+0.0, 0.5, 0.5])
+    a3 = alat * np.array([-0.5, 0.5, 0.0])
+
+    Vuc = np.dot(np.cross(a1, a2), a3)  # unit cell volume in angstrom^3
+    b1 = 2 * np.pi * np.cross(a2, a3) / Vuc
+    b2 = 2 * np.pi * np.cross(a3, a1) / Vuc
+    b3 = 2 * np.pi * np.cross(a1, a2) / Vuc
+    Vuc = Vuc * 1E-30  # unit cell volume in m^3
+
+else:
+    exit('Could not identify material, so could not set lattice parameters. Please set prefix in problem_parameters.txt')

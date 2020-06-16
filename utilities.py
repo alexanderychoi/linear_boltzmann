@@ -136,11 +136,13 @@ def check_matrix_properties(matrix):
 
 
 def load_el_ph_data(inputLoc):
-    if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
-        exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
+    if not (os.path.isfile(inputLoc + pp.prefix + '_full_electron_data.parquet') and
+            os.path.isfile(inputLoc + pp.prefix + '_enq.parquet')):
+        exit('Electron or phonon dataframes could not be found. ' +
+             'You can create it using preprocessing.create_el_ph_dataframes.')
     else:
-        el_df = pd.read_parquet(inputLoc + 'gaas_full_electron_data.parquet')
-        ph_df = pd.read_parquet(inputLoc + 'gaas_enq.parquet')
+        el_df = pd.read_parquet(inputLoc + pp.prefix + '_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + pp.prefix + '_enq.parquet')
     return el_df, ph_df
 
 
@@ -237,15 +239,17 @@ def translate_into_fbz(df):
             fbzcoords[octindex, :] = octcoords
         iteration += 1
         print('Finished %d iterations of bringing points into FBZ' % iteration)
+
     uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
     deltakx = np.diff(uniqkx)
     smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
-    for kxi in np.nditer(np.nonzero(smalldkx)):
-        kx = uniqkx[kxi]
-        fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+    if np.any(smalldkx):
+        for kxi in np.nditer(np.nonzero(smalldkx)):
+            kx = uniqkx[kxi]
+            fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+        print('Shifted points that were slightly misaligned in kx.\n')
     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
-
     return df
 
 
@@ -483,5 +487,5 @@ if __name__ == '__main__':
     fermi_distribution(eldf)
     conc = calculate_density(eldf)
     print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))
-    split_L_valleys(eldf, plot_Valleys=True)
-    plt.show()
+    # split_L_valleys(eldf, plot_Valleys=True)
+    # plt.show()

@@ -335,13 +335,13 @@ def bz_3dscatter(points, useplotly=True, icind=False):
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
-    electron_df = utilities.fermi_distribution(electron_df)
-    bz_3dscatter(electron_df,True,True)
+    # electron_df = utilities.fermi_distribution(electron_df)
+    bz_3dscatter(electron_df, True, True)
 
-
-    plot_steady_transient_difference(fields,freq)
-    plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)
-    plot_energy_sep(electron_df, fields)
+    bz_3dscatter()
+    # plot_steady_transient_difference(fields,freq)
+    # plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)
+    # plot_energy_sep(electron_df, fields)
     plt.show()

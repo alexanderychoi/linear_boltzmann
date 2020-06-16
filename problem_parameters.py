@@ -11,8 +11,14 @@ freqGHz = 5
 getX = False
 derL = True
 
-inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/2_Problem_PERT/0_Data/'
-outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/2_Problem_PERT/1_Pipeline/Output/'
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/5_Problem_080kpts_0.4eV/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/5_Problem_080kpts_0.4eV/1_Pipeline/Output/'
+
+inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/8_Problem/0_Data/'
+outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/8_Problem/1_Pipeline/Output/'
+
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem_PERT/1_Pipeline/Output/'
@@ -31,7 +37,9 @@ mu = float(re.findall(r"\s*FermiLevel\s*=\s*(.+)\n", alltext)[0])
 b = float(re.findall(r"\s*GaussianBroadening\s*=\s*(.+)\n", alltext)[0])
 kgrid = float(re.findall(r"\s*GridDensity\s*=\s*(\d+)\n", alltext)[0])
 cutoff = float(re.findall(r"\s*EnergyWindow\s*=\s*(.+)\n", alltext)[0])
+prefix = re.findall(r"\s*Prefix\s*=\s*'(.+)'", alltext)[0]
 print('\nData for this run loaded from "{:s}"\n'.format(inputLoc))
+print('Material prefix is {:s}'.format(prefix))
 print('Lattice temperature is {:.1f} K'.format(T))
 print('Fermi Level is {:.5f} eV'.format(mu))
 print('Gaussian broadening is {:.1e} eV'.format(b))
@@ -52,7 +60,7 @@ absConvergence = 1e-60
 verboseError = True
 # What's the name of the matrix?
 # scmName = 'scatt_mat_pert.mmap'  # Problem 2 Pert
-scmName = 'scattering_matrix_simple_2.mmap'  # Problem 2
+scmName = 'scatt_mat_pert.mmap'  # Problem 2
 
 # String for title of plots
 title_str = 'Grid={:.0f}^3, mu={:.4f} eV, {:.1f} K, Emax={:.3f} eV'.format(kgrid, mu, T, cutoff)
