@@ -8,6 +8,7 @@ import numpy.linalg
 import plotly.offline as py
 import plotly.graph_objs as go
 import preprocessing
+import material_plotter
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -63,8 +64,8 @@ def velocity_distribution_kde(chi, df, title=[]):
     dx = (v_ax.max() - v_ax.min()) / npts
     f0 = np.squeeze(df['k_FD'].values)
     # spread = 22 * dx # For 200^3
-    spread = 25 * dx  # For 160^3
-
+    # spread = 25 * dx  # For 160^3
+    spread = 70 *dx  # For 80^3
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
 
@@ -127,7 +128,7 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
 
     vmags = kptsdf['v_mag [m/s]']
 
-    npts = 1000  # number of points in the KDE
+    npts = 400  # number of points in the KDE
     g_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
     g_ftot = np.zeros(npts)
     g_f0ax = np.zeros(npts)
@@ -149,9 +150,10 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
     dx = (g_en_axis.max() - g_en_axis.min()) / npts
     g_f0 = np.squeeze(kptsdf.loc[g_inds,'k_FD'].values)
     l_f0 = np.squeeze(kptsdf.loc[l_inds,'k_FD'].values)
-    spread = 90 * dx
     spread = 120 * dx
-    spread = 200 * dx
+    # spread = 120 * dx
+    # spread = 200 * dx
+    # spread = 600 * dx
 
     def gaussian(x, mu, vmag, stdev=spread):
         sigma = stdev - (vmag/1E6) * 0.9 * stdev
@@ -239,109 +241,16 @@ def plot_energy_sep(df,fields):
     # plt.title(pp.title_str)
 
 
-def bz_3dscatter(points, useplotly=True, icind=False):
-    if icind:
-        icinds_l = np.load(pp.outputLoc+'left_icinds.npy')
-        icinds_r = np.load(pp.outputLoc+'right_icinds.npy')
-        icr_df = points.loc[icinds_r]
-        icl_df = points.loc[icinds_l]
-
-    if useplotly:
-        if np.any(points['energy [eV]']):
-            colors = points['energy [eV]']
-        else:
-            colors = 'k'
-        trace1 = go.Scatter3d(
-            x=points['kx [1/A]'].values / (2 * np.pi / c.a),
-            y=points['ky [1/A]'].values / (2 * np.pi / c.a),
-            z=points['kz [1/A]'].values / (2 * np.pi / c.a),
-
-            mode='markers',
-            marker=dict(size=2, color=colors, colorscale='Rainbow', showscale=True, opacity=1)
-        )
-        if icind:
-            trace2 = go.Scatter3d(
-                x=icr_df['kx [1/A]'].values / (2 * np.pi / c.a),
-                y=icr_df['ky [1/A]'].values / (2 * np.pi / c.a),
-                z=icr_df['kz [1/A]'].values / (2 * np.pi / c.a),
-
-                mode='markers',
-                marker=dict(size=2, color='black', opacity=1)
-            )
-
-            trace3 = go.Scatter3d(
-                x=icl_df['kx [1/A]'].values / (2 * np.pi / c.a),
-                y=icl_df['ky [1/A]'].values / (2 * np.pi / c.a),
-                z=icl_df['kz [1/A]'].values / (2 * np.pi / c.a),
-
-                mode='markers',
-                marker=dict(size=2, color='#7f7f7f', opacity=1)
-            )
-
-        b1edge = 0.5 * c.b1 / (2 * np.pi / c.a)
-        vector1 = go.Scatter3d(x=[0, b1edge[0]], y=[0, b1edge[1]], z=[0, b1edge[2]],
-                               marker=dict(size=1,color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        b2edge = 0.5 * c.b2 / (2 * np.pi / c.a)
-        vector2 = go.Scatter3d(x=[0, b2edge[0]], y=[0, b2edge[1]], z=[0, b2edge[2]],
-                               marker=dict(size=1,color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        b3edge = 0.5 * c.b3 / (2 * np.pi / c.a)
-        vector3 = go.Scatter3d(x=[0, b3edge[0]], y=[0, b3edge[1]], z=[0, b3edge[2]],
-                               marker=dict(size=1,color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        xedge = -0.5 * (c.b1 + c.b3) / (2 * np.pi / c.a)
-        vector4 = go.Scatter3d(x=[0, xedge[0]], y=[0, xedge[1]], z=[0, xedge[2]],
-                               marker=dict(size=1, color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        yedge = 0.5 * (c.b2 + c.b3) / (2 * np.pi / c.a)
-        vector5 = go.Scatter3d(x=[0, yedge[0]], y=[0, yedge[1]], z=[0, yedge[2]],
-                               marker=dict(size=1, color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        zedge = 0.5 * (c.b1 + c.b2) / (2 * np.pi / c.a)
-        vector6 = go.Scatter3d(x=[0, zedge[0]], y=[0, zedge[1]], z=[0, zedge[2]],
-                               marker=dict(size=1, color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-        ledge = 0.5 * (c.b1 + c.b2 + c.b3) / (2 * np.pi / c.a)
-        vector7 = go.Scatter3d(x=[0, ledge[0]], y=[0, ledge[1]], z=[0, ledge[2]],
-                               marker=dict(size=1, color="rgb(84,48,5)"),
-                               line=dict(color="rgb(84,48,5)", width=5))
-
-        data = [trace1, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
-        if icind:
-            data = [trace1, trace2,trace3, vector1, vector2, vector3, vector4, vector5, vector6, vector7]
-
-        layout = go.Layout(
-            scene=dict(
-                xaxis=dict(
-                    title='kx', titlefont=dict(family='Oswald, monospace', size=18)),
-                yaxis=dict(
-                    title='ky', titlefont=dict(family='Oswald, monospace', size=18)),
-                zaxis=dict(
-                    title='kz', titlefont=dict(family='Oswald, monospace', size=18)), ))
-        fig = go.Figure(data=data, layout=layout)
-        py.plot(fig, filename='bz_scatter.html')
-        return fig
-    else:
-        x = points['kx [1/A]'].values / (2 * np.pi / c.a)
-        y = points['ky [1/A]'].values / (2 * np.pi / c.a)
-        z = points['kz [1/A]'].values / (2 * np.pi / c.a)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(x, y, z)
-        return ax
-
-
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
     preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    bz_3dscatter(electron_df,True,True)
+    # material_plotter.bz_3dscatter(electron_df,True,False)
 
 
-    plot_steady_transient_difference(fields,freq)
-    plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)
+    # plot_steady_transient_difference(fields,freq)
+    plot_vel_KDEs(fields[20],electron_df,pp.freqGHz)
     plot_energy_sep(electron_df, fields)
     plt.show()
