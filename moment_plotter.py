@@ -4,37 +4,9 @@ import utilities
 import problem_parameters as pp
 import matplotlib.pyplot as plt
 import noise_solver
-
-
-def plot_scattering_rates(df):
-    """Plots the scattering rates by pulling them from the on-diagonal of the simple scattering matrix
-    Parameters:
-        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
-    Returns:
-        Nothing. Just the plots.
-    """
-    if pp.scmBool:
-        scmfac = pp.scmVal
-        print('Applying 2 Pi-squared factor.')
-    else:
-        scmfac = 1
-    nkpts = len(df)
-    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    g_inds, l_inds, x_inds = utilities.split_valleys(df,False)
-    if pp.simpleBool:
-        rates = (-1) * np.diag(scm) * scmfac * 1E-12
-    else:
-        chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
-        rates = (-1) * np.diag(scm) * scmfac * 1E-12 / chi2psi
-    plt.figure()
-    plt.plot(df.loc[g_inds,'energy [eV]'], rates[g_inds], '.', MarkerSize=3, label=r'$\Gamma$')
-    plt.plot(df.loc[l_inds,'energy [eV]'], rates[l_inds], '.', MarkerSize=3, label='L')
-    if pp.getX:
-        plt.plot(df.loc[x_inds, 'energy [eV]'], rates[x_inds], '.', MarkerSize=3, label=r'X')
-    plt.xlabel('Energy [eV]')
-    plt.ylabel(r'Scattering rate [ps$^{-1}$]')
-    plt.title(pp.title_str)
-    plt.legend()
+import occupation_plotter
+from matplotlib.font_manager import FontProperties
+import material_plotter
 
 
 def plot_transport_moments(df,fieldVector,freq):
@@ -53,11 +25,17 @@ def plot_transport_moments(df,fieldVector,freq):
         , ng_left, ng_right = ([] for i in range(18))
     vd_3t, meanE_3t, n_3t, mu_3t, ng_3t, nl_3t = ([] for i in range(6))
     diff_new = []
+    super_cutoff_pop = []
+    cutoff = np.min(df['energy [eV]'])+pp.cutoff
+    superinds = df['energy [eV]']>cutoff
     f_1 = np.load(pp.outputLoc + 'Steady/' + 'f_1.npy')
     f_2 = np.load(pp.outputLoc + 'Steady/' + 'f_2.npy')
     g_inds, l_inds, x_inds = utilities.split_valleys(df, False)
-    icinds_l = np.load(pp.outputLoc + 'left_icinds.npy')
-    icinds_r = np.load(pp.outputLoc + 'right_icinds.npy')
+    icinds_l = np.load(pp.outputLoc + 'Gamma_left_icinds.npy')
+    icinds_r = np.load(pp.outputLoc + 'Gamma_right_icinds.npy')
+    icinds_l = np.concatenate([icinds_l,np.load(pp.outputLoc + 'L_left_icinds.npy')])
+    icinds_r = np.concatenate([icinds_r,np.load(pp.outputLoc + 'L_right_icinds.npy')])
+
     for ee in fieldVector:
         chi_1_i = utilities.f2chi(f_1,df,ee)
         chi_2_i = utilities.f2chi(f_2,df,ee)
@@ -77,7 +55,6 @@ def plot_transport_moments(df,fieldVector,freq):
         meanE_3g.append(utilities.mean_energy(chi_3_i[g_inds],df.loc[g_inds]))
         meanE_3l.append(utilities.mean_energy(chi_3_i[l_inds],df.loc[l_inds]))
 
-
         mu_1.append(utilities.calc_diff_mobility(chi_1_i,df,ee) * 10 ** 4)
         mu_2.append(utilities.calc_diff_mobility(chi_2_i,df,ee) * 10 ** 4)
         mu_3.append(utilities.calc_diff_mobility(chi_3_i,df,ee) * 10 ** 4)
@@ -94,7 +71,6 @@ def plot_transport_moments(df,fieldVector,freq):
         ng_1.append(ng)
         nl_1.append(nl)
 
-
         ng,nl,nx,n = utilities.calc_popsplit(chi_2_i,df)
         ng_2.append(ng)
         nl_2.append(nl)
@@ -102,6 +78,8 @@ def plot_transport_moments(df,fieldVector,freq):
         ng,nl,nx,n = utilities.calc_popsplit(chi_3_i,df)
         ng_3.append(ng)
         nl_3.append(nl)
+
+        super_cutoff_pop.append(utilities.calc_popinds(chi_3_i,df,superinds))
 
         if pp.getX:
             meanE_3x.append((utilities.mean_energy(chi_3_i[x_inds],df.loc[x_inds])))
@@ -151,6 +129,7 @@ def plot_transport_moments(df,fieldVector,freq):
 
     plt.xlabel(r'Field [kV/cm]')
     plt.ylabel(r'Carrier Population [m$^-3$]')
+    plt.ylim(bottom=0,top=1.2*np.max(n_3))
     plt.title(pp.title_str)
     plt.legend()
 
@@ -160,7 +139,7 @@ def plot_transport_moments(df,fieldVector,freq):
     plt.plot(kvcm,mu_3,'o-', linewidth=2, label='FDM')
     plt.plot(kvcm,mu_3t,'o-', linewidth=2, label='FDM {:.1e} GHz'.format(freq))
     plt.xlabel(r'Field [kV/cm]')
-    plt.ylabel(r'Differential mobility [$cm^2 V^{-1} s^{-1}$]')
+    plt.ylabel(r'Linear mobility [$cm^2 V^{-1} s^{-1}$]')
     plt.title(pp.title_str)
     plt.legend()
 
@@ -254,6 +233,13 @@ def plot_transport_moments(df,fieldVector,freq):
     plt.title(pp.title_str)
     plt.legend()
 
+    plt.figure()
+    plt.plot(kvcm,super_cutoff_pop/n*100,'o-', linewidth=2)
+    plt.xlabel(r'Field [kV/cm]')
+    plt.ylabel(r'Population percentage above cutoff')
+    plt.title(pp.title_str)
+    plt.legend()
+
 
 def plot_diffusion(df,fieldVector,freq):
     """Takes chi solutions which are already calculated and plots the thermal and intervalley diffusion.
@@ -309,7 +295,7 @@ def plot_diffusion(df,fieldVector,freq):
         n.append(n_i)
 
     kvcm = np.array(fieldVector)*1e-5
-    chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, fieldVector[0]))
+    chi_3t_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(fieldVector[0]))
     mu = utilities.calc_diff_mobility(chi_3t_i, df, fieldVector[0])
     plt.figure()
     plt.plot(kvcm,diff_th_g,'o-', linewidth=2, label=r'$\Gamma$')
@@ -317,7 +303,7 @@ def plot_diffusion(df,fieldVector,freq):
     plt.plot(kvcm,diff_th,'o-', linewidth=2, label='Total')
     if pp.getX:
         plt.plot(kvcm, diff_th_x, 'o-', linewidth=2, label='X')
-    plt.hlines(mu*c.kb_joule*pp.T/c.e, kvcm[0],kvcm[-1],linestyles='dashed',linewidth=2,label='Einstein')
+    # plt.hlines(mu*c.kb_joule*pp.T/c.e, kvcm[0],kvcm[-1],linestyles='dashed',linewidth=2,label='Einstein')
     plt.xlabel(r'Field [kV/cm]')
     plt.ylabel(r'Thermal Diffusion coefficient [m^2/s]')
     plt.title(pp.title_str)
@@ -353,13 +339,141 @@ def plot_diffusion(df,fieldVector,freq):
     plt.legend()
 
 
+def plot_L_valley_drift(df,fieldVector):
+    """Takes chi solutions which are already calculated and plots transport moments: average energy, drift velocity,
+    carrier population, carrier mobility
+    Parameters:
+        fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+    Returns:
+        Nothing. Just the plots.
+    """
+    L1_inds,L2_inds,L3_inds,L4_inds,L5_inds,L6_inds,L7_inds,L8_inds = utilities.split_L_valleys(df)
+    vd_3, vd_3g, vd_3l, vd_3l1, vd_3l2, vd_3l3, vd_3l4, vd_3l5, vd_3l6, vd_3l7, vd_3l8 = ([] for i in range(11))
+    n_3l1, n_3l2, n_3l3, n_3l4, n_3l5, n_3l6, n_3l7, n_3l8 = ([] for i in range(8))
+
+    g_inds, l_inds, x_inds = utilities.split_valleys(df, False)
+    for ee in fieldVector:
+        chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+        vd_3.append(utilities.drift_velocity(chi_3_i,df))
+        vd_3g.append(utilities.mean_velocity(chi_3_i[g_inds],df.loc[g_inds]))
+        vd_3l.append(utilities.mean_velocity(chi_3_i[l_inds],df.loc[l_inds]))
+        vd_3l1.append(utilities.mean_velocity(chi_3_i[L1_inds],df.loc[L1_inds]))
+        vd_3l2.append(utilities.mean_velocity(chi_3_i[L2_inds],df.loc[L2_inds]))
+        vd_3l3.append(utilities.mean_velocity(chi_3_i[L3_inds],df.loc[L3_inds]))
+        vd_3l4.append(utilities.mean_velocity(chi_3_i[L4_inds],df.loc[L4_inds]))
+        vd_3l5.append(utilities.mean_velocity(chi_3_i[L5_inds],df.loc[L5_inds]))
+        vd_3l6.append(utilities.mean_velocity(chi_3_i[L6_inds],df.loc[L6_inds]))
+        vd_3l7.append(utilities.mean_velocity(chi_3_i[L7_inds],df.loc[L7_inds]))
+        vd_3l8.append(utilities.mean_velocity(chi_3_i[L8_inds],df.loc[L8_inds]))
+
+        n_3l1.append(utilities.calc_popinds(chi_3_i,df,L1_inds))
+        n_3l2.append(utilities.calc_popinds(chi_3_i,df,L2_inds))
+        n_3l3.append(utilities.calc_popinds(chi_3_i,df,L3_inds))
+        n_3l4.append(utilities.calc_popinds(chi_3_i,df,L4_inds))
+        n_3l5.append(utilities.calc_popinds(chi_3_i,df,L5_inds))
+        n_3l6.append(utilities.calc_popinds(chi_3_i,df,L6_inds))
+        n_3l7.append(utilities.calc_popinds(chi_3_i,df,L7_inds))
+        n_3l8.append(utilities.calc_popinds(chi_3_i,df,L8_inds))
+
+    kvcm = np.array(fieldVector) * 1e-5
+    plt.figure()
+    # plt.plot(kvcm,vd_3, 'o-', linewidth=2, label=r'Total')
+    # plt.plot(kvcm,vd_3g, 'o-', linewidth=2, label=r'$\Gamma$')
+
+    plt.plot(kvcm, vd_3l1, 'o-', linewidth=2, label='L1')
+    plt.plot(kvcm, vd_3l2, 'o-', linewidth=2, label='L2')
+    plt.plot(kvcm, vd_3l3, 'o-', linewidth=2, label='L3')
+    plt.plot(kvcm, vd_3l4, 'o-', linewidth=2, label='L4')
+    plt.plot(kvcm, vd_3l5, 'o-', linewidth=2, label='L5')
+    plt.plot(kvcm, vd_3l6, 'o-', linewidth=2, label='L6')
+    plt.plot(kvcm, vd_3l7, 'o-', linewidth=2, label='L7')
+    plt.plot(kvcm, vd_3l8, 'o-', linewidth=2, label='L8')
+    plt.plot(kvcm,vd_3l, 'o-', linewidth=2, label='Total L')
+    plt.xlabel(r'Field [kV/cm]')
+    plt.ylabel(r'Drift velocity [m/s]')
+    plt.title(pp.title_str)
+    fontP = FontProperties()
+    fontP.set_size('small')
+    plt.legend(prop=fontP, loc='upper left', ncol=2)
+
+
+    plt.figure()
+    plt.plot(kvcm, n_3l1, 'o-', linewidth=2, label='L1')
+    plt.plot(kvcm, n_3l2, 'o-', linewidth=2, label='L2')
+    plt.plot(kvcm, n_3l3, 'o-', linewidth=2, label='L3')
+    plt.plot(kvcm, n_3l4, 'o-', linewidth=2, label='L4')
+    plt.plot(kvcm, n_3l5, 'o-', linewidth=2, label='L5')
+    plt.plot(kvcm, n_3l6, 'o-', linewidth=2, label='L6')
+    plt.plot(kvcm, n_3l7, 'o-', linewidth=2, label='L7')
+    plt.plot(kvcm, n_3l8, 'o-', linewidth=2, label='L8')
+    plt.xlabel(r'Field [kV/cm]')
+    plt.ylabel(r'Population [m^-3]')
+    plt.title(pp.title_str)
+    fontP = FontProperties()
+    fontP.set_size('small')
+    plt.legend(prop=fontP, loc='upper left', ncol=2)
+
+
+
+    chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(fieldVector[0]))
+    occupation_plotter.velocity_distribution_kde(chi_3_i[L1_inds], df.loc[L1_inds].reset_index())
+
+    plt.figure()
+    plt.plot(df.loc[L1_inds,'k_FD'], df.loc[L1_inds,'vx [m/s]'], 'o', linewidth=2, label='L1')
+
+    print(np.sum(df.loc[L1_inds,'k_FD']*df.loc[L1_inds,'vx [m/s]'])/np.sum(df.loc[L1_inds,'k_FD']))
+    print(np.sum(df.loc[L2_inds,'k_FD']*df.loc[L2_inds,'vx [m/s]'])/np.sum(df.loc[L2_inds,'k_FD']))
+    print(np.sum(df.loc[L3_inds,'k_FD']*df.loc[L3_inds,'vx [m/s]'])/np.sum(df.loc[L3_inds,'k_FD']))
+    print(np.sum(df.loc[L4_inds,'k_FD']*df.loc[L4_inds,'vx [m/s]'])/np.sum(df.loc[L4_inds,'k_FD']))
+    print(np.sum(df.loc[L5_inds,'k_FD']*df.loc[L5_inds,'vx [m/s]'])/np.sum(df.loc[L5_inds,'k_FD']))
+    print(np.sum(df.loc[L6_inds,'k_FD']*df.loc[L6_inds,'vx [m/s]'])/np.sum(df.loc[L6_inds,'k_FD']))
+    print(np.sum(df.loc[L7_inds,'k_FD']*df.loc[L7_inds,'vx [m/s]'])/np.sum(df.loc[L7_inds,'k_FD']))
+    print(np.sum(df.loc[L8_inds,'k_FD']*df.loc[L8_inds,'vx [m/s]'])/np.sum(df.loc[L8_inds,'k_FD']))
+    counts, bins = np.histogram(df.loc[L1_inds,'vx [m/s]']*df.loc[L1_inds,'k_FD'],bins=1001)
+    plt.figure()
+    plt.hist(df.loc[L1_inds,'vx [m/s]'].values, bins = 21, alpha = 0.3, label = 'Positive kx octant')
+    plt.hist(df.loc[L8_inds,'vx [m/s]'].values, bins = 21, alpha =0.3, label = 'Negative kx octant')
+    plt.ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+    plt.xlabel('Velocity [m/s]')
+    plt.ylabel('Bin count')
+    plt.legend()
+
+    plt.figure()
+    plt.plot(df.loc[L1_inds,'kx [1/A]'].values, df.loc[L1_inds,'energy [eV]'].values,'.')
+    plt.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+    plt.ylabel('Velocity [m/s]')
+    plt.xlabel('k-axis [1/A]')
+    plt.legend()
+
+    plt.figure()
+    plt.plot(df.loc[L1_inds,'kz [1/A]'].values, df.loc[L1_inds,'energy [eV]'].values,'.')
+    plt.ticklabel_format(axis='y', style='sci', scilimits=(-2, 2))
+    plt.ylabel('Velocity [m/s]')
+    plt.xlabel('k-axis [1/A]')
+    plt.legend()
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    x = df['kx [1/A]'].values / (2 * np.pi / c.a)
+    y = df['ky [1/A]'].values / (2 * np.pi / c.a)
+    z = df['kz [1/A]'].values / (2 * np.pi / c.a)
+    ax.scatter(x[g_inds], y[g_inds], df.loc[g_inds,'energy [eV]'], s=5, c = df.loc[g_inds,'energy [eV]'])
+    ax.set_xlabel(r'$kx/2\pi a$')
+    ax.set_ylabel(r'$ky/2\pi a$')
+    ax.set_zlabel(r'Energy [eV]')
+    fontP = FontProperties()
+    fontP.set_size('small')
+    plt.title('Gamma valley')
+
+
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    plot_scattering_rates(electron_df)
     plot_transport_moments(electron_df, fields, freq)
     # plot_diffusion(electron_df, fields, freq)
-
+    plot_L_valley_drift(electron_df,fields)
+    material_plotter.bz_3dscatter(electron_df, True, False)
     plt.show()
