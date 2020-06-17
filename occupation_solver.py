@@ -9,6 +9,7 @@ from scipy.sparse import linalg
 import occupation_plotter
 import preprocessing
 import correlation_solver
+import material_plotter
 
 
 class gmres_counter(object):
@@ -61,6 +62,8 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
     l_icinds = []
     r_icinds = []
     lvalley_inds = []
+    if pp.hybridFDM:
+        print('Applying hybrid FDM scheme.')
     start = time.time()
     # Loop through the unique ky and kz values in the Gamma valley
     for i in range(len(uniq_yz)):
@@ -71,7 +74,7 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
         slice_inds = slice_df['k_inds'].values
         # Skip all slices that intersect an L valley. Save the L valley indices
 
-        if len(slice_inds) > 4:
+        if len(slice_inds) > 3:
             # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
             subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
             ordered_inds = subset['k_inds'].values - 1  # indices of matrix (zero indexed)
@@ -93,12 +96,19 @@ def apply_centraldiff_matrix(matrix,fullkpts_df,E,step_size=1):
             inter_inds_down = ordered_inds[1:slast-1]
             matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*c.e*E/c.hbar_joule
             matrix[inter_inds, inter_inds_down] += -1 * 1/(2*step_size)*c.e*E/c.hbar_joule
+            if pp.hybridFDM:
+                matrix[ordered_inds[0],ordered_inds[0]]  = -1 * 1/(step_size)*c.e*E/c.hbar_joule
+                matrix[ordered_inds[0], ordered_inds[1]] = 1 / (step_size) * c.e * E / c.hbar_joule
+                matrix[ordered_inds[1], ordered_inds[0]] = -1 / (2*step_size) * c.e * E / c.hbar_joule
+                matrix[ordered_inds[slast],ordered_inds[last]] = 1/(2*step_size)*c.e*E/c.hbar_joule
         else:
             shortslice_inds.append(slice_inds)
         if kind % 10 == 0:
             pass
     print('Scattering matrix modified to incorporate central difference contribution.')
-    print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
+    shortslice_inds = np.concatenate(shortslice_inds,axis=0)
+    print('Not applied to {:d} Gamma points because fewer than 4 points on the slice.'.format(len(shortslice_inds)))
+    print('This represents {:1f} % of points in the Gamma valley.'.format(len(shortslice_inds)/len(g_df)*100))
     print('Finite difference not applied to L valleys. Derivative treated as zero for these points.')
     if not pp.getX:
         pass
@@ -146,7 +156,8 @@ def apply_centraldiff_matrix_L(matrix,fullkpts_df,E,step_size=1):
     shortslice_inds = []
     l_icinds = []
     r_icinds = []
-
+    if pp.hybridFDM:
+        print('Applying hybrid FDM scheme.')
     for i1 in range(len(L_list)):
         print('Applying to {} L valley'.format(i1))
         l_df = kptdata.loc[L_list[i1]]
@@ -160,7 +171,7 @@ def apply_centraldiff_matrix_L(matrix,fullkpts_df,E,step_size=1):
             # Grab the "slice" of points in k space with the same ky and kz coordinate
             slice_df = l_df.loc[(l_df['ky [1/A]'] == ky) & (l_df['kz [1/A]'] == kz)]
             slice_inds = slice_df['k_inds'].values
-            if len(slice_inds) > 4:
+            if len(slice_inds) > 3:
                 # Subset is the slice sorted by kx value in ascending order. The index of subset still references kptdata.
                 subset = slice_df.sort_values(by=['kx [1/A]'], ascending=True)
                 ordered_inds = subset['k_inds'].values - 1  # indices of matrix (zero indexed)
@@ -182,13 +193,20 @@ def apply_centraldiff_matrix_L(matrix,fullkpts_df,E,step_size=1):
                 inter_inds_down = ordered_inds[1:slast-1]
                 matrix[inter_inds, inter_inds_up] += 1/(2*step_size)*c.e*E/c.hbar_joule
                 matrix[inter_inds, inter_inds_down] += -1 * 1/(2*step_size)*c.e*E/c.hbar_joule
+                if pp.hybridFDM:
+                    matrix[ordered_inds[0], ordered_inds[0]] = -1 * 1 / (step_size) * c.e * E / c.hbar_joule
+                    matrix[ordered_inds[0], ordered_inds[1]] = 1 / (step_size) * c.e * E / c.hbar_joule
+                    matrix[ordered_inds[1], ordered_inds[0]] = -1 / (2 * step_size) * c.e * E / c.hbar_joule
+                    matrix[ordered_inds[slast], ordered_inds[last]] = 1 / (2 * step_size) * c.e * E / c.hbar_joule
             else:
                 shortslice_inds.append(slice_inds)
             if kind % 10 == 0:
                 pass
-        print('Scattering matrix modified to incorporate central difference contribution.')
-        print('Not applied to {:d} points because fewer than 5 points on the slice.'.format(len(shortslice_inds)))
-        print('Finite difference applied to L valleys.')
+    print('Scattering matrix modified to incorporate central difference contribution.')
+    shortslice_inds = np.concatenate(shortslice_inds, axis=0)
+    print('Not applied to {:d} L valley points because fewer than 4 points on the slice.'.format(len(shortslice_inds)))
+    print('This represents {:1f} % of points in the L valley.'.format(len(shortslice_inds) / len(fullkpts_df.loc[L_inds]) * 100))
+    print('Finite difference applied to L valleys.')
     if not pp.getX:
         pass
     else:
@@ -231,7 +249,7 @@ def transient_full_drift(matrix_sc, matrix_fd, kptdf, field, freq):
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
     x_0 = b * invdiag
-    freq_matrix = np.diag(np.ones(len(kptdf))*1j*10**9*-1*2*np.pi*freq)  # On-diagonal of 2*pi*i*w
+    freq_matrix = np.diag(np.ones(len(kptdf))*1j*10**9*2*np.pi*freq)  # Positive quantity
     print('Starting GMRES solver.')
     x_next, criteria = linalg.gmres(freq_matrix+matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
                                     callback=counter,atol=pp.absConvergence)
@@ -304,7 +322,7 @@ def steady_low_field(df, scm):
     return f_next, f_0, error, counter.niter
 
 
-def steady_full_drift(matrix_sc, matrix_fd, kptdf, field):
+def steady_full_drift(matrix_sc, matrix_fd, kptdf, field, guess, applyGuess):
     """Generalized minimal residual solver for calculating transient BTE solution in the form of Chi using the full
     finite difference matrix.
     Parameters:
@@ -312,6 +330,8 @@ def steady_full_drift(matrix_sc, matrix_fd, kptdf, field):
         matrix_fd (memmap): Finite difference matrix, generated by apply_centraldiff_matrix.
         kptdf (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
         field (dbl): Value of the electric field in V/m.
+        guess (nparray) : A vector to use as the initial guess instead of the RTA approximation
+        applyGuess (bool) : If true, use the guess supplied. Otherwise, use the RTA.
     Returns:
         x_next (nparray): Numpy array containing the (hopefully) converged iterative solution as chi.
         x_0 (nparray): Numpy array containing the RTA solution as chi.
@@ -334,7 +354,13 @@ def steady_full_drift(matrix_sc, matrix_fd, kptdf, field):
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
     x_0 = b * invdiag
-    x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,callback=counter,
+    utilities.check_matrix_properties(matrix_sc-matrix_fd)
+    if applyGuess:
+        x_next, criteria = linalg.gmres(matrix_sc * scmfac - matrix_fd, b, x0=guess, tol=pp.relConvergence,
+                                        callback=counter,
+                                        atol=pp.absConvergence)
+    else:
+        x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,callback=counter,
                                     atol=pp.absConvergence)
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     # The following step is the calculation of the relative residual, which involves another MVP. This adds expense. If
@@ -379,7 +405,12 @@ def write_steady(fieldVector, df):
     for i in range(len(fieldVector)):
         fdm = np.memmap(pp.inputLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         EField = fieldVector[i]
-        x_next, _, temp_error, iterations = steady_full_drift(scm, fdm, df, EField)
+        if i == 0:
+            x_next, _, temp_error, iterations = steady_full_drift(scm, fdm, df,EField,guess=0, applyGuess=False)
+        if i > 0:
+            print('Using previous solution as initial guess')
+            x_next, _, temp_error, iterations = steady_full_drift(scm, fdm, df,EField,guess=x_next,applyGuess=True)
+
         error.append(temp_error)
         iteration_count.append(iterations)
         del fdm
@@ -452,9 +483,12 @@ def write_icinds(df):
     """
     nkpts = len(np.unique(df['k_inds']))
     fdm = np.memmap(pp.inputLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
-    _, l_inds, r_inds, _, _ = apply_centraldiff_matrix(fdm, df, 1)
-    np.save(pp.outputLoc + 'left_icinds', l_inds)
-    np.save(pp.outputLoc  + 'right_icinds', r_inds)
+    _, g_l_inds, g_r_inds, _, _ = apply_centraldiff_matrix(fdm, df, 1)
+    _, l_l_inds, l_r_inds, _ = apply_centraldiff_matrix_L(fdm, df, 1)
+    np.save(pp.outputLoc + 'Gamma_left_icinds', g_l_inds)
+    np.save(pp.outputLoc  + 'Gamma_right_icinds', g_r_inds)
+    np.save(pp.outputLoc + 'L_left_icinds', l_l_inds)
+    np.save(pp.outputLoc  + 'L_right_icinds', l_r_inds)
 
 
 if __name__ == '__main__':
@@ -466,21 +500,13 @@ if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
 
-    nkpts = len(np.unique(electron_df['k_inds']))
-    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
-    error = []
-    iteration_count = []
-    f_next, f_0,_,_ = steady_low_field(electron_df, scm)
-    np.save(pp.outputLoc + 'Steady/' + 'f_1',f_0)
-    np.save(pp.outputLoc + 'Steady/' + 'f_2',f_next)
+    writeTransient = True
+    writeSteady = True
+    write_icinds(electron_df)
+    if writeTransient:
+        write_transient(fields, electron_df, freq)
+    if writeSteady:
+        write_steady(fields, electron_df)
 
-    # writeTransient = True
-    # writeSteady = True
-    # write_icinds(electron_df)
-    # if writeTransient:
-    #     write_transient(fields, electron_df, freq)
-    # if writeSteady:
-    #     write_steady(fields, electron_df)
-    #
-    # occupation_plotter.bz_3dscatter(electron_df,True,True)
-    # plt.show()
+    # material_plotter.bz_3dscatter(electron_df,True,True)
+    plt.show()
