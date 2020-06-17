@@ -141,11 +141,13 @@ def check_matrix_properties(matrix):
 
 
 def load_el_ph_data(inputLoc):
-    if not (os.path.isfile(inputLoc + 'gaas_full_electron_data.parquet') and os.path.isfile(inputLoc + 'gaas_enq.parquet')):
-        exit('Electron or phonon dataframes could not be found. You can create it using preprocessing.create_el_ph_dataframes.')
+    if not (os.path.isfile(inputLoc + pp.prefix + '_full_electron_data.parquet') and
+            os.path.isfile(inputLoc + pp.prefix + '_enq.parquet')):
+        exit('Electron or phonon dataframes could not be found. ' +
+             'You can create it using preprocessing.create_el_ph_dataframes.')
     else:
-        el_df = pd.read_parquet(inputLoc + 'gaas_full_electron_data.parquet')
-        ph_df = pd.read_parquet(inputLoc + 'gaas_enq.parquet')
+        el_df = pd.read_parquet(inputLoc + pp.prefix + '_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + pp.prefix + '_enq.parquet')
     return el_df, ph_df
 
 
@@ -242,15 +244,17 @@ def translate_into_fbz(df):
             fbzcoords[octindex, :] = octcoords
         iteration += 1
         print('Finished %d iterations of bringing points into FBZ' % iteration)
+
     uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
     deltakx = np.diff(uniqkx)
     smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
-    for kxi in np.nditer(np.nonzero(smalldkx)):
-        kx = uniqkx[kxi]
-        fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+    if np.any(smalldkx):
+        for kxi in np.nditer(np.nonzero(smalldkx)):
+            kx = uniqkx[kxi]
+            fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+        print('Shifted points that were slightly misaligned in kx.\n')
     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
-
     return df
 
 
@@ -396,7 +400,7 @@ def calc_mobility(F, df):
     return mobility
 
 
-def calc_diff_mobility(chi, df,field):
+def calc_diff_mobility(chi, df, field):
     """Calculate differential mobility as per general definition of conductivity. Solution must be fed in as chi.
     I'm not sure that this formula is the right formula for differential mobility. I just used Wu Li's formula and modified
     to acept chi as an input, which I don't think is the same thing.
@@ -410,7 +414,7 @@ def calc_diff_mobility(chi, df,field):
     Nuc = pp.kgrid ** 3
     print('Field specified. Mobility calculated using general definition of conductivity')
     n = calculate_density(df)
-    prefactor = 2 *c.e / c.Vuc / Nuc /field
+    prefactor = 2 * c.e / c.Vuc / Nuc / field
     conductivity = prefactor * np.sum(df['vx [m/s]'] * chi)
     mobility = conductivity / c.e / n
     # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
@@ -475,7 +479,8 @@ def f2chi(f, df, field):
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
     """
     f0 = np.squeeze(df['k_FD'].values)
-    prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
+    # prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
+    prefactor = field * c.e / c.kb_joule / pp.T * f0
     chi = np.squeeze(f) * np.squeeze(prefactor)
     return chi
 
@@ -487,5 +492,5 @@ if __name__ == '__main__':
     fermi_distribution(eldf)
     conc = calculate_density(eldf)
     print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))
-    split_L_valleys(eldf, plot_Valleys = True)
-    plt.show()
+    # split_L_valleys(eldf, plot_Valleys=True)
+    # plt.show()

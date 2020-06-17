@@ -8,6 +8,41 @@ import occupation_plotter
 from matplotlib.font_manager import FontProperties
 import material_plotter
 
+import matplotlib as mpl
+font = {'size': 11}
+mpl.rc('font', **font)
+
+
+def plot_scattering_rates(df):
+    """Plots the scattering rates by pulling them from the on-diagonal of the simple scattering matrix
+    Parameters:
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+    Returns:
+        Nothing. Just the plots.
+    """
+    if pp.scmBool:
+        scmfac = pp.scmVal
+        print('Applying 2 Pi-squared factor.')
+    else:
+        scmfac = 1
+    nkpts = len(df)
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    g_inds, l_inds, x_inds = utilities.split_valleys(df,False)
+    if pp.simpleBool:
+        rates = (-1) * np.diag(scm) * scmfac * 1E-12
+    else:
+        chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
+        rates = (-1) * np.diag(scm) * scmfac * 1E-12 / chi2psi
+    plt.figure()
+    plt.plot(df.loc[g_inds,'energy [eV]'], rates[g_inds], '.', MarkerSize=3, label=r'$\Gamma$')
+    plt.plot(df.loc[l_inds,'energy [eV]'], rates[l_inds], '.', MarkerSize=3, label='L')
+    if pp.getX:
+        plt.plot(df.loc[x_inds, 'energy [eV]'], rates[x_inds], '.', MarkerSize=3, label=r'X')
+    plt.xlabel('Energy [eV]')
+    plt.ylabel(r'Scattering rate [ps$^{-1}$]')
+    plt.title(pp.title_str)
+    plt.legend()
+
 
 def plot_transport_moments(df,fieldVector,freq):
     """Takes chi solutions which are already calculated and plots transport moments: average energy, drift velocity,
@@ -37,8 +72,8 @@ def plot_transport_moments(df,fieldVector,freq):
     icinds_r = np.concatenate([icinds_r,np.load(pp.outputLoc + 'L_right_icinds.npy')])
 
     for ee in fieldVector:
-        chi_1_i = utilities.f2chi(f_1,df,ee)
-        chi_2_i = utilities.f2chi(f_2,df,ee)
+        chi_1_i = utilities.f2chi(f_1, df, ee)
+        chi_2_i = utilities.f2chi(f_2, df, ee)
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
         chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,ee))
 

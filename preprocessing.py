@@ -14,7 +14,7 @@ def load_optional_data(data_dir):
     """Create dataframes for kpts and qpts in crystal coordinates and Ryd energy.
     Not typically used, so in a separate function."""
 
-     # Electron kpoints in crystal coordinates
+    # Electron kpoints in crystal coordinates
     kpts_array = np.loadtxt('gaas.kpts')
     kpts = pd.DataFrame(data=kpts_array, columns=['k_inds', 'b1', 'b2', 'b3'])
     kpts['k_inds'] = kpts['k_inds'].astype(int)
@@ -22,7 +22,7 @@ def load_optional_data(data_dir):
     # Electron energies
     enk_array = np.loadtxt('gaas.enk')
     enk_ryd = pd.DataFrame(data=enk_array, columns=['k_inds', 'band_inds', 'energy [Ryd]'])
-    enk_ryd[['k_inds', 'band_inds']] = enk[['k_inds', 'band_inds']].astype(int)
+    enk_ryd[['k_inds', 'band_inds']] = enk_ryd[['k_inds', 'band_inds']].astype(int)
 
     # Phonon qpoints in crystal coordinates
     qpts_array = np.loadtxt('gaas.qpts')
@@ -146,19 +146,19 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
         overwrite (bool): True if you want to overwrite the existing dataframe
     """
     if not overwrite and \
-       (os.path.isfile(data_dir + 'gaas_enq.parquet')
-        or os.path.isfile('gaas_full_electron_data.parquet')):
+        (os.path.isfile(data_dir + pp.prefix + '_enq.parquet')
+        or os.path.isfile(data_dir + pp.prefix + '_full_electron_data.parquet')):
         exit('The dataframes already exist and you did not explicitly request an overwrite.')
 
     # Phonon energies
-    enq_array = np.loadtxt(data_dir + 'gaas.enq')
+    enq_array = np.loadtxt(data_dir + pp.prefix + '.enq')
     enq = pd.DataFrame(data=enq_array, columns=['q_inds', 'im_mode', 'energy [Ryd]'])
     enq[['q_inds', 'im_mode']] = enq[['q_inds', 'im_mode']].astype(int)
     enq['energy [eV]'] = enq['energy [Ryd]'] * c.ryd2ev
-    enq.to_parquet(data_dir + 'gaas_enq.parquet')
+    enq.to_parquet(data_dir + pp.prefix + '_enq.parquet')
 
     # Electron data
-    alldat = np.loadtxt(data_dir + 'gaas_fullgrid.kpt', skiprows=4)
+    alldat = np.loadtxt(data_dir + pp.prefix + '_fullgrid.kpt', skiprows=4)
     colheadings = ['k_inds', 'bands', 'energy [eV]', 'kx [frac]', 'ky [frac]', 'kz [frac]',
                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
     electron_df = pd.DataFrame(data=alldat, columns=colheadings)
@@ -172,7 +172,7 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
     # Drop band indces since only one band
     electron_df = electron_df.drop(['bands'], axis=1)
     electron_df = translate_into_fbz(electron_df)
-    electron_df.to_parquet(data_dir + 'gaas_full_electron_data.parquet')
+    electron_df.to_parquet(data_dir + pp.prefix + '_full_electron_data.parquet')
 
 
 def recip2memmap_par(kq, reciploc, data, nl_tot):
@@ -207,7 +207,7 @@ def chunk_iterator(fname, size=512 * 1024 * 1024):
     f = open(fname, 'rb')
     # Want to readline for first line with headings so that numpy doesn't try to convert it to float.
     headings = f.readline().decode('utf-8')
-    print('CHUNKING using chunkify function')
+    print('ITERATING over chunks of the large file.')
     chunkEnd = f.tell()
     while True:
         chunkStart = chunkEnd
@@ -449,7 +449,7 @@ if __name__ == '__main__':
     import problem_parameters as pp
     in_loc = pp.inputLoc
     out_loc = pp.outputLoc
-    nthreads = 8
+    nthreads = 6
 
     create_dataframes = False
     create_pert_scatt_mat = True

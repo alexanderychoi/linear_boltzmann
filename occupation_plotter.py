@@ -244,13 +244,14 @@ def plot_energy_sep(df,fields):
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     # material_plotter.bz_3dscatter(electron_df,True,False)
-
-
     # plot_steady_transient_difference(fields,freq)
     plot_vel_KDEs(fields[20],electron_df,pp.freqGHz)
     plot_energy_sep(electron_df, fields)
+    # plot_steady_transient_difference(fields,freq)
+    # plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)
+    # plot_energy_sep(electron_df, fields)
     plt.show()
