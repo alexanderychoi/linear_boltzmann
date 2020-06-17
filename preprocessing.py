@@ -167,6 +167,8 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
     electron_df['ky [1/A]'] = electron_df['ky [frac]'] * 2 * np.pi / c.a
     electron_df['kz [1/A]'] = electron_df['kz [frac]'] * 2 * np.pi / c.a
     electron_df['vx [m/s]'] = electron_df['vx_dir'] * electron_df['v_mag [m/s]']
+    electron_df['vy [m/s]'] = electron_df['vy_dir'] * electron_df['v_mag [m/s]']
+
     # Drop band indces since only one band
     electron_df = electron_df.drop(['bands'], axis=1)
     electron_df = translate_into_fbz(electron_df)
