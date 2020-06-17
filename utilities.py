@@ -5,7 +5,8 @@ import pandas as pd
 import occupation_plotter
 import problem_parameters as pp
 import matplotlib.pyplot as plt
-
+from matplotlib.font_manager import FontProperties
+import material_plotter
 
 def split_valleys(df, plot_Valleys = True):
     """Hardcoded for GaAs, obtains the indices for Gamma valley, the 8 L valleys, and the 6 X valleys and returns these
@@ -35,10 +36,10 @@ def split_valleys(df, plot_Valleys = True):
     print('There are {:d} kpoints in the L valley'.format(np.count_nonzero(valley_key_L)))
 
     if plot_Valleys:
-        occupation_plotter.bz_3dscatter(g_df, True, False)
-        occupation_plotter.bz_3dscatter(l_df, True, False)
+        material_plotter.bz_3dscatter(g_df, True, False)
+        material_plotter.bz_3dscatter(l_df, True, False)
         if pp.getX:
-            occupation_plotter.bz_3dscatter(x_df, True, False)
+            occupation_plotter.material_plotter(x_df, True, False)
             print('There are {:d} kpoints in the X valley'.format(np.count_nonzero(valley_key_X)))
 
     return valley_key_G, valley_key_L, valley_key_X
@@ -81,18 +82,21 @@ def split_L_valleys(df, plot_Valleys = True):
         z = df['kz [1/A]'].values / (2 * np.pi / c.a)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(x[valley_key_L1], y[valley_key_L1], z[valley_key_L1])
-        ax.scatter(x[valley_key_L2], y[valley_key_L2], z[valley_key_L2])
-        ax.scatter(x[valley_key_L3], y[valley_key_L3], z[valley_key_L3])
-        ax.scatter(x[valley_key_L4], y[valley_key_L4], z[valley_key_L4])
-        ax.scatter(x[valley_key_L5], y[valley_key_L5], z[valley_key_L5])
-        ax.scatter(x[valley_key_L6], y[valley_key_L6], z[valley_key_L6])
-        ax.scatter(x[valley_key_L7], y[valley_key_L7], z[valley_key_L7])
-        ax.scatter(x[valley_key_L8], y[valley_key_L8], z[valley_key_L8])
+        ax.scatter(x[valley_key_L1], y[valley_key_L1], z[valley_key_L1],label='L1',s=0.02)
+        ax.scatter(x[valley_key_L2], y[valley_key_L2], z[valley_key_L2],label='L2',s=0.02)
+        ax.scatter(x[valley_key_L3], y[valley_key_L3], z[valley_key_L3],label='L3',s=0.02)
+        ax.scatter(x[valley_key_L4], y[valley_key_L4], z[valley_key_L4],label='L4',s=0.02)
+        ax.scatter(x[valley_key_L5], y[valley_key_L5], z[valley_key_L5],label='L5',s=0.02)
+        ax.scatter(x[valley_key_L6], y[valley_key_L6], z[valley_key_L6],label='L6',s=0.02)
+        ax.scatter(x[valley_key_L7], y[valley_key_L7], z[valley_key_L7],label='L7',s=0.02)
+        ax.scatter(x[valley_key_L8], y[valley_key_L8], z[valley_key_L8],label='L8',s=0.02)
         ax.set_xlabel(r'$kx/2\pi a$')
         ax.set_ylabel(r'$ky/2\pi a$')
         ax.set_zlabel(r'$kz/2\pi a$')
-
+        fontP = FontProperties()
+        fontP.set_size('small')
+        plt.legend(prop=fontP,loc='center left',ncol=1)
+        plt.title('L valleys')
     return valley_key_L1, valley_key_L2, valley_key_L3, valley_key_L4, valley_key_L5, valley_key_L6, valley_key_L7, valley_key_L8
 
 
@@ -128,11 +132,12 @@ def check_symmetric(a, rtol=1e-05, atol=1e-08):
 
 def check_matrix_properties(matrix):
     cs = matrix_check_colsum(matrix, len(matrix))
-    print('The average absolute value of SCM column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest SCM column sum is {:E}'.format(cs.max()))
+    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
+    print('The largest column sum is {:E}'.format(cs.max()))
     # print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
     # print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
     print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
+    print('Matrix sparsity is {:E}'.format(calc_sparsity(matrix)))
 
 
 def load_el_ph_data(inputLoc):
