@@ -11,11 +11,11 @@ freqGHz = 5
 getX = False
 derL = True
 
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/5_Problem_080kpts_0.4eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/5_Problem_080kpts_0.4eV/1_Pipeline/Output/'
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/1_Pipeline/Output/'
 
-inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/8_Problem/0_Data/'
-outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/8_Problem/1_Pipeline/Output/'
+inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/0_Data/'
+outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/1_Pipeline/Output/'
 
 # inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
 # outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
