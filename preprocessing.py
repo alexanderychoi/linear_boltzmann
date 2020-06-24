@@ -95,17 +95,17 @@ def translate_into_fbz(df):
             oct_vecs = allvecs[:, :, i]
             whichoct = octants[i, :]
             if whichoct[0]:
-                xbool = fbzcoords[:, 0] > 0
+                xbool = fbzcoords[:, 0] >= 0
             else:
-                xbool = fbzcoords[:, 0] < 0
+                xbool = fbzcoords[:, 0] <= 0
             if whichoct[1]:
-                ybool = fbzcoords[:, 1] > 0
+                ybool = fbzcoords[:, 1] >= 0
             else:
-                ybool = fbzcoords[:, 1] < 0
+                ybool = fbzcoords[:, 1] <= 0
             if whichoct[2]:
-                zbool = fbzcoords[:, 2] > 0
+                zbool = fbzcoords[:, 2] >= 0
             else:
-                zbool = fbzcoords[:, 2] < 0
+                zbool = fbzcoords[:, 2] <= 0
             octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
             octcoords = fbzcoords[octindex, :]
             allplanes = 0
@@ -128,9 +128,11 @@ def translate_into_fbz(df):
     uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
     deltakx = np.diff(uniqkx)
     smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
-    for kxi in np.nditer(np.nonzero(smalldkx)):
-        kx = uniqkx[kxi]
-        fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+    if np.any(smalldkx):
+        for kxi in np.nditer(np.nonzero(smalldkx)):
+            kx = uniqkx[kxi]
+            fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+        print('Shifted points that were slightly misaligned in kx.\n')
     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
 
@@ -148,7 +150,13 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
     if not overwrite and \
         (os.path.isfile(data_dir + pp.prefix + '_enq.parquet')
         or os.path.isfile(data_dir + pp.prefix + '_full_electron_data.parquet')):
-        exit('The dataframes already exist and you did not explicitly request an overwrite.')
+        exit('The dataframes already exist and you did not explicitly request an overwrite.\n')
+    elif overwrite and \
+        (os.path.isfile(data_dir + pp.prefix + '_enq.parquet')
+        or os.path.isfile(data_dir + pp.prefix + '_full_electron_data.parquet')):
+        print('Dataframe exist and are being overwritten.\n')
+    else:
+        print('Writing dataframes from perturbo.\n')
 
     # Phonon energies
     enq_array = np.loadtxt(data_dir + pp.prefix + '.enq')
@@ -161,16 +169,17 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
     alldat = np.loadtxt(data_dir + pp.prefix + '_fullgrid.kpt', skiprows=4)
     colheadings = ['k_inds', 'bands', 'energy [eV]', 'kx [frac]', 'ky [frac]', 'kz [frac]',
                    'vx_dir', 'vy_dir', 'vz_dir', 'v_mag [m/s]']
-    electron_df = pd.DataFrame(data=alldat, columns=colheadings)
-    electron_df['k_inds'] = electron_df['k_inds'].astype(int)
-    electron_df['kx [1/A]'] = electron_df['kx [frac]'] * 2 * np.pi / c.a
-    electron_df['ky [1/A]'] = electron_df['ky [frac]'] * 2 * np.pi / c.a
-    electron_df['kz [1/A]'] = electron_df['kz [frac]'] * 2 * np.pi / c.a
-    electron_df['vx [m/s]'] = electron_df['vx_dir'] * electron_df['v_mag [m/s]']
-    # Drop band indces since only one band
-    electron_df = electron_df.drop(['bands'], axis=1)
-    electron_df = translate_into_fbz(electron_df)
-    electron_df.to_parquet(data_dir + pp.prefix + '_full_electron_data.parquet')
+    el_df = pd.DataFrame(data=alldat, columns=colheadings)
+    el_df['k_inds'] = el_df['k_inds'].astype(int)
+    factor = (2 * np.pi / c.alat)  # Perturbo gives recip latt points scaled to 1 in FBZ. Reincorporate here
+    el_df['kx [1/A]'] = el_df['kx [frac]'] * factor
+    el_df['ky [1/A]'] = el_df['ky [frac]'] * factor
+    el_df['kz [1/A]'] = el_df['kz [frac]'] * factor
+    el_df['vx [m/s]'] = el_df['vx_dir'] * el_df['v_mag [m/s]']
+    # Drop band indices since only one band. CANNOT DROP IF USING SILICON
+    # el_df = el_df.drop(['bands'], axis=1)
+    el_df = translate_into_fbz(el_df)
+    el_df.to_parquet(data_dir + pp.prefix + '_full_electron_data.parquet')
 
 
 def recip2memmap_par(kq, reciploc, data, nl_tot):
@@ -449,13 +458,13 @@ if __name__ == '__main__':
     out_loc = pp.outputLoc
     nthreads = 6
 
-    create_dataframes = False
-    create_pert_scatt_mat = True
+    create_dataframes = True
+    create_pert_scatt_mat = False
     chunk_mat_pop_recips = False
     occ_func_and_delta_weights = False
 
     if create_dataframes:
-        create_el_ph_dataframes(in_loc, overwrite=False)
+        create_el_ph_dataframes(in_loc, overwrite=True)
 
     electron_df, phonon_df = utilities.load_el_ph_data(in_loc)
 
