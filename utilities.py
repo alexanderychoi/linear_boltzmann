@@ -8,16 +8,36 @@ import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 import material_plotter
 
-def split_valleys(df, plot_Valleys = True):
+
+def cartesian_projection(crystalVector):
+    """Given a set of coordinates indicating the field direction, return the unit projections of the vector along the
+    Cartesian crystallographic axes.
+    Parameters:
+        cystalVector (nparray, len = 3) : Numpy array containing the three coordinates specifying the direction of the
+        applied electric field. Does not have to be normalized to 1.
+    Returns:
+        unitProjection (nparray, len = 3): Numpy array containing the three coordinates specifying the direction of the
+        field normalized such that unitProjection is a unit vector (2-norm = 1).
+    """
+    unitProjection = np.zeros(len(crystalVector))
+    mag = np.sqrt(crystalVector[0]**2 + crystalVector[1]**2 + crystalVector[2]**2)
+    unitProjection[0] = crystalVector[0]/mag
+    unitProjection[1] = crystalVector[1]/mag
+    unitProjection[2] = crystalVector[2]/mag
+
+    return unitProjection
+
+
+def gaas_split_valleys(df, plot_Valleys = True):
     """Hardcoded for GaAs, obtains the indices for Gamma valley, the 8 L valleys, and the 6 X valleys and returns these
     as zero-indexed vectors.
     Parameters:
         df (DataFrame): Dataframe that has coordinates that have already been shifted back into the FBZ.
         plot_Valleys (Bool): Boolean signifying whether to generate plots of the three distinct valley types.
     Returns:
-        valley_key_G (nparray): Numpy array containing the zero-indexed Gamma valley indices.
-        valley_key_L (nparray): Numpy array containing the zero-indexed L valley indices.
-        valley_key_X (nparray): Numpy array containing the zero-indexed X valley inds. If get_X = False, return an empty
+        valley_key_G (BooleanList): Containing the zero-indexed Gamma valley indices.
+        valley_key_L (BooleanList): Containing the zero-indexed L valley indices.
+        valley_key_X (BooleanList): Containing the zero-indexed X valley inds. If get_X = False, return an empty
     """
     kmag = np.sqrt(df['kx [1/A]'].values ** 2 + df['ky [1/A]'].values ** 2 + df['kz [1/A]'].values ** 2)
     kx = df['kx [1/A]'].values
@@ -39,7 +59,7 @@ def split_valleys(df, plot_Valleys = True):
         material_plotter.bz_3dscatter(g_df, True, False)
         material_plotter.bz_3dscatter(l_df, True, False)
         if pp.getX:
-            occupation_plotter.material_plotter(x_df, True, False)
+            material_plotter.bz_3dscatter(x_df, True, False)
             print('There are {:d} kpoints in the X valley'.format(np.count_nonzero(valley_key_X)))
 
     return valley_key_G, valley_key_L, valley_key_X
@@ -61,7 +81,7 @@ def split_L_valleys(df, plot_Valleys = True):
         valley_key_L7 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,+) k-coords
         valley_key_L8 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,-) k-coords
     """
-    _, L_inds, _ = split_valleys(df, False)
+    _, L_inds, _ = gaas_split_valleys(df, False)
     print('There are {:d} kpoints in the L valley'.format(np.count_nonzero(L_inds)))
     kx = df['kx [1/A]'].values
     ky = df['ky [1/A]'].values
@@ -150,18 +170,15 @@ def load_el_ph_data(inputLoc):
         ph_df = pd.read_parquet(inputLoc + pp.prefix + '_enq.parquet')
     return el_df, ph_df
 
-
 def translate_into_fbz(df):
     """Manually translate coordinates back into first Brillouin zone
-
     The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
     with these planes. Since the FBZ is centered on Gamma, the position vectors of the high symmetry points are also
     vectors normal to the plane. Once we have these vectors, we find the distance between a given point (u) and
     a plane (n) using the dot product of the difference vector (u-n). And if the distance is positive, then translate
     back into the FBZ.
-
     Args:
-        df (dataframe): Electron dataframe containing the kpoints. Will have their data translated back into FBZ 
+        df (dataframe): Electron dataframe containing the kpoints. Will have their data translated back into FBZ
     """
     # First, find all the vectors defining the boundary
     coords = df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
@@ -214,17 +231,17 @@ def translate_into_fbz(df):
             oct_vecs = allvecs[:, :, i]
             whichoct = octants[i, :]
             if whichoct[0]:
-                xbool = fbzcoords[:, 0] > 0
+                xbool = fbzcoords[:, 0] >= 0
             else:
-                xbool = fbzcoords[:, 0] < 0
+                xbool = fbzcoords[:, 0] <= 0
             if whichoct[1]:
-                ybool = fbzcoords[:, 1] > 0
+                ybool = fbzcoords[:, 1] >= 0
             else:
-                ybool = fbzcoords[:, 1] < 0
+                ybool = fbzcoords[:, 1] <= 0
             if whichoct[2]:
-                zbool = fbzcoords[:, 2] > 0
+                zbool = fbzcoords[:, 2] >= 0
             else:
-                zbool = fbzcoords[:, 2] < 0
+                zbool = fbzcoords[:, 2] <= 0
             octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
             octcoords = fbzcoords[octindex, :]
             allplanes = 0
@@ -244,7 +261,6 @@ def translate_into_fbz(df):
             fbzcoords[octindex, :] = octcoords
         iteration += 1
         print('Finished %d iterations of bringing points into FBZ' % iteration)
-
     uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
     deltakx = np.diff(uniqkx)
     smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
@@ -255,7 +271,114 @@ def translate_into_fbz(df):
         print('Shifted points that were slightly misaligned in kx.\n')
     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
     print('Done bringing points into FBZ!')
+
     return df
+
+# def translate_into_fbz(df):
+#     """Manually translate coordinates back into first Brillouin zone
+#
+#     The way we do this is by finding all the planes that form the FBZ boundary and the vectors that are associated
+#     with these planes. Since the FBZ is centered on Gamma, the position vectors of the high symmetry points are also
+#     vectors normal to the plane. Once we have these vectors, we find the distance between a given point (u) and
+#     a plane (n) using the dot product of the difference vector (u-n). And if the distance is positive, then translate
+#     back into the FBZ.
+#
+#     Args:
+#         df (dataframe): Electron dataframe containing the kpoints. Will have their data translated back into FBZ
+#     """
+#     # First, find all the vectors defining the boundary
+#     coords = df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
+#     b1, b2, b3 = c.b1, c.b2, c.b3
+#     b1pos = 0.5 * b1[:, np.newaxis]
+#     b2pos = 0.5 * b2[:, np.newaxis]
+#     b3pos = 0.5 * b3[:, np.newaxis]
+#     lpos = 0.5 * (b1 + b2 + b3)[:, np.newaxis]
+#     b1neg = -1 * b1pos
+#     b2neg = -1 * b2pos
+#     b3neg = -1 * b3pos
+#     lneg = -1 * lpos
+#     xpos = -0.5 * (b1 + b3)[:, np.newaxis]
+#     ypos = 0.5 * (b2 + b3)[:, np.newaxis]
+#     zpos = 0.5 * (b1 + b2)[:, np.newaxis]
+#     xneg = -1 * xpos
+#     yneg = -1 * ypos
+#     zneg = -1 * zpos
+#
+#     # Place them into octants to avoid problems when finding points
+#     # (naming is based on positive or negative for coordinate so octpmm means x+ y- z-. p=plus, m=minus)
+#     vecs_ppp = np.concatenate((b2pos, xpos, ypos, zpos), axis=1)[:, :, np.newaxis]
+#     vecs_ppm = np.concatenate((b1neg, xpos, ypos, zneg), axis=1)[:, :, np.newaxis]
+#     vecs_pmm = np.concatenate((lneg, xpos, yneg, zneg), axis=1)[:, :, np.newaxis]
+#     vecs_mmm = np.concatenate((b2neg, xneg, yneg, zneg), axis=1)[:, :, np.newaxis]
+#     vecs_mmp = np.concatenate((b1pos, xneg, yneg, zpos), axis=1)[:, :, np.newaxis]
+#     vecs_mpp = np.concatenate((lpos, xneg, ypos, zpos), axis=1)[:, :, np.newaxis]
+#     vecs_mpm = np.concatenate((b3pos, xneg, ypos, zneg), axis=1)[:, :, np.newaxis]
+#     vecs_pmp = np.concatenate((b3neg, xpos, yneg, zpos), axis=1)[:, :, np.newaxis]
+#     # Construct matrix which is 3 x 4 x 8 where we have 3 Cartesian coordinates, 4 vectors per octant, and 8 octants
+#     allvecs = np.concatenate((vecs_ppp, vecs_ppm, vecs_pmm, vecs_mmm, vecs_mmp, vecs_mpp, vecs_mpm, vecs_pmp), axis=2)
+#
+#     # Since the number of points in each octant is not equal, can't create array of similar shape. Instead the 'octant'
+#     # array below is used as a boolean map where 1 (true) indicates positive, and 0 (false) indicates negative
+#     octants = np.array([[1, 1, 1],
+#                         [1, 1, 0],
+#                         [1, 0, 0],
+#                         [0, 0, 0],
+#                         [0, 0, 1],
+#                         [0, 1, 1],
+#                         [0, 1, 0],
+#                         [1, 0, 1]])
+#
+#     fbzcoords = coords.copy(deep=True).values
+#     exitvector = np.zeros((8, 1))
+#     iteration = 0
+#     while not np.all(exitvector):  # don't exit until all octants have points inside
+#         exitvector = np.zeros((8, 1))
+#         for i in range(8):
+#             oct_vecs = allvecs[:, :, i]
+#             whichoct = octants[i, :]
+#             if whichoct[0]:
+#                 xbool = fbzcoords[:, 0] > 0
+#             else:
+#                 xbool = fbzcoords[:, 0] < 0
+#             if whichoct[1]:
+#                 ybool = fbzcoords[:, 1] > 0
+#             else:
+#                 ybool = fbzcoords[:, 1] < 0
+#             if whichoct[2]:
+#                 zbool = fbzcoords[:, 2] > 0
+#             else:
+#                 zbool = fbzcoords[:, 2] < 0
+#             octindex = np.logical_and(np.logical_and(xbool, ybool), zbool)
+#             octcoords = fbzcoords[octindex, :]
+#             allplanes = 0
+#             for j in range(oct_vecs.shape[1]):
+#                 diffvec = octcoords[:, :] - np.tile(oct_vecs[:, j], (octcoords.shape[0], 1))
+#                 dist2plane = np.dot(diffvec, oct_vecs[:, j]) / np.linalg.norm(oct_vecs[:, j])
+#                 outside = dist2plane[:] > 0
+#                 if np.any(outside):
+#                     octcoords[outside, :] = octcoords[outside, :] - \
+#                                             (2 * np.tile(oct_vecs[:, j], (np.count_nonzero(outside), 1)))
+#                     # Times 2 because the vectors that define FBZ are half of the full recip latt vectors
+#                     # print('number outside this plane is %d' % np.count_nonzero(outside))
+#                 else:
+#                     allplanes += 1
+#             if allplanes == 4:
+#                 exitvector[i] = 1
+#             fbzcoords[octindex, :] = octcoords
+#         iteration += 1
+#         print('Finished %d iterations of bringing points into FBZ' % iteration)
+#
+#     uniqkx = np.sort(np.unique(fbzcoords[:, 0]))
+#     deltakx = np.diff(uniqkx)
+#     smalldkx = np.concatenate((deltakx < (np.median(deltakx) * 1E-2), [False]))
+#     if np.any(smalldkx):
+#         for kxi in np.nditer(np.nonzero(smalldkx)):
+#             kx = uniqkx[kxi]
+#             fbzcoords[fbzcoords[:, 0] == kx, 0] = uniqkx[kxi+1]
+#         print('Shifted points that were slightly misaligned in kx.\n')
+#     df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']] = fbzcoords
+#     print('Done bringing points into FBZ!')
+#     return df
 
 
 # The following set of functions calculate quantities based on the kpt DataFrame
@@ -436,7 +559,7 @@ def calc_popsplit(chi, df):
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    g_inds,l_inds,x_inds = split_valleys(df,False)
+    g_inds,l_inds,x_inds = gaas_split_valleys(df,False)
 
     Nuc = pp.kgrid ** 3
     n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])

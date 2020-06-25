@@ -110,7 +110,7 @@ def plot_vel_KDEs(field, df, freq):
     # velocity_distribution_kde(np.real(chi_3t_i), df, title=r'{:.1e} GHz Chi {:.1e} V/m '.format(freq,field) + pp.title_str)
 
     chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(field))
-    g_inds,l_inds,x_inds = utilities.split_valleys(df,False)
+    g_inds,l_inds,x_inds = utilities.gaas_split_valleys(df,False)
     chi_3_g = chi_3[g_inds]
     chi_3_l = chi_3[l_inds]
     if pp.getX:
@@ -124,7 +124,7 @@ def plot_vel_KDEs(field, df, freq):
 
 
 def occupation_v_energy_sep(chi, enk, kptsdf):
-    g_inds, l_inds, x_inds = utilities.split_valleys(kptsdf,False)
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(kptsdf,False)
 
     vmags = kptsdf['v_mag [m/s]']
 
@@ -198,7 +198,7 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
 
 
 def plot_energy_sep(df,fields):
-    utilities.split_valleys(df, True)
+    utilities.gaas_split_valleys(df, True)
     plt.figure(figsize=(6, 6))
     for ee in fields:
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    plot_vel_KDEs(fields[20],electron_df,pp.freqGHz)
+    plot_vel_KDEs(fields[0],electron_df,pp.freqGHz)
     plot_energy_sep(electron_df, fields)
     # plot_steady_transient_difference(fields,freq)
     # plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)

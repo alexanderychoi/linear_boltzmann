@@ -121,7 +121,7 @@ def plot_scattering_rates(df):
     nkpts = len(df)
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     # utilities.check_matrix_properties(scm)
-    g_inds, l_inds, x_inds = utilities.split_valleys(df,False)
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(df,False)
     if pp.simpleBool:
         rates = (-1) * np.diag(scm) * scmfac * 1E-12
     else:
@@ -254,12 +254,11 @@ if __name__ == '__main__':
     preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    plot_scattering_rates(electron_df)
+    # plot_scattering_rates(electron_df)
     bz_3dscatter(electron_df, True, False)
-    plot_bandstructure(electron_df, electron_df)
+    # plot_bandstructure(electron_df, electron_df)
     plot_energy_kx(electron_df)
     # plot_diffusion(electron_df, fields, freq)
     # plot_L_valley_drift(electron_df,fields)
     # bz_3dscatter(electron_df, True, False)
-    print(c.e*utilities.calculate_density(electron_df) * 18500/ 100 ** 2 * 2 * c.kb_joule* pp.T / c.Vuc)
     plt.show()
