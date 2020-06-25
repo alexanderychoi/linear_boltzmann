@@ -2,7 +2,6 @@ import numpy as np
 import problem_parameters as pp
 
 # Physical parameters (these will typically not change)
-a = 5.5563606  # Lattice constant for GaAs [Angstrom]
 e = 1.602 * 10 ** (-19)  # Fundamental electronic charge [C]
 kb_joule = 1.38064852 * 10 ** (-23)  # Boltzmann constant in SI [m^2 kg s^-2 K^-1]
 kb_ev = 8.617333 * (10 ** -5)  # Boltzmann constant in eV/K
@@ -17,10 +16,11 @@ if pp.prefix == 'gaas':
     a2 = alat * np.array([+0.0, 0.5, 0.5])
     a3 = alat * np.array([-0.5, 0.5, 0.0])
 
-    b1 = np.array([-1.1308095, -1.1308095, +1.1308095])
-    b2 = np.array([+1.1308095, +1.1308095, +1.1308095])
-    b3 = np.array([-1.1308095, +1.1308095, -1.1308095])
-    Vuc = np.dot(np.cross(a1, a2), a3) * 1E-30  # unit cell volume in m^3
+    Vuc = np.dot(np.cross(a1, a2), a3)  # unit cell volume in angstrom^3
+    b1 = 2 * np.pi * np.cross(a2, a3) / Vuc
+    b2 = 2 * np.pi * np.cross(a3, a1) / Vuc
+    b3 = 2 * np.pi * np.cross(a1, a2) / Vuc
+    Vuc = Vuc * 1E-30  # unit cell volume in m^3
 
 elif pp.prefix == 'si':
     alat = 5.431474883  # lattice parameter in Angstrom consistent with what perturbo uses
