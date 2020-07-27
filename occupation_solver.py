@@ -447,6 +447,24 @@ def write_icinds(df):
     np.save(pp.outputLoc  + 'L_right_icinds', l_r_inds) # All 8 L valley indices saved together
 
 
+def writeOutputFile():
+    from datetime import datetime
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    outF = open(pp.outputLoc+"Boltzmann_Transport_log.txt", "w")
+
+    outF.write('Boltzmann Transport Equation solved at: ' + dt_string + '\n')
+    outF.write('FDM scheme: ' + pp.fdmName + '\n')
+    outF.write('SCM name: ' + pp.scmName + '\n')
+    outF.write('GNRES rel: ' + pp.relConvergence + '\n')
+    outF.write('GMRES abs: ' + pp.absConvergence + '\n')
+    outF.write('X Valleys: ' + pp.getX + '\n')
+    outF.write('L derivative applied: ' + pp.derL + '\n')
+    outF.write('SCM Bool: ' + pp.scmBool + '\n')
+    outF.write('SCM Val: ' + pp.scmVal + '\n')
+    outF.close()
+
+
 if __name__ == '__main__':
     # Create electron and phonon dataframes
     preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
@@ -465,4 +483,6 @@ if __name__ == '__main__':
         write_transient(fields, electron_df, freqs)
     if writeIcinds:
         write_icinds(electron_df)
+    writeOutputFile()
     plt.show()
+
