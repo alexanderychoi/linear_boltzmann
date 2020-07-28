@@ -2,22 +2,102 @@ import numpy as np
 import constants as c
 import os
 import pandas as pd
-import occupation_plotter
 import problem_parameters as pp
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 import material_plotter
 
-def split_valleys(df, plot_Valleys = True):
+# PURPOSE: THIS MODULE CONTAINS A VARIETY OF FUNCTIONS THAT ARE USED THROUGHOUT OTHER MODULES TO PERFORM MORE COMPLEX
+# CALCULATIONS. FOR EXAMPLE, THE CALCULATION OF THE DRIFT VELOCITY IS REQUIRED IN MULTIPLE MODULES: TO PLOT THE STEADY
+# MOMENT AS A FUNCTION OF FIELD, TO CALCULATE THE EFFECTIVE DISTRIBUTION, ETC. UTILITIES.PY IS A CENTRALIZED MODULE THAT
+# DEFINES THESE OFTEN-USED FUNCTIONS.
+
+# ORDER: THIS MODULE IS NOT TYPICALLY RUN DIRECTLY, BUT CALLED BY OTHER MODULES.
+
+# OUTPUT: THIS MODULE DOES NOT PRODUCE OUTPUTS.
+
+def load_el_ph_data(inputLoc):
+    if not (os.path.isfile(inputLoc + pp.prefix + '_full_electron_data.parquet') and
+            os.path.isfile(inputLoc + pp.prefix + '_enq.parquet')):
+        exit('Electron or phonon dataframes could not be found. ' +
+             'You can create it using preprocessing.create_el_ph_dataframes.')
+    else:
+        el_df = pd.read_parquet(inputLoc + pp.prefix + '_full_electron_data.parquet')
+        ph_df = pd.read_parquet(inputLoc + pp.prefix + '_enq.parquet')
+    return el_df, ph_df
+
+
+# The following set of functions performs calculations on the scattering or finite difference matrices
+def calc_sparsity(matrix):
+    """Count the number of non-zero elements in the matrix and return sparsity, normalized to 1.
+    Parameters:
+        matrix (nparray): Matrix on which sparsity is to be calculated.
+    Returns:
+        sparsity (dbl): Value of the sparsity, normalized to unity.
+    """
+    nkpts = len(matrix)
+    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
+    return sparsity
+
+
+def matrix_check_colsum(matrix, nkpts):
+    """Calculates the column sums of the given matrix.
+    Parameters:
+        matrix (array): NxN matrix on which colsums are to be calculated.
+        nkpts (int): The size of the matrix (N)
+    Returns:
+        colsum (array): NX1 vector containing the column sums.
+    """
+    colsum = np.zeros(nkpts)
+    for k in range(nkpts):
+        colsum[k] = np.sum(matrix[:, k])
+    return colsum
+
+
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+
+
+def check_matrix_properties(matrix):
+    cs = matrix_check_colsum(matrix, len(matrix))
+    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
+    print('The largest column sum is {:E}'.format(cs.max()))
+    # print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
+    # print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
+    print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
+    print('Matrix sparsity is {:E}'.format(calc_sparsity(matrix)))
+
+
+# The following set of functions calculate quantities based on the kpt DataFrame
+def cartesian_projection(crystalVector):
+    """Given a set of coordinates indicating the field direction, return the unit projections of the vector along the
+    Cartesian crystallographic axes.
+    Parameters:
+        cystalVector (nparray, len = 3) : Numpy array containing the three coordinates specifying the direction of the
+        applied electric field. Does not have to be normalized to 1.
+    Returns:
+        unitProjection (nparray, len = 3): Numpy array containing the three coordinates specifying the direction of the
+        field normalized such that unitProjection is a unit vector (2-norm = 1).
+    """
+    unitProjection = np.zeros(len(crystalVector))
+    mag = np.sqrt(crystalVector[0]**2 + crystalVector[1]**2 + crystalVector[2]**2)
+    unitProjection[0] = crystalVector[0]/mag
+    unitProjection[1] = crystalVector[1]/mag
+    unitProjection[2] = crystalVector[2]/mag
+
+    return unitProjection
+
+
+def gaas_split_valleys(df, plot_Valleys = True):
     """Hardcoded for GaAs, obtains the indices for Gamma valley, the 8 L valleys, and the 6 X valleys and returns these
     as zero-indexed vectors.
     Parameters:
         df (DataFrame): Dataframe that has coordinates that have already been shifted back into the FBZ.
         plot_Valleys (Bool): Boolean signifying whether to generate plots of the three distinct valley types.
     Returns:
-        valley_key_G (nparray): Numpy array containing the zero-indexed Gamma valley indices.
-        valley_key_L (nparray): Numpy array containing the zero-indexed L valley indices.
-        valley_key_X (nparray): Numpy array containing the zero-indexed X valley inds. If get_X = False, return an empty
+        valley_key_G (BooleanList): Containing the zero-indexed Gamma valley indices.
+        valley_key_L (BooleanList): Containing the zero-indexed L valley indices.
+        valley_key_X (BooleanList): Containing the zero-indexed X valley inds. If get_X = False, return an empty
     """
     kmag = np.sqrt(df['kx [1/A]'].values ** 2 + df['ky [1/A]'].values ** 2 + df['kz [1/A]'].values ** 2)
     kx = df['kx [1/A]'].values
@@ -39,7 +119,7 @@ def split_valleys(df, plot_Valleys = True):
         material_plotter.bz_3dscatter(g_df, True, False)
         material_plotter.bz_3dscatter(l_df, True, False)
         if pp.getX:
-            occupation_plotter.material_plotter(x_df, True, False)
+            material_plotter.bz_3dscatter(x_df, True, False)
             print('There are {:d} kpoints in the X valley'.format(np.count_nonzero(valley_key_X)))
 
     return valley_key_G, valley_key_L, valley_key_X
@@ -61,7 +141,7 @@ def split_L_valleys(df, plot_Valleys = True):
         valley_key_L7 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,+) k-coords
         valley_key_L8 (nparray): Numpy array containing the zero-indexed L valley indices. (-,-,-) k-coords
     """
-    _, L_inds, _ = split_valleys(df, False)
+    _, L_inds, _ = gaas_split_valleys(df, False)
     print('There are {:d} kpoints in the L valley'.format(np.count_nonzero(L_inds)))
     kx = df['kx [1/A]'].values
     ky = df['ky [1/A]'].values
@@ -100,58 +180,6 @@ def split_L_valleys(df, plot_Valleys = True):
     return valley_key_L1, valley_key_L2, valley_key_L3, valley_key_L4, valley_key_L5, valley_key_L6, valley_key_L7, valley_key_L8
 
 
-def calc_sparsity(matrix):
-    """Count the number of non-zero elements in the matrix and return sparsity, normalized to 1.
-    Parameters:
-        matrix (nparray): Matrix on which sparsity is to be calculated.
-    Returns:
-        sparsity (dbl): Value of the sparsity, normalized to unity.
-    """
-    nkpts = len(matrix)
-    sparsity = 1 - (np.count_nonzero(matrix) / nkpts**2)
-    return sparsity
-
-
-def matrix_check_colsum(matrix, nkpts):
-    """Calculates the column sums of the given matrix.
-    Parameters:
-        matrix (array): NxN matrix on which colsums are to be calculated.
-        nkpts (int): The size of the matrix (N)
-    Returns:
-        colsum (array): NX1 vector containing the column sums.
-    """
-    colsum = np.zeros(nkpts)
-    for k in range(nkpts):
-        colsum[k] = np.sum(matrix[:, k])
-    return colsum
-
-
-def check_symmetric(a, rtol=1e-05, atol=1e-08):
-    return np.allclose(a, a.T, rtol=rtol, atol=atol)
-
-
-def check_matrix_properties(matrix):
-    cs = matrix_check_colsum(matrix, len(matrix))
-    print('The average absolute value of column sum is {:E}'.format(np.average(np.abs(cs))))
-    print('The largest column sum is {:E}'.format(cs.max()))
-    # print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
-    # print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
-    # print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
-    # print('Matrix sparsity is {:E}'.format(calc_sparsity(matrix)))
-
-
-def load_el_ph_data(inputLoc):
-    if not (os.path.isfile(inputLoc + pp.prefix + '_full_electron_data.parquet') and
-            os.path.isfile(inputLoc + pp.prefix + '_enq.parquet')):
-        exit('Electron or phonon dataframes could not be found. ' +
-             'You can create it using preprocessing.create_el_ph_dataframes.')
-    else:
-        el_df = pd.read_parquet(inputLoc + pp.prefix + '_full_electron_data.parquet')
-        ph_df = pd.read_parquet(inputLoc + pp.prefix + '_enq.parquet')
-    return el_df, ph_df
-
-
-# The following set of functions calculate quantities based on the kpt DataFrame
 def fermi_distribution(df, testboltzmann=False):
     """Given an electron DataFrame, a Fermi Level, and a temperature, calculate the Fermi-Dirac distribution and add ...
     as a column to the DataFrame. Flagged option to add another column with the Boltzmann distribution.
@@ -188,25 +216,9 @@ def calculate_density(df):
 
 
 # The following set of functions calculate quantities based on steady state chi solutions
-def drift_velocity(chi, df):
-    """Function that calculates the drift velocity given a Chi solution through moment of group velocity in BZ. Note that
-    this makes use of the equilibrium carrier density.
-    Parameters:
-        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
-        df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
-
-    Returns:
-        vd (double): The value of the drift velocity for a given steady-state solution of the BTE in m/s.
-    """
-    f0 = df['k_FD'].values
-    f = chi + f0
-    vd = np.sum(f * df['vx [m/s]']) / np.sum(f)
-    return vd
-
-
 def mean_velocity(chi, df):
     """Function that calculates the mean velocity given a Chi solution through moment of group velocity in BZ. Note that
-    this makes use of the equilibrium carrier density.
+    this makes use of the equilibrium carrier density. Hardcoded for field applied in the (1 0 0)
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt containing the group velocity associated with each state in eV.
@@ -266,13 +278,30 @@ def mean_energy(chi, df):
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    n = calculate_density(df)
     meanE = np.sum(f * df['energy [eV]']) / np.sum(f)
     eq_en = np.sum(f0 * df['energy [eV]']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
-    print('Equilibrium carrier energy is {:.10E} [eV]'.format(eq_en))
+    # print('Equilibrium carrier energy is {:.10E} [eV]'.format(eq_en))
+
     return meanE
+
+
+def mean_kx(chi, df):
+    """Function that calculates the mean kx by a sum of the electron energy over the BZ. Note that this makes use of
+    the equilbrium carrier density.
+    Parameters:
+        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+
+    Returns:
+        meanE (double): The value of the mean carrier energy in eV.
+    """
+    f0 = df['k_FD'].values
+    f = chi + f0
+    meankx = np.sum(f * df['kx [1/A]']) / np.sum(f)
+
+    return meankx
 
 
 def calc_mobility(F, df):
@@ -295,10 +324,9 @@ def calc_mobility(F, df):
     return mobility
 
 
-def calc_diff_mobility(chi, df, field):
-    """Calculate differential mobility as per general definition of conductivity. Solution must be fed in as chi.
-    I'm not sure that this formula is the right formula for differential mobility. I just used Wu Li's formula and modified
-    to acept chi as an input, which I don't think is the same thing.
+def calc_linear_mobility(chi, df, field):
+    """Calculate linear mobility as per general definition of conductivity. Solution must be fed in as chi. I just used
+    Wu Li's formula and modified to acept chi as an input.
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in F form or as psi
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
@@ -313,7 +341,8 @@ def calc_diff_mobility(chi, df, field):
     conductivity = prefactor * np.sum(df['vx [m/s]'] * chi)
     mobility = conductivity / c.e / n
     # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
-    # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    print('Conductivity is {:.10E} (S / m)'.format(conductivity))
     return mobility
 
 
@@ -322,7 +351,7 @@ def calc_popsplit(chi, df):
     Parameters:
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
         df (dataframe): Electron DataFrame indexed by kpt
-        get_X (Bool): Boolean signifying whether the calculation should also return X valley indices. Not every grid
+        get_X (Bool): Boolean signifying whether the calculation should also re`turn X valley indices. Not every grid
         contains the X valleys. True -> Get X valley inds
     Returns:
         ng (double): The value of the gamma carrier population in m^-3.
@@ -331,7 +360,7 @@ def calc_popsplit(chi, df):
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    g_inds,l_inds,x_inds = split_valleys(df,False)
+    g_inds,l_inds,x_inds = gaas_split_valleys(df,False)
 
     Nuc = pp.kgrid ** 3
     n_g = 2 / Nuc / c.Vuc * np.sum(f[g_inds])
@@ -374,8 +403,8 @@ def f2chi(f, df, field):
         chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
     """
     f0 = np.squeeze(df['k_FD'].values)
-    # prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
-    prefactor = field * c.e / c.kb_joule / pp.T * f0
+    prefactor = field * c.e / c.kb_joule / pp.T * f0 * (1 - f0)
+    # prefactor = field * c.e / c.kb_joule / pp.T * f0
     chi = np.squeeze(f) * np.squeeze(prefactor)
     return chi
 
@@ -387,5 +416,3 @@ if __name__ == '__main__':
     fermi_distribution(eldf)
     conc = calculate_density(eldf)
     print('Carrier concentration is {:.2E} cm^-3'.format(conc * 1E-6))
-    # split_L_valleys(eldf, plot_Valleys=True)
-    # plt.show()

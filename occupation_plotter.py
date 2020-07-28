@@ -1,15 +1,18 @@
 import numpy as np
-import constants as c
 import utilities
 import problem_parameters as pp
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import numpy.linalg
-import plotly.offline as py
-import plotly.graph_objs as go
-import preprocessing
-import material_plotter
-from mpl_toolkits.mplot3d import Axes3D
+import constants as c
+
+# PURPOSE: THIS MODULE WILL GENERATE DIRECT VISUALIZATIONS OF THE STEADY DISTRIBUTION FUNCTION AS A FUNCTION OF ELECTRIC
+# FIELD. THE VISUALIZATIONS ARE KERNEL DENSITY ESTIMATES OF THE #2 (LOW FIELD + PERTURBO SCM) AND #3 (FINITE DIFFERENCE
+# + PERTURBO SCM) DISTRIBUTION FUNCTIONS IN VELOCITY, MOMENTUM, AND ENERGY SPACE.
+
+# ORDER: THIS MODULE CAN BE RUN AFTER OCCUPATION_SOLVER.PY HAS STORED SOLUTIONS IN THE OUTPUT LOC.
+
+# OUTPUT: THIS MODULE RENDERS FIGURES FOR EXPLORATORY DATA ANALYSIS. IT DOES NOT SAVE FIGURES.
 
 import matplotlib as mpl
 font = {'size': 11}
@@ -17,8 +20,11 @@ mpl.rc('font', **font)
 
 
 def plot_steady_transient_difference(fieldVector, freq):
-    """Wrapper script for velocity_distribution_kde. Can do for the various solution schemes saved to file.
-        Parameters:
+    """Plotting code to compare the steady-state and transient solutions at a given frequency. Generates plots of the
+    residual between the real parts of the AC and DC solutions. Currently only implemented for #3 solutions
+    (full derivative + Perturbo SCM).
+
+    Parameters:
         fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
         freq (dbl): Frequency in GHz to be used for the transient solution
 
@@ -34,7 +40,6 @@ def plot_steady_transient_difference(fieldVector, freq):
         ac_dc_cosine.append(distance.cosine(steady_chi,transient_chi)*-1)
         print('Relative residual is {:E}'.format(ac_dc_error[-1]))
         print('Cosine similarity is {:E}'.format(ac_dc_cosine[-1]))
-
     plt.figure()
     plt.plot(fieldVector*1E-5, ac_dc_error)
     plt.xlabel('EField (kV/cm)')
@@ -48,6 +53,63 @@ def plot_steady_transient_difference(fieldVector, freq):
     plt.title(pp.title_str)
 
 
+def momentum_distribution_kde(chi, df,ee,title=[],saveData = False):
+    """Takes chi solutions from file and plots the KDE of the distribution in momentum space.
+
+    Parameters:
+        chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        title (str): String containing the desired name of the plot
+
+    Returns:
+        Nothing. Just the plots.
+
+    TODO: CURRENTLY THE SPACING PARAMETER IS HARDCODED FOR DIFFERENT GRID SIZES. WOULD BE NICE TO MAKE THIS MORE ROBUST
+    IN THE FUTURE.
+    """
+    mom = df['kx [1/A]']
+    npts = 600  # number of points in the KDE
+    kdist = np.zeros(npts)
+    kdist_tot = np.zeros(npts)
+    kdist_f0 = np.zeros(npts)
+    # Need to define the energy range that I'm doing integration over
+    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    k_ax = np.linspace(mom.min(), mom.max(), npts)
+    dx = (k_ax.max() - k_ax.min()) / npts
+    f0 = np.squeeze(df['k_FD'].values)
+    if pp.kgrid == 200:
+        spread = 22 * dx # For 200^3
+    if pp.kgrid == 160:
+        spread = 25 * dx  # For 160^3
+    if pp.kgrid == 80:
+        spread = 70 *dx  # For 80^3
+    def gaussian(x, mu, sigma=spread):
+        return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+    for k in range(len(chi)):
+        istart = int(np.maximum(np.floor((mom[k] - k_ax[0]) / dx) - (4 * spread / dx), 0))
+        iend = int(np.minimum(np.floor((mom[k] - k_ax[0]) / dx) + (4 * spread / dx), npts - 1))
+        kdist_tot[istart:iend] += (chi[k] + f0[k]) * gaussian(k_ax[istart:iend], mom[k])
+        kdist_f0[istart:iend] += f0[k] * gaussian(k_ax[istart:iend], mom[k])
+        kdist[istart:iend] += chi[k] * gaussian(k_ax[istart:iend], mom[k])
+
+    ax = plt.axes([0.18, 0.15, 0.76, 0.76])
+    ax.plot(k_ax, [0] * len(k_ax), 'k')
+    # ax.plot(k_ax, kdist_f0, '--', linewidth=2, label='Equilbrium')
+    ax.plot(k_ax, kdist_tot, linewidth=2, label='{:.3f} kV/cm'.format(ee/1e5))
+    # ax.fill(k_ax, kdist, '--', linewidth=2, label='Non-equilibrium deviation', color='Red')
+    ax.set_xlabel('kx [1/A]')
+    ax.set_ylabel(r'Occupation [arb.]')
+    plt.legend()
+    if title:
+        plt.title(title, fontsize=8)
+
+    # Sometimes, it is useful to save the KDE data for paper figures. This toggles on Boolean.
+    if saveData:
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_ax_' + '2_' + "E_{:.1e}".format(ee), k_ax)
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist_f0_' + '2_' + "E_{:.1e}".format(ee), kdist_f0)
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist' + '2_' + "E_{:.1e}".format(ee), kdist)
+
+
 def velocity_distribution_kde(chi, df, title=[]):
     """Takes chi solutions which are already calculated and plots the KDE of the distribution in velocity space
     Parameters:
@@ -56,6 +118,9 @@ def velocity_distribution_kde(chi, df, title=[]):
         title (str): String containing the desired name of the plot
     Returns:
         Nothing. Just the plots.
+
+    TODO: CURRENTLY THE SPACING PARAMETER IS HARDCODED FOR DIFFERENT GRID SIZES. WOULD BE NICE TO MAKE THIS MORE ROBUST
+    IN THE FUTURE.
     """
     vel = df['vx [m/s]']
     npts = 600  # number of points in the KDE
@@ -67,9 +132,12 @@ def velocity_distribution_kde(chi, df, title=[]):
     v_ax = np.linspace(vel.min(), vel.max(), npts)
     dx = (v_ax.max() - v_ax.min()) / npts
     f0 = np.squeeze(df['k_FD'].values)
-    # spread = 22 * dx # For 200^3
-    # spread = 25 * dx  # For 160^3
-    spread = 70 *dx  # For 80^3
+    if pp.kgrid == 200:
+        spread = 22 * dx # For 200^3
+    if pp.kgrid == 160:
+        spread = 25 * dx  # For 160^3
+    if pp.kgrid == 80:
+        spread = 70 *dx  # For 80^3
     def gaussian(x, mu, sigma=spread):
         return (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
 
@@ -80,7 +148,6 @@ def velocity_distribution_kde(chi, df, title=[]):
         vdist_f0[istart:iend] += f0[k] * gaussian(v_ax[istart:iend], vel[k])
         vdist[istart:iend] += chi[k] * gaussian(v_ax[istart:iend], vel[k])
 
-    plt.figure()
     ax = plt.axes([0.18, 0.15, 0.76, 0.76])
     ax.plot(v_ax, [0] * len(v_ax), 'k')
     ax.plot(v_ax, vdist_f0, '--', linewidth=2, label='Equilbrium')
@@ -94,27 +161,18 @@ def velocity_distribution_kde(chi, df, title=[]):
         plt.title(title, fontsize=8)
 
 
-def plot_vel_KDEs(field, df, freq):
-    """Wrapper script for velocity_distribution_kde. Can do for the various solution schemes saved to file.
+def plot_vel_KDEs(field, df):
+    """Wrapper script for velocity_distribution_kde. Can do for the various solution schemes saved to file, but for now
+    only implemented for steady #3 solutions.
         Parameters:
-        outLoc (str): String containing the location of the directory to write the chi solutions and ready steady state chis.
         field (dbl): the values of the electric field to be evaluated in V/m.
         df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
 
     Returns:
         Nothing. Just the plots.
     """
-    # chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq,field))
-    # chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(field))
-    # chi_2_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(field))
-    # chi_1_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}.npy".format(field))
-    # velocity_distribution_kde(chi_3_i, df, title='DC Chi FDM {:.1e} V/m '.format(field) + pp.title_str)
-    # velocity_distribution_kde(chi_2_i, df, title='DC Chi L-F {:.1e} V/m '.format(field) + pp.title_str)
-    # velocity_distribution_kde(chi_1_i, df, title='DC Chi RTA {:.1e} V/m '.format(field) + pp.title_str)
-    # velocity_distribution_kde(np.real(chi_3t_i), df, title=r'{:.1e} GHz Chi {:.1e} V/m '.format(freq,field) + pp.title_str)
-
     chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(field))
-    g_inds,l_inds,x_inds = utilities.split_valleys(df,False)
+    g_inds,l_inds,x_inds = utilities.gaas_split_valleys(df,False)
     chi_3_g = chi_3[g_inds]
     chi_3_l = chi_3[l_inds]
     if pp.getX:
@@ -127,8 +185,46 @@ def plot_vel_KDEs(field, df, freq):
         velocity_distribution_kde(chi_3_x, df.loc[x_inds].reset_index(), title='X Chi FDM {:.1e} V/m '.format(field) + pp.title_str)
 
 
+def plot_mom_KDEs(fieldVector, df, lowField = False, saveData = False):
+    """Wrapper script for momentum_distribution_kde. Can do for the various solution schemes saved to file, but for now
+    only implemented for steady #2 or #3 solutions, on Boolean toggle.
+        Parameters:
+        fieldVector (nparray): the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        lowField (bool): Should the momentum distribution be calculated for #2 or #3 solutions.
+        saveData (bool): Should the kde be written to file?
+
+    Returns:
+        Nothing. Just the plots.
+    """
+    g_inds,l_inds,x_inds = utilities.gaas_split_valleys(df,False)
+    plt.figure()
+    for ee in fieldVector:
+        if lowField:
+            chi_2 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
+            chi_2_g = chi_2[g_inds]
+            momentum_distribution_kde(chi_2_g, df.loc[g_inds].reset_index(), ee,'',saveData)
+        else:
+            chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+            chi_3_g = chi_3[g_inds]
+            momentum_distribution_kde(chi_3_g, df.loc[g_inds].reset_index(), ee,'',saveData)
+
+
 def occupation_v_energy_sep(chi, enk, kptsdf):
-    g_inds, l_inds, x_inds = utilities.split_valleys(kptsdf,False)
+    """Takes chi solutions which are already calculated and plots the KDE of the distribution in energy space. The Gamma,
+    L, and X valleys are calculated separately.
+        Parameters:
+            chi (nparray): Numpy array containing a solution of the steady Boltzmann equation in chi form.
+            enk (nparray): Containing the energy associated with each state in eV.
+            kptsdf (datafrane): Electron dataframe containing momentum and velocity information.
+        Returns:
+            Nothing. Just the plots.
+
+        TODO: CURRENTLY THE SPACING PARAMETER IS HARDCODED FOR DIFFERENT GRID SIZES. WOULD BE NICE TO MAKE THIS MORE ROBUST
+        IN THE FUTURE.
+        """
+
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(kptsdf,False)
 
     vmags = kptsdf['v_mag [m/s]']
 
@@ -156,8 +252,11 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
     dx = (g_en_axis.max() - g_en_axis.min()) / npts
     g_f0 = np.squeeze(kptsdf.loc[g_inds,'k_FD'].values)
     l_f0 = np.squeeze(kptsdf.loc[l_inds,'k_FD'].values)
+
     f0 = np.squeeze(kptsdf['k_FD'])
+    # (Peishi): I used 35 for the spread for npts=400 and it works pretty well. Don't need a ton of npts.
     spread = 35 * dx
+    spread = 350 * dx  # This is a value that has to change to get better smoothing. Also depends on the number of pts.
     # spread = 120 * dx
     # spread = 200 * dx
     # spread = 600 * dx
@@ -210,7 +309,16 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
 
 
 def plot_energy_sep(df, fields):
-    utilities.split_valleys(df, False)
+    """Wrapper script for occupation_v_energy_sep. Can do for the various solution schemes saved to file, but for now
+    only implemented for steady #3 solutions.
+        Parameters:
+        fields (nparray): Containing the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+
+    Returns:
+        Nothing. Just the plots.
+    """
+    utilities.gaas_split_valleys(df, True)
     plt.figure(figsize=(6, 6))
     for ee in fields:
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
@@ -221,37 +329,57 @@ def plot_energy_sep(df, fields):
         plt.plot(en_axis-np.min(df['energy [eV]']), f0ax, '-', label='Equilibrium')
         if pp.getX:
             plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
+    plt.ylim([-0.02,0.015])
     plt.xlabel('Energy above CBM (eV)')
     plt.ylabel(r'FDM deviational occupation ($\delta f_{\mathbf{k}}$) [arb]')
     plt.title(pp.title_str)
 
-    # plt.figure()
-    # for ee in fields:
-    #     chi_2_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
-    #     g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax = \
-    #     occupation_v_energy_sep(chi_2_i, df['energy [eV]'].values, df)
-    #     plt.plot(g_en_axis-np.min(df['energy [eV]']), g_chiax, label=r'$\Gamma$'+' Valley')
-    #     plt.plot(l_en_axis-np.min(df['energy [eV]']), l_chiax, '--', label='L Valley')
-    #     if pp.getX:
-    #         plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
-    # plt.xlabel('Energy above CBM (eV)')
-    # plt.ylim([-0.05,0.05])
-    # plt.ylabel(r'L-F deviational occupation ($\delta f_{\mathbf{k}}$) [arb]')
-    # plt.title(pp.title_str)
-    #
-    # plt.figure()
-    # for ee in fields:
-    #     chi_1_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}.npy".format(ee))
-    #     g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax = \
-    #     occupation_v_energy_sep(chi_1_i, df['energy [eV]'].values, df)
-    #     plt.plot(g_en_axis-np.min(df['energy [eV]']), g_chiax, label=r'$\Gamma$'+' Valley')
-    #     plt.plot(l_en_axis-np.min(df['energy [eV]']), l_chiax, '--', label='L Valley')
-    #     if pp.getX:
-    #         plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
-    # plt.xlabel('Energy above CBM (eV)')
-    # plt.ylim([-0.05,0.05])
-    # plt.ylabel(r'RTA deviational occupation ($\delta f_{\mathbf{k}}$) [arb]')
-    # plt.title(pp.title_str)
+
+def plot_energy_sep_lf(df, fields):
+    """Wrapper script for occupation_v_energy_sep. Can do for the various solution schemes saved to file, but for now
+    only implemented for steady #2 solutions.
+        Parameters:
+        fields (nparray): Containing the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+
+    Returns:
+        Nothing. Just the plots.
+    """
+    plt.figure(figsize=(6, 6))
+    for ee in fields:
+        chi_2_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
+        g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax = \
+            occupation_v_energy_sep(chi_2_i, df['energy [eV]'].values, df)
+        plt.plot(g_en_axis - np.min(df['energy [eV]']), g_chiax, label=r'$\Gamma$' + ' Valley')
+        plt.plot(l_en_axis - np.min(df['energy [eV]']), l_chiax, '--', label='L Valley')
+        if pp.getX:
+            plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
+    plt.ylim([-0.02,0.015])
+    plt.xlabel('Energy above CBM (eV)')
+    plt.ylabel(r'LF deviational occupation ($\delta f_{\mathbf{k}}$) [arb]')
+    plt.title(pp.title_str)
+
+
+def plot_2d_dist(df, field):
+    """Plots a 3D scatter where x and y are momentum coordinates and z is the distribution function.
+        Parameters:
+        fields (nparray): Containing the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+
+    Returns:
+        Nothing. Just the plots.
+    """
+    g_inds,_,_ = utilities.gaas_split_valleys(df, True)
+    plt.figure(figsize=(6, 6))
+    chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(field))
+
+    x = df.loc[g_inds, 'kx [1/A]'].values / (2 * np.pi / c.alat)
+    y = df.loc[g_inds, 'ky [1/A]'].values / (2 * np.pi / c.alat)
+    z = np.log10(chi_3[g_inds] + df.loc[g_inds,'k_FD'])
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x, y, z)
+    plt.title(pp.title_str)
 
 
 def plot_noise_kde(el_df, big_e):
@@ -333,21 +461,19 @@ def plot_noise_kde(el_df, big_e):
 
 
 if __name__ == '__main__':
-    fields = [1E2, 2E4, 4E4]  # V/m
-    # fields = [4E4]  # V/m
-    freq = 1  # GHz
-
+    # Create electron and phonon dataframes
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
+    fields = pp.fieldVector
+    freq = pp.freqGHz
 
+    plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    # plot_vel_KDEs(fields[20],electron_df,pp.freqGHz)
+    plot_mom_KDEs(fields, electron_df,lowField=False,saveData=False)
+    # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
-    # noise_k = plot_noise_kde(electron_df, fields)
-    # plot_energy_sep(electron_df, fields)
-    # plot_steady_transient_difference(fields,freq)
-    # plot_vel_KDEs(fields[-1],electron_df,pp.freqGHz)
-    # plot_energy_sep(electron_df, fields)
+    # plot_energy_sep_lf(electron_df, fields)
+    # plot_2d_dist(electron_df, fields[-1])
     plt.show()

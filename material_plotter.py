@@ -5,8 +5,6 @@ import problem_parameters as pp
 import matplotlib.pyplot as plt
 import plotly.offline as py
 import plotly.graph_objs as go
-import pandas as pd
-import noise_solver
 import occupation_plotter
 from matplotlib.font_manager import FontProperties
 import preprocessing
@@ -24,7 +22,7 @@ def bz_3dscatter(points, useplotly=True, icind=False):
         if np.any(points['energy [eV]']):
             colors = points['energy [eV]']
         else:
-            colors = 'k'
+            colors = 'black'
         trace1 = go.Scatter3d(
             x=points['kx [1/A]'].values / (2 * np.pi / c.alat),
             y=points['ky [1/A]'].values / (2 * np.pi / c.alat),
@@ -121,21 +119,36 @@ def plot_scattering_rates(df):
     nkpts = len(df)
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     # utilities.check_matrix_properties(scm)
-    g_inds, l_inds, x_inds = utilities.split_valleys(df,False)
     if pp.simpleBool:
         rates = (-1) * np.diag(scm) * scmfac * 1E-12
     else:
         chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
         rates = (-1) * np.diag(scm) * scmfac * 1E-12 / chi2psi
     plt.figure()
-    # plt.plot(df['energy [eV]'], rates, '.', MarkerSize=3)
-    plt.plot(df.loc[g_inds,'energy [eV]'], rates[g_inds], '.', MarkerSize=3, label=r'$\Gamma$')
-    plt.plot(df.loc[l_inds,'energy [eV]'], rates[l_inds], '.', MarkerSize=3, label='L')
-    if pp.getX:
-        plt.plot(df.loc[x_inds, 'energy [eV]'], rates[x_inds], '.', MarkerSize=3, label=r'X')
+    if pp.prefix == 'gaas':
+        g_inds, l_inds, x_inds = utilities.gaas_split_valleys(df,False)
+        # plt.plot(df['energy [eV]'], rates, '.', MarkerSize=3)
+        plt.plot(df.loc[g_inds,'energy [eV]']-pp.mu, rates[g_inds], '.', MarkerSize=3, label=r'$\Gamma$')
+        plt.plot(df.loc[l_inds,'energy [eV]']-pp.mu, rates[l_inds], '.', MarkerSize=3, label='L')
+        if pp.getX:
+            plt.plot(df.loc[x_inds, 'energy [eV]']-np.min(df['energy [eV]']), rates[x_inds], '.', MarkerSize=3, label=r'X')
+    else:
+        plt.plot(df['energy [eV]']-pp.mu,rates,'.', MarkerSize=3)
     plt.xlabel('Energy [eV]')
     plt.ylabel(r'Scattering rate [ps$^{-1}$]')
     plt.title(pp.title_str)
+    plt.ylim([0,30])
+
+    plt.figure()
+    plt.plot(df['energy [eV]'],rates**(-1)*1000, '.', MarkerSize=3)
+    plt.xlabel('Energy [eV]')
+    plt.ylabel(r'Relaxation time [fs]')
+    plt.title(pp.title_str)
+
+
+    thermal_tau = np.sum(df['k_FD']*rates**(-1))/np.sum(df['k_FD'])
+    print('Thermal relaxation time is {:3f} ps'.format(thermal_tau))
+    print('Approximate thermal mobility is {:3f} cm^2/V-s'.format(c.e*thermal_tau/1e12/(9.11e-31*0.067)*100**2))
     plt.legend()
 
 
@@ -183,7 +196,7 @@ def plot_bandstructure(kpts, enk):
     deg2rad = 2 * np.pi / 360
     ang_tol = 1 * deg2rad  # 1 degree in radians
 
-    enkonly = np.array(enk['energy [eV]'])[:, np.newaxis]
+    enkonly = np.array(enk['energy [eV]']-pp.mu)[:, np.newaxis]
     enkinds = np.array(enk['k_inds'])
     kptsonly = np.array(kpts[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']]) / (2 * np.pi / a)
     kptsinds = np.array(kpts['k_inds'])
@@ -241,7 +254,7 @@ def plot_energy_kx(df):
         Nothing. Just the plots.
     """
     plt.figure()
-    plt.plot(df['kx [1/A]'], df['energy [eV]'], '.', MarkerSize=3)
+    plt.plot(df['kx [1/A]'], df['energy [eV]']-pp.mu, '.', MarkerSize=3)
     plt.ylabel('Energy [eV]')
     plt.xlabel(r'kx [1/A]')
     plt.title(pp.title_str)
@@ -256,10 +269,9 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     plot_scattering_rates(electron_df)
     bz_3dscatter(electron_df, True, False)
-    plot_bandstructure(electron_df, electron_df)
+    # plot_bandstructure(electron_df, electron_df)
     plot_energy_kx(electron_df)
     # plot_diffusion(electron_df, fields, freq)
     # plot_L_valley_drift(electron_df,fields)
     # bz_3dscatter(electron_df, True, False)
-    print(c.e*utilities.calculate_density(electron_df) * 18500/ 100 ** 2 * 2 * c.kb_joule* pp.T / c.Vuc)
     plt.show()

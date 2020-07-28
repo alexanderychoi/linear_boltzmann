@@ -8,6 +8,7 @@ kb_ev = 8.617333 * (10 ** -5)  # Boltzmann constant in eV/K
 hbar_joule = 1.054571817 * 10 ** (-34)  # Reduced Planck's constant [J/s]
 hbar_ev = 6.582119569 * 10 ** (-16)  # Reduced Planck's constant [eV/s]
 ryd2ev = 13.605693122994  # CODATA value. Different from perturbo at 8th sigfig
+m_gaas = 0.063*9.11e-31  # Effective mass from Ioffe.Ru [kg]
 
 # Lattice vectors
 if pp.prefix == 'gaas':

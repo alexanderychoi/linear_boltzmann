@@ -178,6 +178,9 @@ def create_el_ph_dataframes(data_dir, overwrite=False):
     el_df['ky [1/A]'] = el_df['ky [frac]'] * factor
     el_df['kz [1/A]'] = el_df['kz [frac]'] * factor
     el_df['vx [m/s]'] = el_df['vx_dir'] * el_df['v_mag [m/s]']
+    el_df['vy [m/s]'] = el_df['vy_dir'] * el_df['v_mag [m/s]']
+    el_df['vz [m/s]'] = el_df['vz_dir'] * el_df['v_mag [m/s]']
+
     # Drop band indices since only one band. CANNOT DROP IF USING SILICON
     # el_df = el_df.drop(['bands'], axis=1)
     el_df = translate_into_fbz(el_df)
@@ -441,8 +444,8 @@ def process_perturbo_matrix(data_dir, el_df):
     matrix = np.memmap(data_dir + 'scatt_mat_pert.mmap', dtype='float64', mode='w+', shape=(nk, nk))
 
     counter = 1
-    f = open(data_dir + 'gaas.scatt_mat')
-    for chunkStart, chunkSize in chunk_iterator(data_dir + 'gaas.scatt_mat', size=512*(1024**2)):
+    f = open(data_dir + pp.prefix + '.scatt_mat')
+    for chunkStart, chunkSize in chunk_iterator(data_dir + pp.prefix + '.scatt_mat', size=512*(1024**2)):
         f.seek(chunkStart)
         all_lines = np.array([float(i) for i in f.read(chunkSize).split()])
         print('Finished READ IN for {:d} chunk of {:2E} bits.'.format(counter, chunkSize))

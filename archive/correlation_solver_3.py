@@ -22,7 +22,7 @@ class gmres_counter(object):
             print('iter %3i\trk = %s' % (self.niter, str(rk)))
 
 
-def correlation_1(chi, matrix_sc, matrix_fd, df, field, freq):
+def correlation(chi, matrix_sc, matrix_fd, df, field, freq):
     """Generalized minimal residual solver for calculating transient Gamma vd-vd autocorrelation using the full
     finite difference matrix.
     Parameters:

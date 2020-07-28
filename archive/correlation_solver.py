@@ -295,7 +295,7 @@ def vd_vd(chi, matrix_sc, matrix_fd, df, field, freq):
     print('Mean thermal velocity in L is {:3E}'.format(np.mean(np.abs(l_df['vx [m/s]'].values))))
     print('Population in Gamma is {:3E}'.format(ng))
     print('Population in L is {:3E}'.format(nl))
-    print('Drift velocity is {:3E}'.format(utilities.drift_velocity(chi,df)))
+    print('Drift velocity is {:3E}'.format(utilities.mean_velocity(chi,df)))
     b[g_inds] = (-1) * ((g_df['vx [m/s]'] - g_vel) * f[g_inds])
     b[l_inds] = (-1) * ((l_df['vx [m/s]'] - l_vel) * f[l_inds])
     if pp.getX:
