@@ -20,12 +20,11 @@ freqGHz = 1
 getX = False
 derL = True
 
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/1_Pipeline/Output/'
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/9_Problem_f_steady_matrix/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_f_steady_matrix/1_Pipeline/Output/'
 
-inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/0_Data/'
-outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/1_Pipeline/Output/'
-
+inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/0_Data/'
+outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/1_Pipeline/Output/'
 # inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
 # outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
@@ -48,8 +47,8 @@ outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/8_Problem/1_Pipeline/Output_V2/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/8_Problem/1_Pipeline/Output_V3/'
 
-inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/6_Problem_Si/0_Data/'
-outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/6_Problem_Si/1_Pipeline/Output_V1/'
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/6_Problem_Si/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/6_Problem_Si/1_Pipeline/Output_V1/'
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/2_Problem/1_Pipeline/Output/'
 
@@ -86,7 +85,6 @@ verboseError = True
 # What's the name of the matrix?
 # scmName = 'scatt_mat_pert.mmap'  # Problem 2 Pert
 # scmName = 'scattering_matrix_simple_2.mmap'  # Problem 2
-scmName = 'scatt_mat_pert.mmap'  # Problem 8
 scmName = 'scatt_mat_pert.mmap'  # Problem 2
 
 # String for title of plots

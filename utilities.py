@@ -136,8 +136,8 @@ def check_matrix_properties(matrix):
     print('The largest column sum is {:E}'.format(cs.max()))
     # print('The matrix is symmetric: {0!s}'.format(check_symmetric(matrix)))
     # print('The average absolute value of element is {:E}'.format(np.average(np.abs(matrix))))
-    print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
-    print('Matrix sparsity is {:E}'.format(calc_sparsity(matrix)))
+    # print('The average value of on-diagonal element is {:E}'.format(np.average(np.diag(matrix))))
+    # print('Matrix sparsity is {:E}'.format(calc_sparsity(matrix)))
 
 
 def load_el_ph_data(inputLoc):
@@ -268,8 +268,10 @@ def mean_energy(chi, df):
     f = chi + f0
     n = calculate_density(df)
     meanE = np.sum(f * df['energy [eV]']) / np.sum(f)
+    eq_en = np.sum(f0 * df['energy [eV]']) / np.sum(f0)
     print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
+    print('Equilibrium carrier energy is {:.10E} [eV]'.format(eq_en))
     return meanE
 
 
@@ -288,8 +290,8 @@ def calc_mobility(F, df):
     conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
     n = calculate_density(df)
     mobility = conductivity / c.e / n
-    # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
-    # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
 
