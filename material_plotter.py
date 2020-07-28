@@ -26,57 +26,57 @@ def bz_3dscatter(points, useplotly=True, icind=False):
         else:
             colors = 'k'
         trace1 = go.Scatter3d(
-            x=points['kx [1/A]'].values / (2 * np.pi / c.a),
-            y=points['ky [1/A]'].values / (2 * np.pi / c.a),
-            z=points['kz [1/A]'].values / (2 * np.pi / c.a),
+            x=points['kx [1/A]'].values / (2 * np.pi / c.alat),
+            y=points['ky [1/A]'].values / (2 * np.pi / c.alat),
+            z=points['kz [1/A]'].values / (2 * np.pi / c.alat),
 
             mode='markers',
             marker=dict(size=2, color=colors, colorscale='Rainbow', showscale=True, opacity=1)
         )
         if icind:
             trace2 = go.Scatter3d(
-                x=icr_df['kx [1/A]'].values / (2 * np.pi / c.a),
-                y=icr_df['ky [1/A]'].values / (2 * np.pi / c.a),
-                z=icr_df['kz [1/A]'].values / (2 * np.pi / c.a),
+                x=icr_df['kx [1/A]'].values / (2 * np.pi / c.alat),
+                y=icr_df['ky [1/A]'].values / (2 * np.pi / c.alat),
+                z=icr_df['kz [1/A]'].values / (2 * np.pi / c.alat),
 
                 mode='markers',
                 marker=dict(size=2, color='black', opacity=1)
             )
 
             trace3 = go.Scatter3d(
-                x=icl_df['kx [1/A]'].values / (2 * np.pi / c.a),
-                y=icl_df['ky [1/A]'].values / (2 * np.pi / c.a),
-                z=icl_df['kz [1/A]'].values / (2 * np.pi / c.a),
+                x=icl_df['kx [1/A]'].values / (2 * np.pi / c.alat),
+                y=icl_df['ky [1/A]'].values / (2 * np.pi / c.alat),
+                z=icl_df['kz [1/A]'].values / (2 * np.pi / c.alat),
 
                 mode='markers',
                 marker=dict(size=2, color='#7f7f7f', opacity=1)
             )
 
-        b1edge = 0.5 * c.b1 / (2 * np.pi / c.a)
+        b1edge = 0.5 * c.b1 / (2 * np.pi / c.alat)
         vector1 = go.Scatter3d(x=[0, b1edge[0]], y=[0, b1edge[1]], z=[0, b1edge[2]],
                                marker=dict(size=1,color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        b2edge = 0.5 * c.b2 / (2 * np.pi / c.a)
+        b2edge = 0.5 * c.b2 / (2 * np.pi / c.alat)
         vector2 = go.Scatter3d(x=[0, b2edge[0]], y=[0, b2edge[1]], z=[0, b2edge[2]],
                                marker=dict(size=1,color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        b3edge = 0.5 * c.b3 / (2 * np.pi / c.a)
+        b3edge = 0.5 * c.b3 / (2 * np.pi / c.alat)
         vector3 = go.Scatter3d(x=[0, b3edge[0]], y=[0, b3edge[1]], z=[0, b3edge[2]],
                                marker=dict(size=1,color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        xedge = -0.5 * (c.b1 + c.b3) / (2 * np.pi / c.a)
+        xedge = -0.5 * (c.b1 + c.b3) / (2 * np.pi / c.alat)
         vector4 = go.Scatter3d(x=[0, xedge[0]], y=[0, xedge[1]], z=[0, xedge[2]],
                                marker=dict(size=1, color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        yedge = 0.5 * (c.b2 + c.b3) / (2 * np.pi / c.a)
+        yedge = 0.5 * (c.b2 + c.b3) / (2 * np.pi / c.alat)
         vector5 = go.Scatter3d(x=[0, yedge[0]], y=[0, yedge[1]], z=[0, yedge[2]],
                                marker=dict(size=1, color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        zedge = 0.5 * (c.b1 + c.b2) / (2 * np.pi / c.a)
+        zedge = 0.5 * (c.b1 + c.b2) / (2 * np.pi / c.alat)
         vector6 = go.Scatter3d(x=[0, zedge[0]], y=[0, zedge[1]], z=[0, zedge[2]],
                                marker=dict(size=1, color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
-        ledge = 0.5 * (c.b1 + c.b2 + c.b3) / (2 * np.pi / c.a)
+        ledge = 0.5 * (c.b1 + c.b2 + c.b3) / (2 * np.pi / c.alat)
         vector7 = go.Scatter3d(x=[0, ledge[0]], y=[0, ledge[1]], z=[0, ledge[2]],
                                marker=dict(size=1, color="rgb(84,48,5)"),
                                line=dict(color="rgb(84,48,5)", width=5))
@@ -97,9 +97,9 @@ def bz_3dscatter(points, useplotly=True, icind=False):
         py.plot(fig, filename='bz_scatter.html')
         return fig
     else:
-        x = points['kx [1/A]'].values / (2 * np.pi / c.a)
-        y = points['ky [1/A]'].values / (2 * np.pi / c.a)
-        z = points['kz [1/A]'].values / (2 * np.pi / c.a)
+        x = points['kx [1/A]'].values / (2 * np.pi / c.alat)
+        y = points['ky [1/A]'].values / (2 * np.pi / c.alat)
+        z = points['kz [1/A]'].values / (2 * np.pi / c.alat)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.scatter(x, y, z)
