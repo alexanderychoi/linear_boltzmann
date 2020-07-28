@@ -302,7 +302,7 @@ def steady_low_field(df, scm):
                                     callback=counter)
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     if pp.verboseError:
-        b_check = np.dot(scm*scmfac,f_next)
+        b_check = np.dot(scm*scmfac, f_next)
         error = np.linalg.norm(b_check - b)/np.linalg.norm(b)
         print('Norm of b is {:3E}'.format(np.linalg.norm(b)))
         print('Absolute residual error is {:3E}'.format(np.linalg.norm(b_check-b)))
@@ -312,12 +312,12 @@ def steady_low_field(df, scm):
         print('Error not stored.')
     loopend = time.time()
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
-    if not pp.simpleBool:
+    if pp.simpleBool:
         # Return chi in all cases so there's not confusion in plotting
-        print('Converting psi to chi since matrix in canonical linearization')
+        print('Converting chi to psi since matrix in canonical linearization')
         chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
-        f_next = f_next * chi2psi
-        f_0 = f_0 * chi2psi
+        f_next = f_next / chi2psi
+        f_0 = f_0 / chi2psi
     return f_next, f_0, error, counter.niter
 
 
@@ -377,7 +377,7 @@ def steady_full_drift(matrix_sc, matrix_fd, kptdf, field, guess, applyGuess):
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
     if not pp.simpleBool:
         # Return chi in all cases so there's not confusion in plotting
-        print('Converting psi to chi since matrix in canonical linearization')
+        print('Converting psi to chi since matrix in simple linearization')
         x_next = x_next * chi2psi
         x_0 = x_0 * chi2psi
     return x_next, x_0, error, counter.niter
@@ -492,20 +492,20 @@ def write_icinds(df):
 
 if __name__ == '__main__':
     # Create electron and phonon dataframes
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
 
     fields = pp.fieldVector
     freq = pp.freqGHz
 
-    writeTransient = True
-    writeSteady = True
-    write_icinds(electron_df)
-    if writeTransient:
-        write_transient(fields, electron_df, freq)
-    if writeSteady:
-        write_steady(fields, electron_df)
+    # writeTransient = True
+    # writeSteady = True
+    # write_icinds(electron_df)
+    # if writeTransient:
+    #     write_transient(fields, electron_df, freq)
+    # if writeSteady:
+    #     write_steady(fields, electron_df)
     nkpts = len(np.unique(electron_df['k_inds']))
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     error = []
@@ -513,6 +513,7 @@ if __name__ == '__main__':
     f_next, f_0, _, _ = steady_low_field(electron_df, scm)
     np.save(pp.outputLoc + 'Steady/f_1', f_0)
     np.save(pp.outputLoc + 'Steady/f_2', f_next)
+    utilities.calc_mobility(f_next, electron_df)
 
     # material_plotter.bz_3dscatter(electron_df,True,True)
     plt.show()
