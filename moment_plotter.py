@@ -482,9 +482,7 @@ def plot_L_valley_drift(df,fieldVector):
 
 
 if __name__ == '__main__':
-    fields = pp.fieldVector
-    freq = pp.freqGHz
-    freqs = pp.freqVector
+    fields = pp.small_signal_fields
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)

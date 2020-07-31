@@ -104,12 +104,17 @@ def small_signal_mobility_paperplot(fieldVector,freqVector,df):
     for ee in fieldVector:
         colorList = ['black', 'dodgerblue', 'tomato']
         cond = []
+        cond_linear = []
         for freq in freqVector:
             mu_3 = []
             chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
             mu_3.append(utilities.calc_linear_mobility(chi_3_i, df, ee) * 10 ** 4)
             cond.append(np.load(pp.outputLoc + 'Small_Signal/' + 'cond_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, ee)))
+            cond_linear.append(np.load(pp.outputLoc + 'Small_Signal/' + 'linear_cond_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, ee)))
+
         ax.plot(freqVector, np.array(cond)/c.e/n*100**2, '-', label='E = {:.0f} '.format(ee/100)+r'$V \, cm^{-1}$',linewidth=lw,color = colorList[i])
+        ax.plot(freqVector, np.array(cond_linear)/c.e/n*100**2, '-.', label='E = {:.0f} L '.format(ee/100)+r'$V \, cm^{-1}$',linewidth=lw,color = colorList[i])
+
         i = i + 1
     plt.xlabel(r'Frequency ($GHz$)')
     plt.ylabel(r'Longitudinal AC Mobility ($cm^2 \, V^{-1}\, s^{-1}$)')
@@ -356,6 +361,29 @@ def energy_kde_paperplot(fields,df):
     ax2.set_ylim(y.min(), y.max())
 
 
+def plot_energy_transient(freqVector,df):
+    meanEnergy = []
+    fig, ax = plt.subplots()
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    for freq in freqVector:
+        chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, 1e4))
+        meanEnergy.append(utilities.mean_energy(chi_3t_i,df))
+    ax.plot(freqVector, np.array(meanEnergy)-np.min(df['energy [eV]']),label = r'100 ($V \, cm^{-1}$)')
+    meanEnergy = []
+
+    for freq in freqVector:
+        chi_3t_i = np.load(pp.outputLoc + 'Transient/' + 'chi_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, 4e4))
+        meanEnergy.append(utilities.mean_energy(chi_3t_i,df))
+    ax.plot(freqVector, np.array(meanEnergy)-np.min(df['energy [eV]']),label = r'400 ($V \, cm^{-1}$)')
+    ax.axhline(utilities.mean_energy(np.zeros(len(df)),df)-np.min(df['energy [eV]']), linestyle='--',
+               label='Thermal Energy',color='black')
+    plt.legend()
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Mean energy above CBM (eV)')
+    plt.xscale('log')
+    plt.savefig(pp.figureLoc + 'Freq_Dependent_Energy.png', bbox_inches='tight', dpi=600)
+
+
 def plot_density_v_field(fieldVector, freq, df, pA, pB):
     fig, ax = plt.subplots()
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
@@ -375,10 +403,10 @@ def plot_density_v_field(fieldVector, freq, df, pA, pB):
         S_xx_vector.append(S_xx)
         S_xx_RTA_vector.append(S_xx_RTA)
         S_yy_vector.append(S_yy)
-        # S_xx_Davy.append(davydov_utilities.davydovNoise(electron_df, ee, pA,pB))
+        # S_xx_Davy.append(davydov_utilities.davydovNoise(electron_df, ))
         conductivity_xx_vector.append(conductivity_xx)
         kvcm = np.array(fieldVector) * 1e-5
-        # davyEnergy.append(davydov_utilities.davydovMeanEnergy(df,ee,pA,pB)/c.e)
+        davyEnergy.append(davydov_utilities.davydovMeanEnergy(df,ee,pA,pB)/c.e)
         # fermiNoise.append(davydov_utilities.fermiDiracNoise(df,pA,pB))
     Nuc = pp.kgrid ** 3
     ax.plot(kvcm, S_xx_vector, label=r'$S^{xx}$')
@@ -390,6 +418,10 @@ def plot_density_v_field(fieldVector, freq, df, pA, pB):
     plt.legend()
     plt.xlabel('Field [kV/cm]')
     plt.ylabel('Spectral Density [A^2/m^4/Hz]')
+    print('Sxx at 400 V/cm is {:3e}'.format(S_xx_vector[-1]))
+    print('Sxx at 0 V/cm is {:3e}'.format(S_xx_vector[0]))
+    n = utilities.calculate_density(df)
+    print('The mobility corresponding to 0 V/cm is {:3e} cm^2/V/s'.format(conductivity_xx_vector[0]*100**2/c.e/n))
     # ax.text(0.6, 0.9, textstr, transform=ax.transAxes, fontsize=8, verticalalignment='top', bbox=props)
 
     # fig, ax = plt.subplots()
@@ -399,6 +431,8 @@ def plot_density_v_field(fieldVector, freq, df, pA, pB):
     # ax.plot(kvcm,davyEnergy)
     # plt.xlabel('Field [kV/cm]')
     # plt.ylabel('Mean Davydov [eV]')
+
+    print('Factor is {:3e}'.format(Nuc*c.Vuc))
 
 
 def plot_density(fieldVector, freqVector, df, cutoff):
@@ -416,7 +450,7 @@ def plot_density(fieldVector, freqVector, df, cutoff):
     for freq in freqVector:
         plotfield = fieldVector[0]
         chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(plotfield))
-        S_xx, S_xx_RTA, S_yy, S_yy_RTA, conductivity_xx = psd_solver.density(chi, plotfield, df, freq,True,cutoff)
+        S_xx, S_xx_RTA, S_yy, S_yy_RTA, conductivity_xx = psd_solver.density(chi, plotfield, df, freq,False,cutoff)
         S_xx_vector.append(S_xx)
         S_xx_RTA_vector.append(S_xx_RTA)
         S_yy_vector.append(S_yy)
@@ -425,8 +459,8 @@ def plot_density(fieldVector, freqVector, df, cutoff):
     fig, ax = plt.subplots()
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
     # textstr = '\n'.join((pp.fdmName, r'$E = %.1f kV/cm  \, \, (100)$' % (plotfield / 1e5,)))
-    # ax.axhline(np.array(conductivity_xx_vector[0]) * 4 * c.kb_joule * pp.T / c.Vuc / Nuc, linestyle='--',
-    #            label=r'$\frac{4 kT \sigma_{xx}^{eq}}{V_0 N_0}$',color='black')
+    ax.axhline(np.array(conductivity_xx_vector[0]) * 4 * c.kb_joule * pp.T / c.Vuc / Nuc, linestyle='--',
+               label=r'$\frac{4 kT \sigma_{xx}^{eq}}{V_0 N_0}$',color='black')
     # ax.plot(freqVector, np.array(cond) * 4 * c.kb_joule * pp.T / c.Vuc / Nuc, linestyle='--',
     #            label=r'$\frac{4 k_B T_0}{\mathcal{V}_0} \Re [\sigma^{\alpha \beta}_{\omega}(\mathcal{E} = 0)]$', color='black')
 
@@ -450,7 +484,7 @@ def plot_density(fieldVector, freqVector, df, cutoff):
     for freq in freqVector:
         plotfield = fieldVector[-1]
         chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(plotfield))
-        S_xx, S_xx_RTA, S_yy, S_yy_RTA, conductivity_xx = psd_solver.density(chi, plotfield, df, freq,True,cutoff)
+        S_xx, S_xx_RTA, S_yy, S_yy_RTA, conductivity_xx = psd_solver.density(chi, plotfield, df, freq,False,cutoff)
         S_xx_vector.append(S_xx)
         S_xx_RTA_vector.append(S_xx_RTA)
         S_yy_vector.append(S_yy)
@@ -461,6 +495,8 @@ def plot_density(fieldVector, freqVector, df, cutoff):
     print(RT)
     # ax.plot(freqVector,fitQuant,'-.',label='SL: '+r'$A = {:.0f} \, A^2/m^4, $ '.format(A) + r'$\tau = {:.0f} \, fs$'.format(RT), color = 'green')
     ax.plot(freqVector, S_xx_vector,color='tomato', label=r'$S_{l}$' + '  E = {:.1f} '.format(plotfield/1e2)+r'$V\,cm^{-1}$')
+    array = np.column_stack((freqVector,np.array(S_xx_vector)))
+    np.save(pp.outputLoc+'Sxx_freq',array)
 
     fitQuant, RT, A, = rt_solver.fit_single_lorentzian_rt(freqVector,S_xx_vector)
     # ax.plot(freqVector,fitQuant,'-.',label='SL: '+r'$A = {:.0f} \, A^2/m^4, $ '.format(A) + r'$\tau = {:.0f} \, fs$'.format(RT), color = 'pink')
@@ -505,6 +541,21 @@ def plot_density(fieldVector, freqVector, df, cutoff):
     plt.title('Roll off for Energy RT')
 
 
+def plotScatteringRate():
+    dat_300 = np.loadtxt(pp.inputLoc + 'relaxation_time_300K.dat', skiprows=1)
+    enk_300 = dat_300[:, 3]  # eV
+    taus_300 = dat_300[:, 4]  # fs
+    rates_300 = dat_300[:, 5]  # THz
+    plt.figure()
+    plt.plot(enk_300-np.min(enk_300), rates_300, '.', markersize=3)
+    plt.ylabel('Scattering rate (THz)')
+    plt.xlabel('Energy (eV)')
+    plt.xlim([-0.01,0.32])
+    plt.ylim([-1,20])
+    plt.savefig(pp.figureLoc + 'ScatteringRate.png', bbox_inches='tight', dpi=600)
+
+
+
 def plotDavydovRTs(df,pA,pB):
     nkpts = len(df)
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
@@ -538,14 +589,19 @@ if __name__ == '__main__':
     small_signal_fields = np.array([1e-3,1e4,4e4])
     cutoffVector = np.geomspace(0.01,0.5,30)
 
+    # Calculate the steady and transient solutions for moment_fields + small_signal_fields and the geomspaced frequencies
+    # Calculate the small signal conductivity for the small_signal_fields and the geomspaced frequencies
+    # Calculate the PSD for the moment_fields + small_signal_fields and the geomspaced frequencies
+    # Then you can make the plots here.
+
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     pop_below_cutoff(4e4, electron_df, cutoffVector)
 
-    momentum_kde_paperplot(mom_kde_fields)
+    # momentum_kde_paperplot(mom_kde_fields)
     momentum_kde2_paperplot(energy_kde_fields)
-    linear_mobility_paperplot(moment_fields, electron_df)
+    linear_mobility_paperplot(small_signal_fields, electron_df)
     energy_kde_paperplot(energy_kde_fields, electron_df)
     small_signal_mobility_paperplot(small_signal_fields,freqs,electron_df)
     # pA = 4.60082e-22 # Prefactor for energy time dependence [see Lundstrom]
@@ -554,5 +610,6 @@ if __name__ == '__main__':
     plot_density(small_signal_fields, freqs, electron_df,0.5)
     plotkykxplane(electron_df,4e4,pA)
     plot_density_v_field(small_signal_fields, freqs[0], electron_df, pA,pB)
-
+    plot_energy_transient(freqs, electron_df)
+    plotScatteringRate()
     plt.show()

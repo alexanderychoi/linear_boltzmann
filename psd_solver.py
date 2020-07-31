@@ -165,11 +165,14 @@ def write_correlation(fieldVector,df,freqVector):
             Vx = utilities.mean_velocity(chi, df)
             b_xx = (-1) * ((df['vx [m/s]'] - Vx) * f)
             b_yy = (-1) * ((df['vy [m/s]']) * f)
+
             corr_xx, corr_xx_RTA, _, _ = occupation_solver.gaas_inverse_relaxation_operator(b_xx, scm, fdm, df, ee, freq)
+
             del fdm
             # This may be a problem since writing fdm twice????????????????????????
             fdm = np.memmap(pp.inputLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
             corr_yy, corr_yy_RTA, _, _ = occupation_solver.gaas_inverse_relaxation_operator(b_yy, scm, fdm, df, ee, freq)
+
             del fdm
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '3_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx)
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx_RTA)
@@ -201,7 +204,9 @@ def density(chi, EField, df, freq, partialSum = False, cutoff=0):
     """
     Nuc = pp.kgrid ** 3
     conductivity_xx = 2 * c.e / (Nuc * c.Vuc * EField) * np.sum(chi * df['vx [m/s]'])
-    n = utilities.calculate_noneq_density(chi,df)
+    print('Conductivity is {:3f} S/m at E = {:.1f} V/cm'.format(conductivity_xx,EField/100))
+    n = utilities.calculate_density(df)
+    print('Carrier density is {:3e} cm^-3'.format(n/100**3))
     mobility = conductivity_xx/c.e/n
     print('Mobility is {:3f} cm^2/(V-s)'.format(mobility*100**2))
 
@@ -290,7 +295,8 @@ if __name__ == '__main__':
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
 
-    fields = pp.fieldVector
+    # fields = pp.moment_fields
+    fields = pp.small_signal_fields
     freqs = pp.freqVector
 
     write_correlation(fields, electron_df, freqs)
