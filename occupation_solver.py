@@ -326,7 +326,7 @@ def steady_low_field(df, scm):
                                     callback=counter)
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     if pp.verboseError:
-        b_check = np.dot(scm*scmfac,f_next)
+        b_check = np.dot(scm*scmfac, f_next)
         error = np.linalg.norm(b_check - b)/np.linalg.norm(b)
         print('Norm of b is {:3E}'.format(np.linalg.norm(b)))
         print('Absolute residual error is {:3E}'.format(np.linalg.norm(b_check-b)))
@@ -338,7 +338,7 @@ def steady_low_field(df, scm):
     print('Convergence took {:.2f}s'.format(loopend - loopstart))
     if pp.simpleBool:
         # Return chi in all cases so there's not confusion in plotting
-        print('Converting psi to chi since matrix in simple linearization')
+        print('Converting chi to psi since matrix in canonical linearization')
         chi2psi = np.squeeze(df['k_FD'] * (1 - df['k_FD']))
         f_next = f_next / chi2psi
         f_0 = f_0 / chi2psi
@@ -469,7 +469,7 @@ def writeOutputFile():
 
 if __name__ == '__main__':
     # Create electron and phonon dataframes
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     fields = pp.small_signal_fields

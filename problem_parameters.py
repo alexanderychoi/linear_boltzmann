@@ -25,14 +25,14 @@ import re
 		# -> ...
 
 # Peishi Local directories
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/1_Pipeline/Output/'
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/1_Pipeline/Output/'
+# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
+# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
 # inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/0_Data/'
 # outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/1_Pipeline/Output/'
 
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
 # Alex Dropbox directories
 subproblemVer = '4_Subproblem/'
@@ -83,17 +83,18 @@ fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))
 # Field direction (for now only implemented for Si, not GaAs)
 fieldDirection = np.array([1,1,1])  								# Crystal direction of field orientation (x,y,z)
 
-
 freqVector = np.geomspace(0.1,10000,30)  							# GaAs freqs for small signal freq plot
 # freqVector = np.array(freqVector[0:3])
 # freqVector = np.array([0.1])										# Low freq for testing
 # freqVector = np.array([1,5,10,50,100]) 							# Si frqs
 freqGHz = freqVector[0]
 
+
 # BLOCK 3: SIMULATION PARAMETERS
 relConvergence = 1e-3  									# Convergence parameters for the GMRES solver
 absConvergence = 1e-60  								# Convergence parameters for the GMRES solver
 verboseError = False  									# Do we want to calculate and store the residual error of GMRES?
+
 
 # BLOCK 4: MATRIX PARAMETERS
 scmName = 'scatt_mat_pert.mmap'  # Name of the scattering matrix
@@ -103,6 +104,7 @@ simpleBool = True  # Is the matrix in the simple linearization (on-diagonal RTs)
 fdmName = 'Column Preserving Central Difference'  # What stencil are we using for the finite difference scheme?
 # fdmName = 'Hybrid Difference'
 # fdmName = 'Backwards Difference'
+
 
 # BLOCK 5: TEXT FILE PROBLEM PARAMETERS
 f = open(inputLoc+'problem_parameters.txt')
@@ -127,7 +129,6 @@ f.close()
 if prefix == 'gaas':
 	getX = False  # Do we have X valleys?
 	derL = True  # Should we apply the central difference scheme in the L valleys?
-
 # Si-specific Parameters
 if prefix == 'si':
 	pass

@@ -10,6 +10,7 @@ import constants as c
 import utilities
 import problem_parameters as pp
 
+
 def load_optional_data(data_dir):
     """Create dataframes for kpts and qpts in crystal coordinates and Ryd energy.
     Not typically used, so in a separate function."""
@@ -457,12 +458,11 @@ def process_perturbo_matrix(data_dir, el_df):
 
 
 if __name__ == '__main__':
-    import problem_parameters as pp
     in_loc = pp.inputLoc
     out_loc = pp.outputLoc
     nthreads = 6
 
-    create_dataframes = False
+    create_dataframes = True
     create_pert_scatt_mat = True
     chunk_mat_pop_recips = False
     occ_func_and_delta_weights = False

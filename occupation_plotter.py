@@ -14,6 +14,10 @@ import constants as c
 
 # OUTPUT: THIS MODULE RENDERS FIGURES FOR EXPLORATORY DATA ANALYSIS. IT DOES NOT SAVE FIGURES.
 
+import matplotlib as mpl
+font = {'size': 11}
+mpl.rc('font', **font)
+
 
 def plot_steady_transient_difference(fieldVector, freq):
     """Plotting code to compare the steady-state and transient solutions at a given frequency. Generates plots of the
@@ -228,17 +232,19 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
 
     vmags = kptsdf['v_mag [m/s]']
 
-    npts = 1200  # number of points in the KDE
-    g_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    npts = 400  # number of points in the KDE
+    g_chiax = np.zeros(npts)
     g_ftot = np.zeros(npts)
     g_f0ax = np.zeros(npts)
 
-    l_chiax = np.zeros(npts)  # capital sigma as defined in Jin Jian's paper Eqn 3
+    l_chiax = np.zeros(npts)
     l_ftot = np.zeros(npts)
     l_f0ax = np.zeros(npts)
 
+    f0ax = np.zeros(npts)
+
     # Need to define the energy range that I'm doing integration over
-    # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
+    en_axis = np.linspace(enk.min(), enk.max(), npts)
     g_en_axis = np.linspace(enk.min(), enk.max(), npts)
     l_en_axis = np.linspace(enk.min(), enk.max(), npts)
 
@@ -250,15 +256,24 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
     dx = (g_en_axis.max() - g_en_axis.min()) / npts
     g_f0 = np.squeeze(kptsdf.loc[g_inds,'k_FD'].values)
     l_f0 = np.squeeze(kptsdf.loc[l_inds,'k_FD'].values)
+
+    f0 = np.squeeze(kptsdf['k_FD'])
+    # (Peishi): I used 35 for the spread for npts=400 and it works pretty well. Don't need a ton of npts.
+    spread = 35 * dx
     spread = 350 * dx  # This is a value that has to change to get better smoothing. Also depends on the number of pts.
     # spread = 120 * dx
     # spread = 200 * dx
     # spread = 600 * dx
 
     def gaussian(x, mu, vmag, stdev=spread):
-        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        sigma = stdev - (vmag/1E6) * 1.0 * stdev
         vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
         return vals
+
+    for k in range(len(f0)):
+        istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+        iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+        f0ax[istart:iend] += f0[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
 
     for k in range(len(g_chi)):
         istart = int(np.maximum(np.floor((g_enk[k] - g_en_axis[0]) / dx) - (4*spread/dx), 0))
@@ -294,10 +309,10 @@ def occupation_v_energy_sep(chi, enk, kptsdf):
         x_chi = []
         x_chiax = []
         x_f0ax =[]
-    return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax
+    return g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax, f0ax, en_axis
 
 
-def plot_energy_sep(df,fields):
+def plot_energy_sep(df, fields):
     """Wrapper script for occupation_v_energy_sep. Can do for the various solution schemes saved to file, but for now
     only implemented for steady #3 solutions.
         Parameters:
@@ -311,10 +326,11 @@ def plot_energy_sep(df,fields):
     plt.figure(figsize=(6, 6))
     for ee in fields:
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
-        g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax = \
+        g_en_axis, g_ftot, g_chiax, g_f0ax, l_en_axis, l_ftot, l_chiax, l_f0ax, x_en_axis, x_ftot, x_chiax, x_f0ax, f0ax, en_axis = \
         occupation_v_energy_sep(chi_3_i, df['energy [eV]'].values, df)
         plt.plot(g_en_axis-np.min(df['energy [eV]']), g_chiax, label=r'$\Gamma$'+' Valley')
         plt.plot(l_en_axis-np.min(df['energy [eV]']), l_chiax, '--', label='L Valley')
+        plt.plot(en_axis-np.min(df['energy [eV]']), f0ax, '-', label='Equilibrium')
         if pp.getX:
             plt.plot(x_en_axis - np.min(df['energy [eV]']), x_chiax, '--', label='X Valley')
     plt.ylim([-0.02,0.015])
@@ -370,6 +386,84 @@ def plot_2d_dist(df, field):
     plt.title(pp.title_str)
 
 
+def plot_noise_kde(el_df, big_e):
+    vmags = el_df['v_mag [m/s]']
+    vx = el_df['vx [m/s]']
+    enk = el_df['energy [eV]'] - el_df['energy [eV]'].min()
+
+    npts = 400  # number of points in the KDE
+    # Define the energy range over intergration
+    en_axis = np.linspace(enk.min(), enk.max(), npts)
+    v_axis = np.linspace(vx.min(), vx.max(), npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    spread = 40 * dx
+
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag/1E6) * 0.9 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
+
+    # Define colormap
+    cmap = plt.cm.get_cmap('YlOrRd', 9)
+    colors = []
+    for i in range(cmap.N):
+        rgb = cmap(i)[:3]  # will return rgba, we take only first 3 so we get rgb
+        colors.append(mpl.colors.rgb2hex(rgb))
+
+    noise_tot = np.zeros(len(big_e))
+    plt.figure()
+    enplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        noise_k = 2 * (2 * c.e / pp.kgrid**3 / c.Vuc)**2 * np.real(g_k * vx)
+        # noise_k = np.abs(vx)
+        noise_tot[i] = np.sum(noise_k)
+        noise_en = np.zeros(npts)
+
+        for k in range(len(noise_k)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            noise_en[istart:iend] += noise_k[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k])
+        enplot.plot(en_axis, noise_en, color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
+    enplot.set_xlabel('Energy above CBM (eV)')
+    # plt.yticks([])
+    # plt.ylabel(r'Noise power per energy ($A^2m^{-4}Hz^{-1}eV^{-1}$)')
+    # plt.ylabel(r'Noise power per energy')
+    enplot.set_ylabel(r'Effective distribution (g)')
+    enplot.set_xlim([0, 0.45])
+    enplot.legend()
+
+    v_axis = np.linspace(vx.min(), vx.max(), npts)
+    dx = (v_axis.max() - v_axis.min()) / npts
+    spread = 40 * dx
+
+    plt.figure()
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        dv = utilities.drift_velocity(chi, electron_df)
+        noise_k = 2 * (2 * c.e / pp.kgrid**3 / c.Vuc)**2 * np.real(g_k * vx)
+        noise_vx = np.zeros(npts)
+        for k in range(len(noise_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            noise_vx[istart:iend] += noise_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
+        vxplot.axvline(dv * 1E-3, color=colors[4+i], linestyle='--')
+    vxplot.set_xlabel('Group velocity [km/s]')
+    vxplot.set_ylabel(r'Noise power per unit velocity')
+    vxplot.legend()
+
+    # plt.figure()
+    # plt.title('Noise vs field')
+    # plt.plot(big_e, noise_tot)
+    # plt.figure()
+    # plt.plot(vx, np.real(g_k), '.', markersize=5)
+
+    return noise_k
+
+
 if __name__ == '__main__':
     # Create electron and phonon dataframes
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
@@ -378,6 +472,7 @@ if __name__ == '__main__':
     fields = pp.small_signal_fields
     freq = pp.freqGHz
 
+    plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
     plot_mom_KDEs(fields, electron_df,saveData=True)

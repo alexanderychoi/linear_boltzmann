@@ -279,9 +279,10 @@ def mean_energy(chi, df):
     f0 = df['k_FD'].values
     f = chi + f0
     meanE = np.sum(f * df['energy [eV]']) / np.sum(f)
-
-    print(sum(f))
-    print(sum(f0))
+    eq_en = np.sum(f0 * df['energy [eV]']) / np.sum(f0)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
+    # print('Equilibrium carrier energy is {:.10E} [eV]'.format(eq_en))
 
     return meanE
 
@@ -318,8 +319,8 @@ def calc_mobility(F, df):
     conductivity = prefactor * np.sum(df['k_FD'] * (1 - df['k_FD']) * df['vx [m/s]'] * F)
     n = calculate_density(df)
     mobility = conductivity / c.e / n
-    # print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
-    # print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
+    print('Carrier density is {:.8E}'.format(n * 1E-6) + ' per cm^{-3}')
+    print('Mobility is {:.10E} (cm^2 / V / s)'.format(mobility * 1E4))
     return mobility
 
 
