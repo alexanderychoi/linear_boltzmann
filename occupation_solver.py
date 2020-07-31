@@ -423,11 +423,11 @@ def write_transient(fieldVector, df, freqVector):
         plt.xlabel('EField (kV/cm)')
         plt.ylabel(r'$|Ax_{f}-b|/|b|$')
         plt.title('Occupation {:.1e} GHz'.format(freq) + pp.title_str)
-    plt.figure()
-    plt.plot(fieldVector*1E-5, iteration_count)
-    plt.xlabel('EField (kV/cm)')
-    plt.ylabel('Iterations to convergence')
-    plt.title('Occupation {:.1e} GHz'.format(freq) + pp.title_str)
+    # plt.figure()
+    # plt.plot(fieldVector*1E-5, iteration_count)
+    # plt.xlabel('EField (kV/cm)')
+    # plt.ylabel('Iterations to convergence')
+    # plt.title('Occupation {:.1e} GHz'.format(freq) + pp.title_str)
 
 
 def write_icinds(df):
@@ -440,11 +440,13 @@ def write_icinds(df):
     nkpts = len(np.unique(df['k_inds']))
     fdm = np.memmap(pp.inputLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
     _, g_l_inds, g_r_inds, _ = gaas_gamma_fdm(fdm, df, 1)
-    _, l_l_inds, l_r_inds, _ = gaas_l_fdm(fdm, df, 1)
     np.save(pp.outputLoc + 'Gamma_left_icinds', g_l_inds)
     np.save(pp.outputLoc + 'Gamma_right_icinds', g_r_inds)
-    np.save(pp.outputLoc + 'L_left_icinds', l_l_inds) # All 8 L valley indices saved together
-    np.save(pp.outputLoc  + 'L_right_icinds', l_r_inds) # All 8 L valley indices saved together
+    if pp.derL:
+        _, l_l_inds, l_r_inds, _ = gaas_l_fdm(fdm, df, 1)
+        np.save(pp.outputLoc + 'L_left_icinds', l_l_inds)  # All 8 L valley indices saved together
+        np.save(pp.outputLoc + 'L_right_icinds', l_r_inds)  # All 8 L valley indices saved together
+
 
 
 def writeOutputFile():
@@ -456,12 +458,12 @@ def writeOutputFile():
     outF.write('Boltzmann Transport Equation solved at: ' + dt_string + '\n')
     outF.write('FDM scheme: ' + pp.fdmName + '\n')
     outF.write('SCM name: ' + pp.scmName + '\n')
-    outF.write('GNRES rel: ' + pp.relConvergence + '\n')
-    outF.write('GMRES abs: ' + pp.absConvergence + '\n')
-    outF.write('X Valleys: ' + pp.getX + '\n')
-    outF.write('L derivative applied: ' + pp.derL + '\n')
-    outF.write('SCM Bool: ' + pp.scmBool + '\n')
-    outF.write('SCM Val: ' + pp.scmVal + '\n')
+    outF.write('GNRES rel: ' + str(pp.relConvergence) + '\n')
+    outF.write('GMRES abs: ' + str(pp.absConvergence) + '\n')
+    outF.write('X Valleys: ' + str(pp.getX) + '\n')
+    outF.write('L derivative applied: ' + str(pp.derL) + '\n')
+    outF.write('SCM Bool: ' + str(pp.scmBool) + '\n')
+    outF.write('SCM Val: ' + str(pp.scmVal) + '\n')
     outF.close()
 
 
@@ -470,13 +472,15 @@ if __name__ == '__main__':
     preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = pp.fieldVector
+    fields = pp.small_signal_fields
     freqs = pp.freqVector
+
+    print(utilities.calculate_density(electron_df))
 
     # Toggle to run calculations for transient or steady BTE solutions.
     writeTransient = False
     writeSteady = True
-    writeIcinds = True
+    writeIcinds = False
     if writeSteady:
         write_steady(fields, electron_df)
     if writeTransient:
