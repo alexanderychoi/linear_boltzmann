@@ -57,9 +57,9 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
     else:
         scmfac = 1
         print('Not applying correction factor to the scattering matrix.')
-    _,_,_,matrix_fd = gaas_gamma_fdm(matrix_fd, kptdf, field)
+    _, _, _, matrix_fd = gaas_gamma_fdm(matrix_fd, kptdf, field)
     if pp.derL:
-        _,_,_,matrix_fd = gaas_l_fdm(matrix_fd, kptdf, field)
+        _, _, _, matrix_fd = gaas_l_fdm(matrix_fd, kptdf, field)
     loopstart = time.time()
     chi2psi = np.squeeze(kptdf['k_FD'] * (1 - kptdf['k_FD']))
     invdiag = (np.diag(matrix_sc) * scmfac) ** (-1)
@@ -100,7 +100,7 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
     return x_next, x_smrta, error, counter.niter
 
 
-def gaas_gamma_fdm(matrix,fullkpts_df,E):
+def gaas_gamma_fdm(matrix, fullkpts_df, E):
     """Calculate a finite difference matrix using the specified difference stencil and apply bc. In the current version,
     it is only applied in the kx direction, but it is easy to generalize for a general axis. Only applied to the Gamma
     valley of GaAs.
@@ -122,12 +122,14 @@ def gaas_gamma_fdm(matrix,fullkpts_df,E):
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
     # This is not robust and should be replaced.
+    if pp.kgrid == 80:
+        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
     if pp.kgrid == 160:
         step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
     if pp.kgrid == 200:
         step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
-    if pp.kgrid == 80:
-        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
+    if pp.kgrid == 250:
+        step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
     print('Generating GaAs Gamma Valley finite difference matrix using ' + pp.fdmName)
 
     print('Step size is {:.3f} inverse Angstroms'.format(step_size / 1e10))
@@ -220,12 +222,14 @@ def gaas_l_fdm(matrix,fullkpts_df,E):
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
     # This is not robust and should be replaced.
+    if pp.kgrid == 80:
+        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
     if pp.kgrid == 160:
         step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
     if pp.kgrid == 200:
         step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
-    if pp.kgrid == 80:
-        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
+    if pp.kgrid == 250:
+        step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
     print('Step size is {:.3f} inverse Angstroms'.format(step_size/1e10))
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]','energy [eV]']]
     _,L_inds,_=utilities.gaas_split_valleys(kptdata,False)
@@ -369,7 +373,7 @@ def write_steady(fieldVector, df):
         fdm = np.memmap(pp.inputLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         b = (-1) * c.e * ee / c.kb_joule / pp.T * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
         # Frequency set as zero for steady solutions in the inverse operator
-        x_next,x_smrta, temp_error, iterations = gaas_inverse_relaxation_operator(b, scm, fdm, df, ee, 0)
+        x_next, x_smrta, temp_error, iterations = gaas_inverse_relaxation_operator(b, scm, fdm, df, ee, 0)
         error.append(temp_error)
         iteration_count.append(iterations)
         del fdm
@@ -456,12 +460,12 @@ def writeOutputFile():
     outF.write('Boltzmann Transport Equation solved at: ' + dt_string + '\n')
     outF.write('FDM scheme: ' + pp.fdmName + '\n')
     outF.write('SCM name: ' + pp.scmName + '\n')
-    outF.write('GNRES rel: ' + pp.relConvergence + '\n')
-    outF.write('GMRES abs: ' + pp.absConvergence + '\n')
-    outF.write('X Valleys: ' + pp.getX + '\n')
-    outF.write('L derivative applied: ' + pp.derL + '\n')
-    outF.write('SCM Bool: ' + pp.scmBool + '\n')
-    outF.write('SCM Val: ' + pp.scmVal + '\n')
+    outF.write('GMRES rel: ' + str(pp.relConvergence) + '\n')
+    outF.write('GMRES abs: ' + str(pp.absConvergence) + '\n')
+    outF.write('X Valleys: ' + str(pp.getX) + '\n')
+    outF.write('L derivative applied: ' + str(pp.derL) + '\n')
+    outF.write('SCM Bool: ' + str(pp.scmBool) + '\n')
+    outF.write('SCM Val: ' + str(pp.scmVal) + '\n')
     outF.close()
 
 
@@ -476,7 +480,7 @@ if __name__ == '__main__':
     # Toggle to run calculations for transient or steady BTE solutions.
     writeTransient = False
     writeSteady = True
-    writeIcinds = True
+    writeIcinds = False
     if writeSteady:
         write_steady(fields, electron_df)
     if writeTransient:

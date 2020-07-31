@@ -95,7 +95,7 @@ def steady_low_field_corr(b, matrix_sc, kptdf, field, freq):
     return x_next, x_smrta, error, counter.niter
 
 
-def write_low_field_correlation(fieldVector,df,freqVector):
+def write_low_field_correlation(fieldVector, df, freqVector):
     """Calls the GMRES solver hard coded for solving the effective BTE w/low-field approx.
     Parameters:
         fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
@@ -114,7 +114,7 @@ def write_low_field_correlation(fieldVector,df,freqVector):
             f = chi + f0
             Vx = utilities.mean_velocity(chi, df)
             b_xx = (-1) * ((df['vx [m/s]'] - Vx) * f)
-            corr_xx,_,_,_ = steady_low_field_corr(b_xx, scm, df, ee, freq)
+            corr_xx, _, _, _ = steady_low_field_corr(b_xx, scm, df, ee, freq)
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '2_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx)
             print('Transient solution written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
             print('\n \n')
@@ -175,11 +175,14 @@ def write_correlation(fieldVector,df,freqVector):
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx_RTA)
             np.save(pp.outputLoc + 'SB_Density/' + 'yy_' + '3_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy)
             np.save(pp.outputLoc + 'SB_Density/' + 'yy_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy_RTA)
-            print('Transient solution written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
+            print('Correlations written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
+            s_xx, _, s_yy, _, _ = density(chi, ee, df, freq)
+            print('Longitudinal noise power is {:.4E} [A^2/m^4/Hz]'.format(s_xx))
+            print('Transverse noise power is {:.4E} [A^2/m^4/Hz]'.format(s_yy))
             print('\n \n')
 
 
-def density(chi, EField,df,freq, partialSum = False, cutoff = 0):
+def density(chi, EField, df, freq, partialSum = False, cutoff=0):
     """Calls the GMRES solver hard coded for solving the effective BTE w/FDM and writes the effective distribution to
     file. Calculates the longitudinal (xx) and transverse (yy) effective distribution functions.
     Parameters:
@@ -290,7 +293,7 @@ if __name__ == '__main__':
     fields = pp.fieldVector
     freqs = pp.freqVector
 
-    write_correlation(fields,electron_df,freqs)
-    plot_density(fields, freqs, electron_df)
+    write_correlation(fields, electron_df, freqs)
+    # plot_density(fields, freqs, electron_df)
 
     plt.show()

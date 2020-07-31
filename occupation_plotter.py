@@ -438,7 +438,7 @@ def plot_noise_kde(el_df, big_e):
     for i, ee in enumerate(big_e):
         g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
         chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
-        dv = utilities.drift_velocity(chi, electron_df)
+        dv = utilities.mean_velocity(chi, electron_df)
         noise_k = 2 * (2 * c.e / pp.kgrid**3 / c.Vuc)**2 * np.real(g_k * vx)
         noise_vx = np.zeros(npts)
         for k in range(len(noise_k)):
@@ -471,7 +471,7 @@ if __name__ == '__main__':
     plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    plot_mom_KDEs(fields, electron_df,lowField=False,saveData=False)
+    # plot_mom_KDEs(fields, electron_df,lowField=False,saveData=False)
     # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
     # plot_energy_sep_lf(electron_df, fields)
