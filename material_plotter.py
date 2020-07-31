@@ -271,7 +271,4 @@ if __name__ == '__main__':
     bz_3dscatter(electron_df, True, False)
     # plot_bandstructure(electron_df, electron_df)
     plot_energy_kx(electron_df)
-    # plot_diffusion(electron_df, fields, freq)
-    # plot_L_valley_drift(electron_df,fields)
-    # bz_3dscatter(electron_df, True, False)
     plt.show()

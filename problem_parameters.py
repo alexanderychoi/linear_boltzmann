@@ -7,8 +7,6 @@ import re
 
 # For the same input data, there may be multiple simulations with different toggles (convergence parameters, FDM scheme, etc.)
 # Each output is split into multiple subproblems with a text file detailing the relevant toggles
-subproblemVer = '4_Subproblem/'
-
 # Output structure:
 # #_Problem
 	# -> 1_Pipeline
@@ -37,12 +35,33 @@ subproblemVer = '4_Subproblem/'
 # outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
 
 # Alex Dropbox directories
+subproblemVer = '4_Subproblem/'
 
+# Grid used for plots in the paper as of 7/27/20:
 inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/0_Data/'
-outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/1_Pipeline/Output_V4/'
 outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/1_Pipeline/'+subproblemVer
 figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/2_Output/'+subproblemVer+'PaperFigures/'
 
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/2_Problem_PERT_Lder/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/2_Problem_PERT_Lder/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/2_Problem_PERT_Lder/2_Output/'+subproblemVer+'PaperFigures/'
+
+# Grids used to test convergence:
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.2eV_window/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.2eV_window/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.2eV_window/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/2_Output/'+subproblemVer+'PaperFigures/'
+
+
+# Old grids:
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/7_Problem/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/7_Problem/1_Pipeline/Output_V2/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/7_Problem/1_Pipeline/Output_V3/'
@@ -54,6 +73,10 @@ figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunc
 # BLOCK 2: PHYSICAL PROBLEM PARAMETERS: FIELDS AND FREQUENCIES
 # fieldVector = np.array([1e-3,1e4,4e4])							# GaAs fields for noise plots
 fieldVector =np.geomspace(1e2,4e4,20)  								# GaAs fields for moment plots
+moment_fields = np.geomspace(1e2, 4e4, 20)
+small_signal_fields = np.array([1e-3, 1e4, 4e4])
+fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))
+
 # fieldVector =np.array([1e2,1e4,4e4])  							# GaAs fields for small signal freq plot
 # fieldVector = np.array([1e2, 1e3, 1e4, 2e4, 4e4, 6e4,1e5,1.5e5,2e5,3e5]) 	# Si Fields
 
@@ -62,9 +85,10 @@ fieldDirection = np.array([1,1,1])  								# Crystal direction of field orienta
 
 
 freqVector = np.geomspace(0.1,10000,30)  							# GaAs freqs for small signal freq plot
+# freqVector = np.array(freqVector[0:3])
 # freqVector = np.array([0.1])										# Low freq for testing
 # freqVector = np.array([1,5,10,50,100]) 							# Si frqs
-freqGHz = 1
+freqGHz = freqVector[0]
 
 # BLOCK 3: SIMULATION PARAMETERS
 relConvergence = 1e-3  									# Convergence parameters for the GMRES solver
@@ -86,7 +110,6 @@ alltext = f.read()
 scratchLoc = re.findall(r"\s*scratchLoc\s*=\s*'(.+)'\n", alltext)
 T = float(re.findall(r"\s*Temperature\s*=\s*(.+)\n", alltext)[0])
 mu = float(re.findall(r"\s*FermiLevel\s*=\s*(.+)\n", alltext)[0])
-# mu = 6.04
 b = float(re.findall(r"\s*GaussianBroadening\s*=\s*(.+)\n", alltext)[0])
 kgrid = float(re.findall(r"\s*GridDensity\s*=\s*(\d+)\n", alltext)[0])
 cutoff = float(re.findall(r"\s*EnergyWindow\s*=\s*(.+)\n", alltext)[0])

@@ -49,7 +49,7 @@ def plot_steady_transient_difference(fieldVector, freq):
     plt.title(pp.title_str)
 
 
-def momentum_distribution_kde(chi, df,ee,title=[],saveData = False):
+def momentum_distribution_kde(chi, df,ee,title=[],saveData = False,lowfield=False):
     """Takes chi solutions from file and plots the KDE of the distribution in momentum space.
 
     Parameters:
@@ -100,10 +100,14 @@ def momentum_distribution_kde(chi, df,ee,title=[],saveData = False):
         plt.title(title, fontsize=8)
 
     # Sometimes, it is useful to save the KDE data for paper figures. This toggles on Boolean.
-    if saveData:
+    if saveData and lowfield:
         np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_ax_' + '2_' + "E_{:.1e}".format(ee), k_ax)
         np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist_f0_' + '2_' + "E_{:.1e}".format(ee), kdist_f0)
         np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist' + '2_' + "E_{:.1e}".format(ee), kdist)
+    if saveData and not lowfield:
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_ax_' + '3_' + "E_{:.1e}".format(ee), k_ax)
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist_f0_' + '3_' + "E_{:.1e}".format(ee), kdist_f0)
+        np.save(pp.outputLoc + 'Momentum_KDE/' + 'k_dist' + '3_' + "E_{:.1e}".format(ee), kdist)
 
 
 def velocity_distribution_kde(chi, df, title=[]):
@@ -181,7 +185,7 @@ def plot_vel_KDEs(field, df):
         velocity_distribution_kde(chi_3_x, df.loc[x_inds].reset_index(), title='X Chi FDM {:.1e} V/m '.format(field) + pp.title_str)
 
 
-def plot_mom_KDEs(fieldVector, df, lowField = False, saveData = False):
+def plot_mom_KDEs(fieldVector, df, saveData = False):
     """Wrapper script for momentum_distribution_kde. Can do for the various solution schemes saved to file, but for now
     only implemented for steady #2 or #3 solutions, on Boolean toggle.
         Parameters:
@@ -196,14 +200,14 @@ def plot_mom_KDEs(fieldVector, df, lowField = False, saveData = False):
     g_inds,l_inds,x_inds = utilities.gaas_split_valleys(df,False)
     plt.figure()
     for ee in fieldVector:
-        if lowField:
-            chi_2 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
-            chi_2_g = chi_2[g_inds]
-            momentum_distribution_kde(chi_2_g, df.loc[g_inds].reset_index(), ee,'',saveData)
-        else:
-            chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
-            chi_3_g = chi_3[g_inds]
-            momentum_distribution_kde(chi_3_g, df.loc[g_inds].reset_index(), ee,'',saveData)
+        chi_2 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}.npy".format(ee))
+        chi_2_g = chi_2[g_inds]
+        momentum_distribution_kde(chi_2_g, df.loc[g_inds].reset_index(), ee,'',saveData,True)
+    plt.figure()
+    for ee in fieldVector:
+        chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+        chi_3_g = chi_3[g_inds]
+        momentum_distribution_kde(chi_3_g, df.loc[g_inds].reset_index(), ee,'',saveData,False)
 
 
 def occupation_v_energy_sep(chi, enk, kptsdf):
@@ -371,12 +375,12 @@ if __name__ == '__main__':
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = pp.fieldVector
+    fields = pp.small_signal_fields
     freq = pp.freqGHz
 
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    plot_mom_KDEs(fields, electron_df,lowField=False,saveData=False)
+    plot_mom_KDEs(fields, electron_df,saveData=True)
     # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
     # plot_energy_sep_lf(electron_df, fields)
