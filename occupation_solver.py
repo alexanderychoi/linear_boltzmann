@@ -68,15 +68,25 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
 
     x_smrta = b * np.ones(len(kptdf))*tau_0
     if freq > 0:
-        freq_matrix = np.diag(np.ones(len(kptdf))*1j*10**9*2*np.pi*freq)  # Positive quantity
+        # The way I've written it below saves memory and should allow for larger matrices to be run
+        invrel = np.diag(np.ones(len(kptdf))*1j*10**9*2*np.pi*freq)  # Frequency matrix
+        invrel += matrix_sc * scmfac
+        invrel -= matrix_fd
+        # freq_matrix = np.diag(np.ones(len(kptdf))*1j*10**9*2*np.pi*freq)  # Positive quantity
         print('Starting GMRES solver.')
-        x_next, criteria = linalg.gmres(freq_matrix+matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
-                                        callback=counter,atol=pp.absConvergence)
+        x_next, criteria = linalg.gmres(invrel, b, x0=x_0, tol=pp.relConvergence,
+                                        callback=counter, atol=pp.absConvergence)
+        # x_next, criteria = linalg.gmres(freq_matrix+matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
+        #                                 callback=counter,atol=pp.absConvergence)
     if freq == 0:
         print('Starting GMRES solver.')
-        x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
-                                        callback=counter,atol=pp.absConvergence)
-        freq_matrix = np.diag(np.zeros(len(kptdf)))
+        invrel = matrix_sc * scmfac
+        invrel -= matrix_fd
+        x_next, criteria = linalg.gmres(invrel, b, x0=x_0, tol=pp.relConvergence,
+                                        callback=counter, atol=pp.absConvergence)
+        # x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
+        #                                 callback=counter,atol=pp.absConvergence)
+        # freq_matrix = np.diag(np.zeros(len(kptdf)))
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     # The following step is the calculation of the relative residual, which involves another MVP. This adds expense. If
     # we're confident in the convergence, we can omit this check to increase speed.
@@ -122,17 +132,24 @@ def gaas_gamma_fdm(matrix, fullkpts_df, E):
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
     # This is not robust and should be replaced.
-    if pp.kgrid == 80:
-        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
-    if pp.kgrid == 160:
-        step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
-    if pp.kgrid == 200:
-        step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
-    if pp.kgrid == 250:
-        step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
-    print('Generating GaAs Gamma Valley finite difference matrix using ' + pp.fdmName)
+    dkx = np.diff(np.sort(np.unique(fullkpts_df['kx [1/A]'])))
+    if len(dkx == dkx.min()) >= (len(dkx) - 2):  # Only use if only 2 grid spacings not equal to the default
+        step_size = dkx.min() * 1E10
+        print('Delta k for finite difference is {:.10E} [1/A]'.format(step_size * 1E-10))
+    else:
+        exit('Could not satisfy criteria for automatically determining grid spacing for finite difference')
 
-    print('Step size is {:.3f} inverse Angstroms'.format(step_size / 1e10))
+    ### Spacing parameter should be less hardcoded now due to above code.
+    # if pp.kgrid == 80:
+    #     step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
+    # if pp.kgrid == 160:
+    #     step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
+    # if pp.kgrid == 200:
+    #     step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+    # if pp.kgrid == 250:
+    #     step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
+
+    print('Generating GaAs Gamma Valley finite difference matrix using ' + pp.fdmName)
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]']]
     g_inds,l_inds,x_inds=utilities.gaas_split_valleys(fullkpts_df,False)
     g_df = kptdata.loc[g_inds]  # Only apply condition in the Gamma valley
@@ -187,17 +204,17 @@ def gaas_gamma_fdm(matrix, fullkpts_df, E):
                 matrix[ordered_inds[slast],ordered_inds[last]] = 1/(2*step_size)*c.e*E/c.hbar_joule
         else:
             shortslice_inds.append(slice_inds)
-    print('Scattering matrix modified to incorporate central difference contribution.')
+    # print('Scattering matrix modified to incorporate central difference contribution.')
     shortslice_inds = np.concatenate(shortslice_inds,axis=0)
     print('Not applied to {:d} Gamma points because fewer than 4 points on the slice.'.format(len(shortslice_inds)))
     print('This represents {:1f} % of points in the Gamma valley.'.format(len(shortslice_inds)/len(g_df)*100))
     end = time.time()
-    print('Finite difference generation took {:.2f}s'.format(end - start))
+    print('Finite difference applied to Gamma valley. Took {:.2f}s'.format(end - start))
 
     return shortslice_inds, np.array(l_icinds), np.array(r_icinds), matrix
 
 
-def gaas_l_fdm(matrix,fullkpts_df,E):
+def gaas_l_fdm(matrix, fullkpts_df, E):
     """Calculate a finite difference matrix using the specified difference stencil and apply bc. In the current version,
     it is only applied in the kx direction, but it is easy to generalize for a general axis. Only applied to the L
     valleys of GaAs.
@@ -222,18 +239,26 @@ def gaas_l_fdm(matrix,fullkpts_df,E):
     # Get the first and last rows since these are different because of the IC. Go through each.
     # Get the unique ky and kz values from the array for looping.
     # This is not robust and should be replaced.
-    if pp.kgrid == 80:
-        step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
-    if pp.kgrid == 160:
-        step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
-    if pp.kgrid == 200:
-        step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
-    if pp.kgrid == 250:
-        step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
-    print('Step size is {:.3f} inverse Angstroms'.format(step_size/1e10))
+    dkx = np.diff(np.sort(np.unique(fullkpts_df['kx [1/A]'])))
+    if len(dkx == dkx.min()) >= (len(dkx) - 2):  # Only use if only 2 grid spacings not equal to the default
+        step_size = dkx.min() * 1E10
+        print('Delta k for finite difference is {:.10E} [1/A]'.format(step_size * 1E-10))
+    else:
+        exit('Could not satisfy criteria for automatically determining grid spacing for finite difference')
+
+    # if pp.kgrid == 80:
+    #     step_size = 0.0070675528500652425*2*1E10  # 1/Angstron for 1/m (for 80^3)
+    # if pp.kgrid == 160:
+    #     step_size = 0.0070675528500652425 * 1E10  # 1/Angstrom to 1/m (for 160^3)
+    # if pp.kgrid == 200:
+    #     step_size = 0.005654047459752398 * 1E10  # 1/Angstrom to 1/m (for 200^3)
+    # if pp.kgrid == 250:
+    #     step_size = 0.004523237882324671 * 1E10  # 1/Angstrom to 1/m (for 250^3)
+    # print('Step size is {:.3f} inverse Angstroms'.format(step_size/1e10))
+
     kptdata = fullkpts_df[['k_inds', 'kx [1/A]', 'ky [1/A]', 'kz [1/A]','energy [eV]']]
-    _,L_inds,_=utilities.gaas_split_valleys(kptdata,False)
-    l1_inds,l2_inds,l3_inds,l4_inds,l5_inds,l6_inds,l7_inds,l8_inds = utilities.split_L_valleys(kptdata,False)
+    _, L_inds, _ = utilities.gaas_split_valleys(kptdata,False)
+    l1_inds, l2_inds, l3_inds, l4_inds, l5_inds, l6_inds, l7_inds, l8_inds = utilities.split_L_valleys(kptdata, False)
     L_list = [l1_inds,l2_inds,l3_inds,l4_inds,l5_inds,l6_inds,l7_inds,l8_inds]
     shortslice_inds = []
     l_icinds = []
@@ -287,7 +312,7 @@ def gaas_l_fdm(matrix,fullkpts_df,E):
                 shortslice_inds.append(slice_inds)
             if kind % 10 == 0:
                 pass
-    print('Scattering matrix modified to incorporate central difference contribution.')
+    # print('Scattering matrix modified to incorporate central difference contribution.')
     shortslice_inds = np.concatenate(shortslice_inds, axis=0)
     print('Not applied to {:d} L valley points because fewer than 4 points on the slice.'.format(len(shortslice_inds)))
     print('This represents {:1f} % of points in the L valley.'.format(len(shortslice_inds) / len(fullkpts_df.loc[L_inds]) * 100))
@@ -297,7 +322,7 @@ def gaas_l_fdm(matrix,fullkpts_df,E):
     else:
         print('Finite difference not applied to X valleys. Derivative treated as zero for these points.')
     end = time.time()
-    print('Finite difference generation took {:.2f}s'.format(end - start))
+    print('Finite difference (for L/X) took {:.2f}s'.format(end - start))
 
     return shortslice_inds, np.array(l_icinds), np.array(r_icinds), matrix
 
@@ -364,7 +389,8 @@ def write_steady(fieldVector, df):
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     error = []
     iteration_count = []
-    f_next, f_0,_,_ = steady_low_field(df, scm)
+    f_next, f_0, _, _ = steady_low_field(df, scm)
+    print('Low field mobility is {:.2f} [cm^2/V/s]'.format(utilities.calc_mobility(f_next, df)*1e4))
     np.save(pp.outputLoc + 'Steady/' + 'f_1',f_0)
     np.save(pp.outputLoc + 'Steady/' + 'f_2',f_next)
     tau_0 = -np.sum(np.diag(scm)**(-1)*df['k_FD'])/np.sum(df['k_FD'])
@@ -382,6 +408,7 @@ def write_steady(fieldVector, df):
         np.save(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}".format(ee), utilities.f2chi(f_0,df, ee))
         np.save(pp.outputLoc + 'Steady/' + 'chi_' + '0_' + "E_{:.1e}".format(ee), x_smrta)
         print('Steady occupation solutions written to file for ' + "{:.1e} V/m ".format(ee))
+
         print('\n \n')
     if pp.verboseError:
         plt.figure()
@@ -452,7 +479,6 @@ def write_icinds(df):
         np.save(pp.outputLoc + 'L_right_icinds', l_r_inds)  # All 8 L valley indices saved together
 
 
-
 def writeOutputFile():
     from datetime import datetime
     now = datetime.now()
@@ -476,7 +502,8 @@ if __name__ == '__main__':
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = pp.small_signal_fields
+    # fields = pp.fieldVector
+    fields = pp.moment_fields
     freqs = pp.freqVector
 
     print(utilities.calculate_density(electron_df))
