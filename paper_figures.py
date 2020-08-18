@@ -555,7 +555,6 @@ def plotScatteringRate():
     plt.savefig(pp.figureLoc + 'ScatteringRate.png', bbox_inches='tight', dpi=600)
 
 
-
 def plotDavydovRTs(df,pA,pB):
     nkpts = len(df)
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))

@@ -134,6 +134,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
               '\n' + r'Optical Phonon Energy = %.2f meV' % opticalPhononEnergymeV
 
     ax.plot(g_df['energy [eV]'] - np.min(g_df['energy [eV]']), rates[g_inds], '.', label='Perturbo')
+    # ax.plot(carrierEnergy[sortedInds] - np.min(carrierEnergy), scatteringRate[sortedInds], '.', label='Frohlich')
     ax.plot(carrierEnergy[sortedInds] - np.min(carrierEnergy), scatteringRate[sortedInds], '.', label='Frohlich')
     ax.plot(g_df['energy [eV]'] - np.min(g_df['energy [eV]']), 1/momRT, '.', label='Acoustic Deformation')
     ax.text(0.55, 0.95, textstr, transform=ax.transAxes, fontsize=8, verticalalignment='top', bbox=props)
@@ -159,7 +160,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
     plt.xlabel('Energy above CBM (eV)')
     plt.ylabel('Relaxation Times (fs)')
     plt.legend()
-    plt.savefig(pp.figureLoc +'davydovTimes.png', bbox_inches='tight',dpi=600)
+    # plt.savefig(pp.figureLoc +'davydovTimes.png', bbox_inches='tight',dpi=600)
 
 
 def frohlich_davydovDistribution(df,ee,opticalPhononEnergy,inverseFrohlichTime,eRT_Ratio):
@@ -244,5 +245,5 @@ if __name__ == '__main__':
 
     acoustic_davydovIntegrand(g_df.reset_index(drop=True), 4e4, pA, eRT_Ratio)
     plot_scattering(g_df.reset_index(drop=True),pA,eRT_Ratio,opticalPhononEnergy,inverseFrohlichTime)
-    plot_davydov_density_v_field(pp.moment_fields, 0.1, electron_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
+    # plot_davydov_density_v_field(pp.moment_fields, 0.1, electron_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
     plt.show()
