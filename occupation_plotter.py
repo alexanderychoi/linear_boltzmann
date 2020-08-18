@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import numpy.linalg
 import constants as c
+import davydov_utilities
 
 # PURPOSE: THIS MODULE WILL GENERATE DIRECT VISUALIZATIONS OF THE STEADY DISTRIBUTION FUNCTION AS A FUNCTION OF ELECTRIC
 # FIELD. THE VISUALIZATIONS ARE KERNEL DENSITY ESTIMATES OF THE #2 (LOW FIELD + PERTURBO SCM) AND #3 (FINITE DIFFERENCE
@@ -464,15 +465,63 @@ def plot_noise_kde(el_df, big_e):
     return noise_k
 
 
+def field_dependence_noise(big_e, el_df):
+    """Plot velocity variance and effective scattering rate versus field"""
+    pA = 4.4481e-23
+    pB = 1000 * pA  # Energy RT coefficient
+    eRT_Ratio = 65
+    inverseFrohlichTime = 5.8271e12
+    opticalPhononEnergy = 35 * c.e
+
+    carrierEnergy = (el_df['energy [eV]'].values - pp.mu)
+    sortedInds = np.argsort(carrierEnergy)
+
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    sr = np.diag(scm)
+    tau = -1 * sr**-1
+    tau_adp, _ = davydov_utilities.acoustic_davydovRTs(el_df, pA, eRT_Ratio)
+    # tau_froh = davydov_utilities.frohlichScattering(el_df, opticalPhononEnergy, inverseFrohlichTime)
+    # tau_froh = tau_froh**-1 * 1E-12
+
+    variance = []
+    tau_eff = []
+    for e in big_e:
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(e))
+        fs = el_df['k_FD'] + chi
+        fs_adp = davydov_utilities.acoustic_davydovDistribution(el_df, e, pA, eRT_Ratio)
+        fs_froh = davydov_utilities.frohlich_davydovDistribution(el_df, e, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
+        var_pert = np.var(fs * el_df['vx [m/s]'])
+        var_adp = np.var(fs_adp * el_df['vx [m/s]'])
+        var_froh = np.var(fs_froh * el_df['vx [m/s]'])
+        variance.append([var_pert, var_adp, var_froh])
+        tau_eff.append([np.sum(fs*tau)/np.sum(fs), np.sum(fs_adp*tau_adp)/np.sum(fs_adp), np.sum(fs_froh*tau_froh)/np.sum(fs_froh)])
+    variance = np.array(variance)
+    tau_eff = np.array(tau_eff)
+
+    plt.figure()
+    plt.plot(big_e, tau_eff[:, 0])
+    plt.plot(big_e, tau_eff[:, 1])
+    plt.plot(big_e, tau_eff[:, 2])
+    plt.title('Weighted lifetime vs field')
+
+    plt.figure()
+    plt.plot(big_e, variance[:, 0])
+    plt.plot(big_e, variance[:, 1])
+    plt.plot(big_e, variance[:, 2])
+    plt.title('Variance')
+
+
 if __name__ == '__main__':
     # Create electron and phonon dataframes
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = pp.small_signal_fields
+    fields = pp.moment_fields
     freq = pp.freqGHz
 
-    plot_noise_kde(electron_df, fields)
+    field_dependence_noise(fields, electron_df)
+    # plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
     # plot_mom_KDEs(fields, electron_df, saveData=True)

@@ -29,12 +29,12 @@ import re
 subproblemVer = '1_Subproblem/'
 
 parentdir = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/'
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/6_Problem/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/GaAs/6_Problem/1_Pipeline/Output_V4/'
-inputLoc = parentdir+'GaAs/10_Problem_Validation/250_kpts_0.3eV_window/10_mev_smear/0_Data/'
-outputLoc = parentdir+'GaAs/10_Problem_Validation/250_kpts_0.3eV_window/10_mev_smear/1_Pipeline/'+subproblemVer
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/4_Problem_160kpts_0.45eV/1_Pipeline/Output/'
+inputLoc = parentdir+'GaAs/14_Problem_Mode_Noise/0_Data/'
+outputLoc = parentdir+'GaAs/14_Problem_Mode_Noise/1_Pipeline/'+subproblemVer
+# inputLoc = parentdir+'GaAs/11_Problem_Temperature/400K/0_Data/'
+# outputLoc = parentdir+'GaAs/11_Problem_Temperature/400K/1_Pipeline/'+subproblemVer
+# inputLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_smear/0_Data/'
+# outputLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_smear/1_Pipeline/'+subproblemVer
 
 # inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/0_Data/'
 # outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/1_Pipeline/Output/'
@@ -76,11 +76,11 @@ outputLoc = parentdir+'GaAs/10_Problem_Validation/250_kpts_0.3eV_window/10_mev_s
 
 
 # BLOCK 2: PHYSICAL PROBLEM PARAMETERS: FIELDS AND FREQUENCIES
-# fieldVector = np.array([1e-3,1e4,4e4])							# GaAs fields for noise plots
+# fieldVector = np.array([1e-3, 1e4, 4e4])							# GaAs fields for noise plots
 # fieldVector =np.geomspace(1e2,4e4,20)  							# GaAs fields for moment plots
-fieldVector = np.array([4e4])										# Highest field for paper, convergence tests
+fieldVector = np.array([5e4])										# Highest field for paper, convergence tests
 # fieldVector =np.geomspace(1e2,4e4,20)  								# GaAs fields for moment plots
-moment_fields = np.geomspace(1e2, 4e4, 20)
+moment_fields = np.linspace(1e2, 5e4, 10)
 small_signal_fields = np.array([1e-3, 1e4, 4e4])
 # fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))
 

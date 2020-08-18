@@ -462,7 +462,7 @@ if __name__ == '__main__':
     out_loc = pp.outputLoc
     nthreads = 6
 
-    create_dataframes = True
+    create_dataframes = False
     create_pert_scatt_mat = True
     chunk_mat_pop_recips = False
     occ_func_and_delta_weights = False
