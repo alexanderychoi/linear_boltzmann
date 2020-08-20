@@ -295,8 +295,8 @@ if __name__ == '__main__':
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
 
-    fields = pp.moment_fields
-    # fields = pp.fieldVector
+    # fields = pp.moment_fields
+    fields = pp.fieldVector
     freqs = pp.freqVector
 
     write_correlation(fields, electron_df, freqs)

@@ -502,8 +502,8 @@ if __name__ == '__main__':
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    # fields = pp.fieldVector
-    fields = pp.moment_fields
+    fields = pp.fieldVector
+    # fields = pp.moment_fields
     freqs = pp.freqVector
 
     print(utilities.calculate_density(electron_df))
