@@ -264,11 +264,11 @@ def plot_energy_kx(df):
 if __name__ == '__main__':
     fields = pp.fieldVector
     freq = pp.freqGHz
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    plot_scattering_rates(electron_df)
+    # plot_scattering_rates(electron_df)
     bz_3dscatter(electron_df, True, False)
     # plot_bandstructure(electron_df, electron_df)
-    plot_energy_kx(electron_df)
+    # plot_energy_kx(electron_df)
     plt.show()

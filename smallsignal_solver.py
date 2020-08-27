@@ -59,7 +59,7 @@ def longitudinal_small_signal_conductivity(df, fieldVector, freqVector):
                 np.save(pp.outputLoc + 'Small_Signal/' + 'linear_cond_3_' + "f_{:.1e}_E_{:.1e}".format(freq, ee),
                         linear_conductivity)  # This is the portion which is proportional to the equilibrium derivative.
                                               # It makes sense to split these up because we know the derivative of the eq.
-                                              # tern analytically.
+                                              # term analytically.
 
             if ee == 0:  # This is a special case, see Overleaf. Chi = 0 obviously, so have to calculate differently.
                 print('Field is zero. Calculating accordingly.')
@@ -111,7 +111,7 @@ def plot_small_signal_conductivity(fieldVector,freqVector,df):
 
 if __name__ == '__main__':
     # Create electron and phonon dataframes
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     fields = pp.small_signal_fields

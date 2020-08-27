@@ -403,10 +403,10 @@ def write_steady(fieldVector, df):
         error.append(temp_error)
         iteration_count.append(iterations)
         del fdm
-        np.save(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}".format(ee), x_next)
-        np.save(pp.outputLoc + 'Steady/' + 'chi_' + '2_' + "E_{:.1e}".format(ee), utilities.f2chi(f_next,df,ee))
-        np.save(pp.outputLoc + 'Steady/' + 'chi_' + '1_' + "E_{:.1e}".format(ee), utilities.f2chi(f_0,df, ee))
-        np.save(pp.outputLoc + 'Steady/' + 'chi_' + '0_' + "E_{:.1e}".format(ee), x_smrta)
+        np.save(pp.outputLoc + 'Steady/chi_3_E_{:.1e}'.format(ee), x_next)
+        np.save(pp.outputLoc + 'Steady/chi_2_E_{:.1e}'.format(ee), utilities.f2chi(f_next,df,ee))
+        np.save(pp.outputLoc + 'Steady/chi_1_E_{:.1e}'.format(ee), utilities.f2chi(f_0,df, ee))
+        np.save(pp.outputLoc + 'Steady/chi_0_E_{:.1e}'.format(ee), x_smrta)
         print('Steady occupation solutions written to file for ' + "{:.1e} V/m ".format(ee))
 
         print('\n \n')
@@ -502,8 +502,9 @@ if __name__ == '__main__':
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = pp.fieldVector
-    # fields = pp.moment_fields
+    # fields = pp.fieldVector
+    fields = pp.moment_fields
+    # fields = pp.small_signal_fields
     freqs = pp.freqVector
 
     print(utilities.calculate_density(electron_df))
