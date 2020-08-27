@@ -109,7 +109,7 @@ def steady_low_field_corr(b, matrix_sc, kptdf, field, freq):
     return x_next, x_smrta, error, counter.niter
 
 
-def write_low_field_correlation(fieldVector,df,freqVector):
+def write_low_field_correlation(fieldVector, df, freqVector):
     """Calls the GMRES solver hard coded for solving the effective BTE w/low-field approx.
     Parameters:
         fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
@@ -128,7 +128,7 @@ def write_low_field_correlation(fieldVector,df,freqVector):
             f = chi + f0
             Vx = utilities.mean_velocity(chi, df)
             b_xx = (-1) * ((df['vx [m/s]'] - Vx) * f)
-            corr_xx,_,_,_ = steady_low_field_corr(b_xx, scm, df, ee, freq)
+            corr_xx, _, _, _ = steady_low_field_corr(b_xx, scm, df, ee, freq)
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '2_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx)
             print('Transient solution written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
             print('\n \n')
@@ -192,7 +192,10 @@ def write_correlation(fieldVector,df,freqVector):
             np.save(pp.outputLoc + 'SB_Density/' + 'xx_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx_RTA)
             np.save(pp.outputLoc + 'SB_Density/' + 'yy_' + '3_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy)
             np.save(pp.outputLoc + 'SB_Density/' + 'yy_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy_RTA)
-            print('Transient solution written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
+            print('Correlations written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
+            s_xx, _, s_yy, _, _ = density(chi, ee, df, freq)
+            print('Longitudinal noise power is {:.4E} [A^2/m^4/Hz]'.format(s_xx))
+            print('Transverse noise power is {:.4E} [A^2/m^4/Hz]'.format(s_yy))
             print('\n \n')
 
 
@@ -271,7 +274,7 @@ def energy_density(chi, EField,df,freq, partialSum = False, cutoff = 0):
     return S_xx
 
 
-def density(chi, EField,df,freq, partialSum = False, cutoff = 0):
+def density(chi, EField, df, freq, partialSum = False, cutoff=0):
     """Calls the GMRES solver hard coded for solving the effective BTE w/FDM and writes the effective distribution to
     file. Calculates the longitudinal (xx) and transverse (yy) effective distribution functions.
     Parameters:
@@ -306,6 +309,8 @@ def density(chi, EField,df,freq, partialSum = False, cutoff = 0):
     S_xx_RTA = 8*np.real(prefactor*np.sum(corr_xx_RTA*(df['vx [m/s]'])))
     S_yy = 8*np.real(prefactor*np.sum(corr_yy*(df['vy [m/s]'])))
     S_yy_RTA = 8*np.real(prefactor*np.sum(corr_yy_RTA*(df['vy [m/s]'])))
+    print('Long. noise power * V0 is {:.4E} [A^2/m^4/Hz] at E={:.1f} V/cm'.format(S_xx * c.Vuc * Nuc, EField/100))
+    print('Trans. noise power * V0 is {:.4E} [A^2/m^4/Hz] at E={:.1f} V/cm'.format(S_yy * c.Vuc * Nuc, EField/100))
     if partialSum:
         print('Calculating spectral density using a cutoff.')
         energyInds = np.array(df['energy [eV]'].values < cutoff+ np.min(df['energy [eV]']))
@@ -332,7 +337,6 @@ def plot_density(fieldVector,freqVector,df):
             conductivity_xx_vector.append(conductivity_xx)
             # conductivity_yy_vector.append(conductivity_yy)
             kvcm = np.array(fieldVector) * 1e-5
-
             Nuc = pp.kgrid ** 3
         fig, ax = plt.subplots()
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
@@ -358,7 +362,6 @@ def plot_density(fieldVector,freqVector,df):
         S_xx_RTA_vector.append(S_xx_RTA)
         S_yy_vector.append(S_yy)
         Nuc = pp.kgrid ** 3
-        print('freq')
     fig, ax = plt.subplots()
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
     textstr = '\n'.join((pp.fdmName,r'$E = %.1f kV/cm  \, \, (100)$' % (plotfield/1e5,)))
@@ -406,12 +409,9 @@ if __name__ == '__main__':
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
 
-    fields = pp.small_signal_fields
-    freqs = pp.freqVector
-
     # fields = pp.moment_fields
-    # freqs = np.array([0.1])
-
+    fields = pp.fieldVector
+    freqs = pp.freqVector
 
     # write_correlation(fields,electron_df,freqs)
     # write_correlation(pp.moment_fields, electron_df, np.array([0.1]))
@@ -419,5 +419,7 @@ if __name__ == '__main__':
 
     # write_energy_correlation(fields,electron_df,freqs)
     # plot_energy_density(fields, freqs, electron_df)
+    write_correlation(fields, electron_df, freqs)
+    plot_density(fields, freqs, electron_df)
 
     plt.show()

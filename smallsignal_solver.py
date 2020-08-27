@@ -62,7 +62,6 @@ def longitudinal_small_signal_conductivity(df, fieldVector, freqVector):
                                               # It makes sense to split these up because we know the derivative of the eq.
                                               # tern analytically.
                 np.save(pp.outputLoc + 'Small_Signal/'+'decomp_cond_3_'+ "f_{:.1e}_E_{:.1e}".format(freq, ee),df['vx [m/s]']*(chi_3t_i/ee - c.e/c.hbar_joule*bp))
-
             if ee == 0:  # This is a special case, see Overleaf. Chi = 0 obviously, so have to calculate differently.
                 print('Field is zero. Calculating accordingly.')
                 fdm2 = np.memmap(pp.inputLoc + '/finite_difference_matrix2.mmap', dtype='float64', mode='w+',

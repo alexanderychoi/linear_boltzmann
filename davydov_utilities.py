@@ -14,6 +14,7 @@ import paper_figures
 SMALL_SIZE = 5.8
 MEDIUM_SIZE = 10
 BIGGER_SIZE = 12
+
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
 plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
@@ -232,7 +233,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
     plt.xlim([-0.02,0.32])
     plt.ylim([-2,27])
     plt.legend()
-    plt.savefig(pp.figureLoc +'davydovRates.png', bbox_inches='tight',dpi=600)
+    # plt.savefig(pp.figureLoc +'davydovRates.png', bbox_inches='tight',dpi=600)
 
 
     fig, ax = plt.subplots(figsize=triFigSize)
@@ -252,7 +253,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
     plt.ylabel('Relaxation times (fs)')
     plt.xlim([-0.02,0.32])
     plt.legend()
-    plt.savefig(pp.figureLoc +'davydovTimes.png', bbox_inches='tight',dpi=600)
+    # plt.savefig(pp.figureLoc +'davydovTimes.png', bbox_inches='tight',dpi=600)
 
 
 def frohlich_davydovDistribution(df,ee,opticalPhononEnergy,inverseFrohlichTime,eRT_Ratio):
@@ -331,7 +332,7 @@ def plot_davydov_density_v_field(fieldVector, freq, df, pA, opticalPhononEnergy,
     plt.legend(loc='lower left')
     plt.xlabel('Field '+ r'$\rm (V \, cm^{-1})$')
     plt.ylabel('Current fluctuation PSD ' r'$\rm (A^2 \, m^4 \, Hz^{-1})$')
-    plt.savefig(pp.figureLoc +'density_vField.png', bbox_inches='tight',dpi=600)
+    # plt.savefig(pp.figureLoc +'density_vField.png', bbox_inches='tight',dpi=600)
 
     T_vector = np.geomspace(300,500,1000)
     energy_vector = paper_figures.calculate_electron_temperature(df,T_vector)
@@ -424,7 +425,7 @@ def plot_density(ee, freqVector, full_df, pA, opticalPhononEnergy, inverseFrohli
     #             arrowprops=dict(facecolor='black', arrowstyle="->"),
     #             )
 
-    plt.savefig(pp.figureLoc + 'Freq_Dependent_PSD.png', bbox_inches='tight', dpi=600)
+    # plt.savefig(pp.figureLoc + 'Freq_Dependent_PSD.png', bbox_inches='tight', dpi=600)
 
 
 
@@ -458,8 +459,7 @@ if __name__ == '__main__':
 
     # acoustic_davydovIntegrand(g_df.reset_index(drop=True), 4e4, pA, eRT_Ratio)
     plot_scattering(g_df.reset_index(drop=True),pA,eRT_Ratio,opticalPhononEnergy,inverseFrohlichTime)
-    plot_davydov_density_v_field(pp.moment_fields, 0.1, g_df.reset_index(drop=True), pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
+    # plot_davydov_density_v_field(pp.moment_fields, 0.1, g_df.reset_index(drop=True), pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
     plotdavydovDistributions(4e4, g_df.reset_index(drop=True), pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
     plot_density(5e4, freqs, electron_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
-
     plt.show()

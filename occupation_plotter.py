@@ -2,12 +2,13 @@ import numpy as np
 import utilities
 import problem_parameters as pp
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from scipy.spatial import distance
 import numpy.linalg
 import constants as c
 import paper_figures
 from matplotlib.lines import Line2D
-
+import davydov_utilities
 
 # PURPOSE: THIS MODULE WILL GENERATE DIRECT VISUALIZATIONS OF THE STEADY DISTRIBUTION FUNCTION AS A FUNCTION OF ELECTRIC
 # FIELD. THE VISUALIZATIONS ARE KERNEL DENSITY ESTIMATES OF THE #2 (LOW FIELD + PERTURBO SCM) AND #3 (FINITE DIFFERENCE
@@ -57,7 +58,7 @@ def plot_steady_transient_difference(fieldVector, freq):
     plt.title(pp.title_str)
 
 
-def momentum_distribution_kde(chi, df,ee,title=[],saveData = False,lowfield=False):
+def momentum_distribution_kde(chi, df, ee, title=[], saveData=False, lowfield=False):
     """Takes chi solutions from file and plots the KDE of the distribution in momentum space.
 
     Parameters:
@@ -72,7 +73,7 @@ def momentum_distribution_kde(chi, df,ee,title=[],saveData = False,lowfield=Fals
     IN THE FUTURE.
     """
     mom = df['kx [1/A]']
-    npts = 600  # number of points in the KDE
+    npts = 400  # number of points in the KDE
     kdist = np.zeros(npts)
     kdist_tot = np.zeros(npts)
     kdist_f0 = np.zeros(npts)
@@ -605,9 +606,84 @@ def plot_noise_kde(el_df, big_e,freq):
     return noise_k
 
 
+def field_dependence_noise(big_e, el_df):
+    """Plot velocity variance and effective scattering rate versus field"""
+    pA = 4.4481e-23 # 13 Problem
+    pB = 1000 * pA  # Energy RT coefficient
+    eRT_Ratio = 65
+    inverseFrohlichTime = 5.8271028e12 # 13 Problem
+    opticalPhononEnergy = 35/1000*c.e
+
+    g_inds, _, _ = utilities.gaas_split_valleys(el_df, False)
+    g_df = el_df.loc[g_inds]
+    g_df.reset_index(drop=True)
+    carrierEnergy = (g_df['energy [eV]'].values - np.min(g_df['energy [eV]']))
+    incr_en = np.argsort(carrierEnergy)
+
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    sr = np.diag(scm)
+    tau = -1 * sr**-1
+    tau_adp, _ = davydov_utilities.acoustic_davydovRTs(g_df, pA, eRT_Ratio)
+    tau_froh = davydov_utilities.frohlichScattering(g_df, opticalPhononEnergy, inverseFrohlichTime)
+    tau_froh = tau_froh**-1
+
+    # def davydov_f1(davdist):
+        # c.e *
+
+    fig, ax = plt.subplots()
+    variance = []
+    tau_eff = []
+    for e in big_e:
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(e))
+        fs = el_df['k_FD'] + chi
+        fs_froh = davydov_utilities.frohlich_davydovDistribution(g_df.reset_index(drop=True), e, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
+        fs_adp = davydov_utilities.acoustic_davydovDistribution(g_df.reset_index(drop=True), e, pA, eRT_Ratio)
+        var_pert = np.var(fs * el_df['vx [m/s]'])
+        var_adp = np.var(fs_adp * g_df['vx [m/s]'])
+        var_froh = np.var(fs_froh * g_df['vx [m/s]'].values[incr_en])
+        variance.append([var_pert, var_adp, var_froh])
+        tau_eff.append([np.sum(fs*tau)/np.sum(fs), np.sum(fs_adp*tau_adp)/np.sum(fs_adp), np.sum(fs_froh*tau_froh[incr_en])/np.sum(fs_froh)])
+        ax.semilogy(g_df['energy [eV]'], fs_adp, '.', markersize=4)
+    variance = np.array(variance)
+    tau_eff = np.array(tau_eff) * 1e15
+
+    big_e = big_e * 1e-5
+    plt.figure()
+    plt.plot(big_e, tau_eff[:, 0], label='Perturbo', color='C1')
+    plt.plot(big_e, tau_eff[:, 1], label='ADP', linestyle='dotted', color='Black')
+    plt.plot(big_e, tau_eff[:, 2], label='Frohlich', linestyle='dashed', color='Black')
+    plt.ylabel('Weighted lifetime [fs]')
+    plt.xlabel('Field [kV/cm]')
+    plt.legend()
+    plt.tight_layout()
+
+    plt.figure()
+    plt.plot(big_e, variance[:, 0], label='Perturbo', color='C1')
+    plt.plot(big_e, variance[:, 1], label='ADP', linestyle='dotted', color='Black')
+    plt.plot(big_e, variance[:, 2], label='Frohlich', linestyle='dashed', color='Black')
+    plt.ylabel('Velocity Variance [(m/s)^2]')
+    plt.xlabel('Field [kV/cm]')
+    plt.legend()
+    plt.tight_layout()
+
+
+def mom_en_relaxation(el_df, fields):
+    enk = el_df['energy [eV]']
+    enk = enk - enk.min()
+    vmags = el_df['v_mag [m/s]']
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
+
+
+
 def energy_KDEs(el_df, fields):
     nkpts = len(np.unique(el_df['k_inds']))
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    ytext = r'Momentum loss (1/s)'
+    xtext = 'Electron energy (eV)'
+    valleycolors = ['#2E8BC0', '#0C2D48']
     cmap = plt.cm.get_cmap('YlOrRd', 6)
     fieldcolors = []
     for i in range(cmap.N):
@@ -628,7 +704,6 @@ def energy_KDEs(el_df, fields):
         sigma = stdev - (vmag / 1E6) * 0.90 * stdev
         vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
         return vals
-
     T_vector = np.geomspace(300,500,1000)
     energy_vector = paper_figures.calculate_electron_temperature(el_df,T_vector)
     carrierEnergy = (el_df['energy [eV]'] - np.min(el_df['energy [eV]']))
@@ -959,6 +1034,95 @@ def energy_KDEs(el_df, fields):
     plt.ylabel(r'Excess energy weight (unitless)')
     plt.xlabel('Electron energy (meV)')
     plt.legend()
+    # decaymatrix = np.zeros((nkpts, nkpts))
+    # allk = el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat)
+    # # allk = np.linalg.norm(el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat), axis=1)
+    # for ik in range(nkpts):
+    #     deltak = np.linalg.norm(allk - np.tile(allk[ik, :], (nkpts, 1)), axis=1)
+    #     # deltak = allk[ik] - allk  # |k| - |k'| so positive is momentum decay
+    #     if enk[ik] == 0:
+    #         continue
+    #     delta_en = enk[ik] - enk
+    #     colk = scm[:, ik].copy()
+    #     rowk = scm[ik, :].copy()
+    #     # Should remove the diagonal contribution, but since the deltak for element k is zero, cancels out
+    #     decaymatrix[ik, :] = (deltak * rowk * -1) / np.linalg.norm(allk[ik])
+    #     decaymatrix[ik, ik] = np.dot(deltak, colk) / np.linalg.norm(allk[ik])
+    #     # decaymatrix[ik, :] = (delta_en * rowk * -1) / enk[ik]
+    #     # decaymatrix[ik, ik] = np.dot(delta_en, colk) / enk[ik]
+    #     if ik % 500 == 0:
+    #         print('Did k = {}'.format(str(ik)))
+    # diagdecayrate = np.diag(decaymatrix)
+    #
+    # for i, field in enumerate(fields):
+    #     chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(field))
+    #     # fs = chi + el_df['k_FD']
+    #     fs = chi
+    #     fulldecay = decaymatrix @ fs
+    #     full_enax = np.zeros(npts)
+    #     for k in range(len(fulldecay)):
+    #         istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    #         iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    #         full_enax[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     plt.plot(en_axis, full_enax, label='{:.0f} V/cm'.format(field/100), color=fieldcolors[i+1])
+    # plt.axhline(0, linestyle='--', color='Black')
+    # plt.ylabel(ytext)
+    # plt.xlabel(xtext)
+    # plt.legend()
+    # plt.tight_layout()
+    #
+    # # Plot of diagonal versus off diagonal momentum loss for chi of field specified below
+    # chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(fields[0]))
+    # # fs = chi + el_df['k_FD']
+    # fs = chi
+    # fulldecay = decaymatrix @ fs
+    # diagdecay_fs = diagdecayrate * fs
+    # diagdecay = np.zeros(npts)
+    # full_enax = np.zeros(npts)
+    # for k in range(len(diagdecayrate)):
+    #     istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    #     iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    #     diagdecay[istart:iend] += diagdecay_fs[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     full_enax[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    # plt.figure()
+    # plt.axhline(0, linestyle='-', color='Black', linewidth=0.5)
+    # plt.plot(en_axis, diagdecay, label='Diagonal only', color=fieldcolors[i+1], linestyle='--')
+    # plt.plot(en_axis, full_enax, label='Including off-diagonal', color=fieldcolors[i+1])
+    # plt.ylabel(ytext)
+    # plt.xlabel(xtext)
+    # plt.legend()
+    # plt.tight_layout()
+    #
+    # # Plot of the momentum loss KDE vs energy for the chi of field designated above
+    # g_decay = np.zeros(npts)
+    # l_decay = np.zeros(npts)
+    # for k in np.nonzero(g_inds)[0]:
+    #     istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    #     iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    #     g_decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    # for k in np.nonzero(l_inds)[0]:
+    #     istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    #     iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    #     l_decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    # plt.figure()
+    # plt.plot(en_axis, g_decay, label='Gamma', color=valleycolors[0])
+    # plt.plot(en_axis, l_decay, label='L', color=valleycolors[1])
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.ylabel(ytext)
+    # plt.xlabel(xtext)
+    # plt.legend()
+    #
+    # # Plot of momentum loss rates parametrically against energy
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.plot(enk[g_inds], diagdecayrate[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    # plt.plot(enk[l_inds], diagdecayrate[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    # plt.ylabel(ytext)
+    # plt.xlabel(xtext)
+    # legend_elements = [Line2D([0], [0], marker='o', lw=0, color=valleycolors[0], label='Gamma', markersize=5),
+    #                    Line2D([0], [0], marker='o', lw=0, color=valleycolors[1], label='L', markersize=5)]
+    # plt.legend(handles=legend_elements)
+    # plt.tight_layout()
 
 
 if __name__ == '__main__':
@@ -975,6 +1139,15 @@ if __name__ == '__main__':
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
     # plot_mom_KDEs(fields, electron_df,saveData=True)
+    fields = pp.fieldVector
+    freq = pp.freqGHz
+
+    # mom_en_relaxation(electron_df, [1e2, 1e4, 3e4, 5e4])
+    # field_dependence_noise(fields, electron_df)
+    # plot_noise_kde(electron_df, fields)
+    # material_plotter.bz_3dscatter(electron_df,True,False)
+    # plot_steady_transient_difference(fields,freq)
+    # plot_mom_KDEs(fields, electron_df, saveData=True)
     # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
     # plot_energy_sep_lf(electron_df, fields)
