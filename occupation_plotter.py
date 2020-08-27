@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from scipy.spatial import distance
 import numpy.linalg
 import constants as c
+import paper_figures
+from matplotlib.lines import Line2D
+
 
 # PURPOSE: THIS MODULE WILL GENERATE DIRECT VISUALIZATIONS OF THE STEADY DISTRIBUTION FUNCTION AS A FUNCTION OF ELECTRIC
 # FIELD. THE VISUALIZATIONS ARE KERNEL DENSITY ESTIMATES OF THE #2 (LOW FIELD + PERTURBO SCM) AND #3 (FINITE DIFFERENCE
@@ -17,6 +20,7 @@ import constants as c
 import matplotlib as mpl
 font = {'size': 11}
 mpl.rc('font', **font)
+triFigSize = (2.25*1.25,2.25*1.25)
 
 
 def plot_steady_transient_difference(fieldVector, freq):
@@ -322,7 +326,6 @@ def plot_energy_sep(df, fields):
     Returns:
         Nothing. Just the plots.
     """
-    utilities.gaas_split_valleys(df, True)
     plt.figure(figsize=(6, 6))
     for ee in fields:
         chi_3_i = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
@@ -386,11 +389,13 @@ def plot_2d_dist(df, field):
     plt.title(pp.title_str)
 
 
-def plot_noise_kde(el_df, big_e):
+def plot_noise_kde(el_df, big_e,freq):
     vmags = el_df['v_mag [m/s]']
     vx = el_df['vx [m/s]']
     enk = el_df['energy [eV]'] - el_df['energy [eV]'].min()
 
+    lw = 1
+    alpha = 1
     npts = 400  # number of points in the KDE
     # Define the energy range over intergration
     en_axis = np.linspace(enk.min(), enk.max(), npts)
@@ -442,26 +447,518 @@ def plot_noise_kde(el_df, big_e):
     for i, ee in enumerate(big_e):
         g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
         chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
-        dv = utilities.drift_velocity(chi, electron_df)
+        chi_t_i = np.load(pp.outputLoc + '/Transient/chi_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee))
+        dv = utilities.mean_velocity(chi, el_df)
         noise_k = 2 * (2 * c.e / pp.kgrid**3 / c.Vuc)**2 * np.real(g_k * vx)
         noise_vx = np.zeros(npts)
+        density_kx = np.zeros(npts)
         for k in range(len(noise_k)):
             istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
             iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
             noise_vx[istart:iend] += noise_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
-        vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
-        vxplot.axvline(dv * 1E-3, color=colors[4+i], linestyle='--')
-    vxplot.set_xlabel('Group velocity [km/s]')
-    vxplot.set_ylabel(r'Noise power per unit velocity')
-    vxplot.legend()
+            density_kx[istart:iend] += chi[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[i*2+2], label='{:.0f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$',alpha=alpha)
+        # vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[4+i],lw=lw)
+        vxplot.axvline(dv * 1E-3, color=colors[i*2+2], linestyle='--')
+        # vxplot.plot(v_axis * 1E-3, density_kx/np.min(density_kx), color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
+    vxplot.set_xlabel(r'Longitudinal group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'Longitudinal noise weight '+ r'$\rm  (A^2 \, m^3 \, Hz^{-2})$')
+    vxplot.legend(loc='upper left',frameon=False)
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.2)
+    freqTHz = freq/1000
+    # textstr = 'f = % .0f THz' %freqTHz
+    textstr = 'f = % .0f GHz' %freq
 
-    # plt.figure()
-    # plt.title('Noise vs field')
-    # plt.plot(big_e, noise_tot)
-    # plt.figure()
-    # plt.plot(vx, np.real(g_k), '.', markersize=5)
+    vxplot.text(0.98,0.98,textstr, transform=vxplot.transAxes, fontsize=8, verticalalignment='top', bbox=props,ha ='right',va='top')
+    # plt.ylim([0,0.017])
+    # plt.ylim([0,2.25e-5])
+    plt.savefig(pp.figureLoc+'Longitudinal_noiseKDE.png', bbox_inches='tight',dpi=600)
+
+    plt.figure()
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        g_k = np.real(np.load(pp.outputLoc + '/Small_Signal/decomp_cond_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        chi_t_i = np.load(pp.outputLoc + '/Transient/chi_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee))
+        dv = utilities.mean_velocity(chi, el_df)
+        noise_k = np.real(chi)*c.kb_joule*pp.T/(c.e*ee)*vx
+        noise_vx = np.zeros(npts)
+        density_kx = np.zeros(npts)
+        for k in range(len(noise_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            noise_vx[istart:iend] += noise_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+            density_kx[istart:iend] += chi[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[i*2+2], label='{:.1f} V/cm'.format(ee / 100),alpha = alpha)
+        # vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[4+i],lw=lw)
+        vxplot.axvline(dv * 1E-3, color=colors[i*2+2], linestyle='--')
+    # vxplot.plot(v_axis * 1E-3, density_kx/np.min(density_kx), color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
+    vxplot.set_xlabel(r'Longitudinal group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'DC conductivity weight ($\rm S \, m^{-2} \, Hz^{-1}$)')
+    vxplot.legend()
+    plt.savefig(pp.figureLoc + 'DC_condKDE.png', bbox_inches='tight', dpi=600)
+
+    nkpts = len(el_df)
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    thermal_energy = utilities.mean_energy(np.zeros(nkpts), el_df)
+    energy_above_thermal = el_df['energy [eV]']-thermal_energy
+
+    plt.figure(figsize=triFigSize)
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        dv = utilities.mean_velocity(chi, el_df)
+        power_k = np.dot(scm,chi)*energy_above_thermal
+        power_vx = np.zeros(npts)
+        for k in range(len(power_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            power_vx[istart:iend] += power_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, power_vx, color=colors[i*2+2], label='{:.1f} V/cm'.format(ee / 100),alpha = alpha)
+        vxplot.axvline(dv * 1E-3, color=colors[i*2+2], linestyle='--')
+    vxplot.set_xlabel(r'Longitudinal group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'Power weight ($\rm eV \, m^{-1}$)')
+    vxplot.legend()
+    plt.savefig(pp.figureLoc + 'power.png', bbox_inches='tight', dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        dv = utilities.mean_velocity(chi, el_df)
+        power_k = np.dot(scm,chi)
+        power_vx = np.zeros(npts)
+        for k in range(len(power_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            power_vx[istart:iend] += power_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, power_vx, color=colors[i*2+2], label='{:.1f} V/cm'.format(ee / 100),alpha = alpha)
+        vxplot.axvline(dv * 1E-3, color=colors[i*2+2], linestyle='--')
+    vxplot.set_xlabel(r'Longitudinal group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'Density flux weight ($\rm s \, m^{-1}$)')
+    vxplot.legend()
+    plt.savefig(pp.figureLoc + 'densityFlux.png', bbox_inches='tight', dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        dv = utilities.mean_velocity(chi, el_df)
+        power_k = energy_above_thermal
+        power_vx = np.zeros(npts)
+        normalizing_vx = np.zeros(npts)
+        for k in range(len(power_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            power_vx[istart:iend] += power_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+            normalizing_vx[istart:iend] += (chi+el_df['k_FD'])[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, power_vx/normalizing_vx, color=colors[i*2+2], label='{:.1f} V/cm'.format(ee / 100),alpha = alpha)
+        vxplot.axvline(dv * 1E-3, color=colors[i*2+2], linestyle='--')
+    vxplot.set_xlabel(r'Longitudinal group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'Energy above thermal ($\rm ev \, s \, m^{-1}$)')
+    vxplot.legend()
+    plt.savefig(pp.figureLoc + 'excessEnergyKDE.png', bbox_inches='tight', dpi=600)
+
+    vx = el_df['vy [m/s]']
+    v_axis = np.linspace(vx.min(), vx.max(), npts)
+    dx = (v_axis.max() - v_axis.min()) / npts
+    spread = 40 * dx
+
+    plt.figure()
+    vxplot = plt.axes()
+    for i, ee in enumerate(big_e):
+        g_k = np.real(np.load(pp.outputLoc + '/SB_Density/yy_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        chi_t_i = np.load(pp.outputLoc + '/Transient/chi_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee))
+        dv = utilities.mean_velocity(chi, el_df)
+        noise_k = 2 * (2 * c.e / pp.kgrid**3 / c.Vuc)**2 * np.real(g_k * vx)
+        noise_vx = np.zeros(npts)
+        density_kx = np.zeros(npts)
+        for k in range(len(noise_k)):
+            istart = int(np.maximum(np.floor((vx[k] - v_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((vx[k] - v_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            noise_vx[istart:iend] += noise_k[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+            density_kx[istart:iend] += chi[k] * gaussian(v_axis[istart:iend], vx[k], vmags[k], stdev=spread)
+        vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[i*2+2], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$',alpha = alpha)
+        # vxplot.plot(v_axis * 1E-3, noise_vx, color=colors[4+i],lw=lw)
+    vxplot.axvline(0, color='black', linestyle='--')
+    # vxplot.plot(v_axis * 1E-3, density_kx/np.min(density_kx), color=colors[4+i], label='{:.1f} V/cm'.format(ee / 100))
+    vxplot.set_xlabel(r'Transverse group velocity ($\rm km \, s^{-1}$)')
+    vxplot.set_ylabel(r'Transverse noise weight '+ r'$\rm  (A^2 \, m^3 \, Hz^{-2})$')
+    vxplot.legend(loc='upper left',frameon=False)
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.2)
+    freqTHz = freq/1000
+    # textstr = 'f = % .0f THz' %freqTHz
+    textstr = 'f = % .0f GHz' %freq
+    vxplot.text(0.98,0.98,textstr, transform=vxplot.transAxes, fontsize=8, verticalalignment='top', bbox=props,ha ='right',va='top')
+    # plt.ylim([0,0.017])
+    # plt.ylim([0,2.25e-5])
+    plt.savefig(pp.figureLoc+'Transverse_noiseKDE.png', bbox_inches='tight',dpi=600)
+
+    print('Thermal energy is {:.3f} eV'.format(thermal_energy))
+    plt.figure(figsize=triFigSize)
+    plt.plot(el_df['vx [m/s]'],el_df['energy [eV]'],'.')
+    plt.xlabel(r'Transverse group velocity ($\rm km \, s^{-1}$)')
+    plt.ylabel(r'State energy (eV)')
+    plt.savefig(pp.figureLoc+'energy_vx.png', bbox_inches='tight',dpi=600)
 
     return noise_k
+
+
+def energy_KDEs(el_df, fields):
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    cmap = plt.cm.get_cmap('YlOrRd', 6)
+    fieldcolors = []
+    for i in range(cmap.N):
+        rgb = cmap(i)[:3]  # will return rgba, we take only first 3 so we get rgb
+        fieldcolors.append(mpl.colors.rgb2hex(rgb))
+
+    npts = 400  # number of points in the KDE
+
+    neg_k_inds = el_df['kx [1/A]'] < 0
+    neg_enk = el_df.loc[neg_k_inds,'energy [eV]'].values
+    neg_enk = neg_enk - neg_enk.min()
+    neg_en_axis = np.linspace(neg_enk.min(), neg_enk.max(), npts)
+    neg_vmags = el_df.loc[neg_k_inds,'v_mag [m/s]'].values
+    dx = (neg_en_axis.max() - neg_en_axis.min()) / npts
+    spread = 35 * dx
+
+    def gaussian(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag / 1E6) * 0.90 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
+
+    T_vector = np.geomspace(300,500,1000)
+    energy_vector = paper_figures.calculate_electron_temperature(el_df,T_vector)
+    carrierEnergy = (el_df['energy [eV]'] - np.min(el_df['energy [eV]']))
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        pertEnergy = np.sum(carrierEnergy * (chi + el_df['k_FD'])) / np.sum(el_df['k_FD'])
+        pert_Temp = np.interp(pertEnergy, energy_vector, T_vector)
+        hot_boltzdist = (np.exp((el_df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pert_Temp))) ** (-1)
+        hot_boltzdist = hot_boltzdist * np.sum(el_df['k_FD']) / np.sum(hot_boltzdist)
+        fulldecay = chi[neg_k_inds]
+        fulldecay2 = hot_boltzdist[neg_k_inds] - el_df.loc[neg_k_inds,'k_FD'].values
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        decay2 = np.zeros(npts)
+        # for k in np.nonzero(pos_k_inds)[0]:
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(neg_en_axis[istart:iend], neg_enk[k], neg_vmags[k], stdev=spread)
+            decay2[istart:iend] += fulldecay2[k] * gaussian(neg_en_axis[istart:iend], neg_enk[k], neg_vmags[k], stdev=spread)
+        plt.plot(neg_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+        plt.plot(neg_en_axis*1000, decay2, '-.',color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'$\Delta f_{k}$')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Negative $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'energy_KDE_neg.png',dpi=600)
+
+    pos_k_inds = el_df['kx [1/A]'] > 0
+    pos_enk = el_df.loc[pos_k_inds,'energy [eV]'].values
+    pos_enk = pos_enk - pos_enk.min()
+    pos_en_axis = np.linspace(pos_enk.min(), pos_enk.max(), npts)
+    pos_vmags = el_df.loc[pos_k_inds,'v_mag [m/s]'].values
+    dx = (pos_en_axis.max() - pos_en_axis.min()) / npts
+    spread = 35 * dx
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        pertEnergy = np.sum(carrierEnergy * (chi + el_df['k_FD'])) / np.sum(el_df['k_FD'])
+        pert_Temp = np.interp(pertEnergy, energy_vector, T_vector)
+        hot_boltzdist = (np.exp((el_df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pert_Temp))) ** (-1)
+        hot_boltzdist = hot_boltzdist * np.sum(el_df['k_FD']) / np.sum(hot_boltzdist)
+        fulldecay = chi[pos_k_inds]
+        fulldecay2 = hot_boltzdist[pos_k_inds] - el_df.loc[pos_k_inds,'k_FD'].values
+
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        decay2 = np.zeros(npts)
+        # for k in np.nonzero(pos_k_inds)[0]:
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(pos_en_axis[istart:iend], pos_enk[k], pos_vmags[k], stdev=spread)
+            decay2[istart:iend] += fulldecay2[k] * gaussian(pos_en_axis[istart:iend], pos_enk[k], pos_vmags[k],
+                                                          stdev=spread)
+        plt.plot(pos_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+        plt.plot(pos_en_axis*1000, decay2,'-.', color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'$\Delta f_{k}$')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Positive $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'energy_KDE_pos.png',dpi=600)
+
+    enk = el_df['energy [eV]']
+    enk = enk - enk.min()
+    vmags = el_df['v_mag [m/s]']
+    en_axis = np.linspace(pos_enk.min(), pos_enk.max(), npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    spread = 55 * dx
+
+    plt.figure(figsize=triFigSize)
+    for i, ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        chi2 = np.load(pp.outputLoc + '/Steady/chi_2_E_{:.1e}.npy'.format(ee))
+        pertEnergy = np.sum(carrierEnergy * (chi + el_df['k_FD'])) / np.sum(el_df['k_FD'])
+        pert_Temp = np.interp(pertEnergy, energy_vector, T_vector)
+        hot_boltzdist = (np.exp((el_df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pert_Temp))) ** (-1)
+        hot_boltzdist = hot_boltzdist*np.sum(el_df['k_FD'])/np.sum(hot_boltzdist)
+        print(pert_Temp)
+        fulldecay = chi
+        fulldecay2 = hot_boltzdist-el_df['k_FD']
+        fulldecay3 = chi2
+        print(np.sum(fulldecay))
+        print(np.sum(fulldecay2))
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        decay2 = np.zeros(npts)
+        decay3 = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            decay2[istart:iend] += fulldecay2[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            decay3[istart:iend] += fulldecay3[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+
+        plt.plot(en_axis * 1000, decay, color=fieldcolors[i + 1],
+                 label='{:.1f} '.format(ee / 100) + r'$\rm V \, cm^{-1}$')
+        plt.plot(en_axis * 1000, decay2, '--',color=fieldcolors[i + 1],
+                 label='{:.1f} '.format(ee / 100) + r'$\rm V \, cm^{-1}$')
+        # plt.plot(en_axis * 1000, decay3, '-.',color=fieldcolors[i + 1],
+        #          label='{:.1f} '.format(ee / 100) + r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'$\Delta f_{k}$')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'All $k_x$')
+    plt.legend(frameon=False,ncol=2)
+    plt.savefig(pp.figureLoc+'energy_KDE_all.png',dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm,chi)
+        fulldecay = fulldecay[neg_k_inds]
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(neg_en_axis[istart:iend], neg_enk[k], neg_vmags[k], stdev=spread)
+        plt.plot(neg_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Density flux weight ($\rm eV^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend(frameon=False)
+    plt.title(r'Negative $k_x$')
+    plt.savefig(pp.figureLoc+'density_flux_neg.png',dpi=600)
+
+
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm,chi)
+        fulldecay = fulldecay[pos_k_inds]
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(pos_en_axis[istart:iend], pos_enk[k], pos_vmags[k], stdev=spread)
+        plt.plot(pos_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Density flux weight ($\rm eV^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend(frameon=False)
+    plt.title(r'Positive $k_x$')
+    plt.savefig(pp.figureLoc+'density_flux_pos.png',dpi=600)
+
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm,chi)
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Density flux weight ($\rm eV^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend(frameon=False)
+    plt.title(r'All $k_x$')
+    plt.savefig(pp.figureLoc+'density_flux_all.png',dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        thermal_energy = utilities.mean_energy(np.zeros(nkpts), el_df)
+        energy_above_thermal = el_df['energy [eV]'].values-thermal_energy
+        fulldecay = np.dot(scm, chi)*energy_above_thermal
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Power weight ($\rm s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend(frameon=False)
+    plt.title(r'All $k_x$')
+    plt.savefig(pp.figureLoc+'energy_flux_all.png',dpi=600)
+
+
+    plt.figure(figsize=triFigSize)
+    dx = (neg_en_axis.max() - neg_en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        thermal_energy = utilities.mean_energy(np.zeros(nkpts), el_df)
+        energy_above_thermal = el_df['energy [eV]'].values-thermal_energy
+        fulldecay = np.dot(scm, chi)*energy_above_thermal
+        fulldecay = fulldecay[neg_k_inds]
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(neg_en_axis[istart:iend], neg_enk[k], neg_vmags[k], stdev=spread)
+        plt.plot(neg_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Power weight ($\rm s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Negative $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'energy_flux_neg.png',dpi=600)
+
+
+    plt.figure(figsize=triFigSize)
+    dx = (pos_en_axis.max() - pos_en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        thermal_energy = utilities.mean_energy(np.zeros(nkpts), el_df)
+        energy_above_thermal = el_df['energy [eV]'].values-thermal_energy
+        fulldecay = np.dot(scm, chi)*energy_above_thermal
+        fulldecay = fulldecay[pos_k_inds]
+
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(pos_en_axis[istart:iend], pos_enk[k], pos_vmags[k], stdev=spread)
+        plt.plot(pos_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Power weight ($\rm s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Positive $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'energy_flux_pos.png',dpi=600)
+
+    kmag = np.sqrt(el_df['kx [1/A]'].values ** 2 + el_df['ky [1/A]'].values ** 2 + el_df['kz [1/A]'].values ** 2)
+    plt.figure(figsize=triFigSize)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm, chi)*el_df['kx [1/A]'].values
+        # fulldecay = np.dot(scm, chi)*kmag
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Momentum weight ($\rm eV^{-1} \, \AA^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend(frameon=False)
+    plt.title(r'All $k_x$')
+    plt.savefig(pp.figureLoc+'momentum_flux_all.png',dpi=600)
+
+
+    plt.figure(figsize=triFigSize)
+    dx = (neg_en_axis.max() - neg_en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm, chi)*el_df['kx [1/A]'].values
+        # fulldecay = np.dot(scm, chi)*kmag
+        fulldecay = fulldecay[neg_k_inds]
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((neg_enk[k] - neg_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(neg_en_axis[istart:iend], neg_enk[k], neg_vmags[k], stdev=spread)
+        plt.plot(neg_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Momentum weight ($\rm eV^{-1} \, \AA^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Negative $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'momentum_flux_neg.png',dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    dx = (pos_en_axis.max() - pos_en_axis.min()) / npts
+    spread = 70 * dx
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        fulldecay = np.dot(scm, chi)*el_df['kx [1/A]'].values
+        # fulldecay = np.dot(scm, chi)*kmag
+        fulldecay = fulldecay[pos_k_inds]
+
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((pos_enk[k] - pos_en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(pos_en_axis[istart:iend], pos_enk[k], pos_vmags[k], stdev=spread)
+        plt.plot(pos_en_axis*1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Momentum weight ($\rm eV^{-1} \, \AA^{-1} \, s^{-1}$)')
+    plt.xlabel('Electron energy (meV)')
+    plt.title(r'Positive $k_x$')
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'momentum_flux_pos.png',dpi=600)
+
+    plt.figure(figsize=triFigSize)
+    for i,ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        spread = 70 * dx
+        thermal_energy = utilities.mean_energy(np.zeros(nkpts), el_df)
+        energy_above_thermal = el_df['energy [eV]'] - thermal_energy
+        fulldecay = energy_above_thermal*chi
+
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis * 1000, decay, color=fieldcolors[i+1], label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.ylabel(r'Excess energy weight (unitless)')
+    plt.xlabel('Electron energy (meV)')
+    plt.legend()
 
 
 if __name__ == '__main__':
@@ -470,14 +967,18 @@ if __name__ == '__main__':
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     fields = pp.small_signal_fields
-    freq = pp.freqGHz
+    freq = pp.freqVector[0]
+    # freq = 6.2e2
+    print(freq)
 
-    plot_noise_kde(electron_df, fields)
+    # plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    plot_mom_KDEs(fields, electron_df,saveData=True)
+    # plot_mom_KDEs(fields, electron_df,saveData=True)
     # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
     # plot_energy_sep_lf(electron_df, fields)
     # plot_2d_dist(electron_df, fields[-1])
+
+    # plot_noise_kde(electron_df, fields)
     plt.show()

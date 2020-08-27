@@ -448,7 +448,6 @@ def write_icinds(df):
         np.save(pp.outputLoc + 'L_right_icinds', l_r_inds)  # All 8 L valley indices saved together
 
 
-
 def writeOutputFile():
     from datetime import datetime
     now = datetime.now()
@@ -474,13 +473,13 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     fields = pp.small_signal_fields
     freqs = pp.freqVector
-
+    # fields = pp.moment_fields
     print(utilities.calculate_density(electron_df))
 
     # Toggle to run calculations for transient or steady BTE solutions.
-    writeTransient = False
+    writeTransient = True
     writeSteady = True
-    writeIcinds = False
+    writeIcinds = True
     if writeSteady:
         write_steady(fields, electron_df)
     if writeTransient:

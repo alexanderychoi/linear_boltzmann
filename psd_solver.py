@@ -8,6 +8,20 @@ import numpy.linalg
 from scipy.sparse import linalg
 import occupation_solver
 
+# Set the parameters for the paper figures
+SMALL_SIZE = 9
+MEDIUM_SIZE = 12
+BIGGER_SIZE = 14
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+
 # PURPOSE: THIS MODULE CONTAINS FUNCTIONS USED TO CALCULATE AND PLOT THE POWER SPECTRAL DENSITY OF CURRENT FLUCTUATIONS.
 # THE CALCULATION INVOLVES LOADING A STEADY BOLTZMANN TRANSPORT SOLUTION, CALCULATING THE EFFECTIVE DISTRIBUTION FCN
 # INDEXED BY FREQUENCY AND FIELD STRENGTH, AND TAKING THE APPROPRIATE BZ SUM OVER THE EFFECTIVE DISTRIBUTION TO GET THE
@@ -182,6 +196,81 @@ def write_correlation(fieldVector,df,freqVector):
             print('\n \n')
 
 
+def write_energy_correlation(fieldVector,df,freqVector):
+    """Calls the GMRES solver hard coded for solving the effective BTE w/FDM and writes the effective distribution to
+    file. Calculates the longitudinal (xx) and transverse (yy) effective distribution functions.
+    Parameters:
+        fieldVector (nparray): Vector containing the values of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        freq (dbl): Frequency in GHz to be used for the transient solution
+    Returns:
+        None. Just writes the chi solutions to file. chi_#_EField. #1 corresponds to low-field RTA, #2 corresponds to
+        low-field iterative, #3 corresponds to full finite-difference iterative.
+    """
+    nkpts = len(np.unique(df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    for freq in freqVector:
+        for ee in fieldVector:
+            chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+            fdm = np.memmap(pp.inputLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+            f0 = df['k_FD'].values
+            f = chi + f0
+            Ex = utilities.mean_energy(chi, df)
+            b_xx = (-1) * ((df['energy [eV]'] - Ex)*c.e * f)
+            # b_yy = (-1) * ((df['energy [eV]'])*c.e * f)
+
+            corr_xx, corr_xx_RTA, _, _ = occupation_solver.gaas_inverse_relaxation_operator(b_xx, scm, fdm, df, ee, freq)
+
+            del fdm
+            # This may be a problem since writing fdm twice????????????????????????
+            # fdm = np.memmap(pp.inputLoc + 'finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
+            # corr_yy, corr_yy_RTA, _, _ = occupation_solver.gaas_inverse_relaxation_operator(b_yy, scm, fdm, df, ee, freq)
+
+            # del fdm
+            np.save(pp.outputLoc + 'E_Density/' + 'xx_' + '3_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx)
+            np.save(pp.outputLoc + 'E_Density/' + 'xx_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_xx_RTA)
+            # np.save(pp.outputLoc + 'E_Density/' + 'yy_' + '3_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy)
+            # np.save(pp.outputLoc + 'E_Density/' + 'yy_' + '1_' + "f_{:.1e}_E_{:.1e}".format(freq,ee),corr_yy_RTA)
+            print('Transient solution written to file for ' + "{:.1e} V/m and {:.1e} GHz".format(ee,freq))
+            print('\n \n')
+
+
+def energy_density(chi, EField,df,freq, partialSum = False, cutoff = 0):
+    """Calls the GMRES solver hard coded for solving the effective BTE w/FDM and writes the effective distribution to
+    file. Calculates the longitudinal (xx) and transverse (yy) effective distribution functions.
+    Parameters:
+        chi (nparray): Containing the non-equilibrium solution to the BTE to be used for calculating the effective dist.
+        EField (dbl): The value of the electric field to be evaluated in V/m.
+        df (dataframe): Electron DataFrame indexed by kpt containing the energy associated with each state in eV.
+        freq (dbl): Frequency in GHz to be used for the transient solution
+        partialSum (bool): If "True", apply an energy cutoff and only consider the contribution of states below.
+        cutoff (dbl): Value of the energy cutoff in eV.
+    Returns:
+        None. Just writes the effective distribution solutions to file. Hardcoded for type #3 solutions. FDM + Perturbo
+    TODO: Right now the "RTA" solutions are not impletmented well. They represent the problem with full FDM being solved
+    using only the on-diagonal elements of the Perturbo scattering matrix. They are still using the chi solution to the
+    transport BTE that uses the full Perturbo scattering matrix, so this is not implemented correctly yet. It isn't
+    being plotted at the moment.
+    """
+    Nuc = pp.kgrid ** 3
+    conductivity_xx = 2 * c.e / (Nuc * c.Vuc * EField) * np.sum(chi * df['vx [m/s]'])
+    print('Conductivity is {:3f} S/m at E = {:.1f} V/cm'.format(conductivity_xx,EField/100))
+    n = utilities.calculate_density(df)
+    print('Carrier density is {:3e} cm^-3'.format(n/100**3))
+    mobility = conductivity_xx/c.e/n
+    print('Mobility is {:3f} cm^2/(V-s)'.format(mobility*100**2))
+
+    corr_xx = np.load(pp.outputLoc + 'E_Density/' +'xx_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, EField))
+
+    prefactor = (1 / Nuc / c.kb_joule) ** 2
+    S_xx = 8*np.real(prefactor*np.sum(corr_xx*(df['energy [eV]']-np.min(df['energy [eV]']))*c.e))
+    if partialSum:
+        print('Calculating spectral density using a cutoff.')
+        energyInds = np.array(df['energy [eV]'].values < cutoff+ np.min(df['energy [eV]']))
+
+    return S_xx
+
+
 def density(chi, EField,df,freq, partialSum = False, cutoff = 0):
     """Calls the GMRES solver hard coded for solving the effective BTE w/FDM and writes the effective distribution to
     file. Calculates the longitudinal (xx) and transverse (yy) effective distribution functions.
@@ -285,6 +374,31 @@ def plot_density(fieldVector,freqVector,df):
     plt.xscale('log')
 
 
+def plot_energy_density(fieldVector,freqVector,df):
+    """Makes plots of the spectral density as a function of frequency and field. Right now hard coded to return the plots
+    of only the type #3 solutions using Perturbo SCM + FDM."""
+    fig, ax = plt.subplots()
+    colorList = ['black', 'dodgerblue', 'tomato']
+    i = 0
+    for ee in fieldVector:
+        S_xx_vector = []
+        for freq in freqVector:
+            chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+            S_xx = energy_density(chi, ee, df, freq)
+            S_xx_vector.append(S_xx)
+        S_xx_vector = np.array(S_xx_vector)
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.plot(freqVector, S_xx_vector, label=r'{:.1f} '.format(ee/100) + r'$\rm V \, cm^{-1}$',color=colorList[i])
+        i = i + 1
+
+    plt.legend()
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Temperature fluctuation PSD ' + r'$ \rm (K^2 \, Hz^{-1})$')
+    plt.xscale('log')
+    plt.savefig(pp.figureLoc +'temperature_PSD.png', bbox_inches='tight',dpi=600)
+
+
+
 if __name__ == '__main__':
     # Create electron and phonon dataframes
 
@@ -299,7 +413,11 @@ if __name__ == '__main__':
     # freqs = np.array([0.1])
 
 
-    write_correlation(fields,electron_df,freqs)
-    plot_density(fields, freqs, electron_df)
+    # write_correlation(fields,electron_df,freqs)
+    # write_correlation(pp.moment_fields, electron_df, np.array([0.1]))
+    # plot_density(fields, freqs, electron_df)
+
+    # write_energy_correlation(fields,electron_df,freqs)
+    # plot_energy_density(fields, freqs, electron_df)
 
     plt.show()
