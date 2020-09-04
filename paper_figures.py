@@ -13,9 +13,10 @@ import matplotlib.ticker as tck
 import matplotlib
 
 # Set the parameters for the paper figures
-SMALL_SIZE = 7
-MEDIUM_SIZE = 8
+SMALL_SIZE = 7.6
+MEDIUM_SIZE = 8.5
 BIGGER_SIZE = 12
+different_small_size = 6.4
 
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
@@ -26,27 +27,61 @@ plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
-# plt.rcParams["font.family"] = "serif"
+plt.rcParams["font.family"] = "sans-serif"
+
+matplotlib.rcParams['mathtext.fontset'] = 'custom'
+matplotlib.rcParams['mathtext.rm'] = 'Bitstream Vera Sans'
+matplotlib.rcParams['mathtext.it'] = 'Bitstream Vera Sans:italic'
+matplotlib.rcParams['mathtext.bf'] = 'Bitstream Vera Sans:bold'
+
+
 # matplotlib.rcParams['mathtext.fontset'] = 'stix'
 # matplotlib.rcParams['font.family'] = 'STIXGeneral'
 # The first color defined below is the previous color
-eq_color = 'black'
-eq_color = '#E6D551'
-med_color = '#23aaff'
-med_color = '#F07E07'
-high_color = '#ff6555'
-high_color = '#D62B09'
+# eq_color = '#E6D551'
+# med_color = '#F07E07'
+# high_color = '#D62B09'
+#
+# eq_color = '#002341'
+# med_color = '#5E8BB0'
+# high_color = '#E50027'
+#
+# eq_color = '#004197'
+# med_color = '#7F3E71'
+# high_color = '#DF265E'
+#
+# eq_color = '#000C20'
+# med_color = '#F1B420'
+# high_color = '#EF3340'
+#
+# eq_color = '#000C20'
+# med_color = '#F1B420'
+# high_color = '#EF3340'
+#
+# eq_color = '#1F2231'
+# med_color = '#01DEE6'
+# high_color = '#F3322B'
 
-rta_color = 'darkorange'
+eq_color = '#0C1446'
+med_color = '#2740DA'
+high_color = '#FF3F00'
+
+# eq_color = '#C1DDF0'
+# med_color = '#1679CB'
+# high_color = '#000066'
+#
+# eq_color = '#8BC3EC'
+# med_color = '#153250'
+# high_color = '#CE0000'
+
+
 rta_color = '#01949A'
-cold_color = 'steelblue'
 cold_color = '#004369'
-warm_color = 'firebrick'
 warm_color = '#D62B09'
 
 columnwidth = 3.375
 triFigSize = (2.25, 2.5)
-dualFigSize = (3.375, 3.375)
+dualFigSize = (3.375,3.5)
 
 # PURPOSE: THIS MODULE CONTAINS PLOTTING CODE TO RENDER THE PLOTS THAT WILL GO INTO THE PAPER.
 
@@ -78,9 +113,9 @@ def linear_mobility_paperplot(fieldVector,df):
         meanE_2.append(utilities.mean_energy(chi_2_i,df))
         meanE_3.append(utilities.mean_energy(chi_3_i,df))
 
-    plt.figure(figsize=triFigSize)
-    ax = plt.axes([0.2, 0.19, 0.75, 0.76])
-
+    plt.figure(figsize=(2.05,2.5))
+    # ax = plt.axes([0.2, 0.19, 0.75, 0.76])
+    ax = plt.axes([0.21, 0.19, 0.75, 0.75])
     mufac = 1000
     # mufac = 1000
     ax.plot(vcm, np.array(mu_3)/mufac, '-', linewidth=lw, label='Warm', color=warm_color)
@@ -88,10 +123,11 @@ def linear_mobility_paperplot(fieldVector,df):
     ax.plot(vcm, np.array(mu_1)/mufac, '--', linewidth=lw, label='RTA', color=rta_color)
 
     plt.xlim([0,np.max(fieldVector)/100])
-    plt.xlabel(r'Field ($\rm V \, cm^{-1}$)')
+    plt.xlabel(r'Electric field ($\rm V \, cm^{-1}$)')
     # plt.ylabel(r'$\sigma^{\omega = 0}_{\parallel}$ ($\rm cm^2 \, kV^{-1}\, s^{-1}$)')
     plt.ylabel(r'DC mobility (1000 $\rm cm^2 \, V^{-1}\, s^{-1}$)')
     plt.ylim([0.8e4/mufac, 2e4/mufac])
+    ax.locator_params(axis='x', nbins=6)
     # plt.legend(ncol=3,loc='lower center',frameon=False)
     plt.legend(frameon=False)
     plt.savefig(pp.figureLoc +'linear_mobility2.png',dpi=600)
@@ -101,7 +137,7 @@ def linear_mobility_paperplot(fieldVector,df):
     plt.plot(vcm,(np.array(meanE_1) -np.min(df['energy [eV]']))*1000,'-', linewidth=lw, label='RTA')
     plt.plot(vcm,(np.array(meanE_2) -np.min(df['energy [eV]']))*1000,'-', linewidth=lw, label='Cold '+r'$e^{-}$')
     plt.plot(vcm,(np.array(meanE_3) -np.min(df['energy [eV]']))*1000,'-', linewidth=lw, label='Warm '+r'$e^{-}$')
-    plt.xlabel(r'Field [$kV/cm$]')
+    plt.xlabel(r'Electric field [$kV/cm$]')
     plt.ylabel(r'Mean Energy [meV]')
     plt.title(pp.title_str)
     plt.savefig(pp.figureLoc +'meanEnergy_vField.png', bbox_inches='tight',dpi=600)
@@ -130,7 +166,8 @@ def small_signal_mobility_paperplot(fieldVector, freqVector, df):
     plt.legend(ncol=3,loc='lower center')
     plt.savefig(pp.figureLoc+'ac_mobility.png', bbox_inches='tight',dpi=600)
 
-    plt.figure(figsize=(2.5, 2.5))
+
+    plt.figure(figsize=(2.05, 2.5))
     ax = plt.axes([0.21, 0.19, 0.75, 0.75])
     i = 0
     for ee in fieldVector:
@@ -158,6 +195,12 @@ def small_signal_mobility_paperplot(fieldVector, freqVector, df):
     plt.xlim([freqs[0], freqs[-1]])
     # ax.text(0.55, 0.95, textstr, transform=ax.transAxes, fontsize=8, verticalalignment='top', bbox=props)
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    plt.xlim([freqVector[0],freqVector[-1]])
+    locmaj = matplotlib.ticker.LogLocator(base=10, numticks=6)
+    ax.xaxis.set_major_locator(locmaj)
+    locmin = matplotlib.ticker.LogLocator(base=10.0, subs=np.arange(2, 10) * .1,
+                                          numticks=100)
+    ax.xaxis.set_minor_locator(locmin)
     plt.savefig(pp.figureLoc+'Real_ac_mobility.png',dpi=600)
 
     fig, ax = plt.subplots()
@@ -331,7 +374,7 @@ def momentum_kde2_paperplot(fields):
     k_ax = np.load(pp.outputLoc + 'Momentum_KDE/' + 'k_ax_' + '2_' + "E_{:.1e}.npy".format(fields[0]))
     # ax.plot(k_ax, np.zeros(len(k_ax)), '-', linewidth=lw, color=eq_color, label='Equilibrium')
     # ax.plot(k_ax, np.zeros(len(k_ax)), '-', linewidth=lw, color=eq_color)
-    ax.axhline(0, color='gray', linewidth=0.8, alpha=0.5)
+    ax.axhline(0,linestyle='--', color='black', linewidth=0.5)
     # ax.axvline(0, color='gray', linewidth=0.8, alpha=0.5)
     for ee in fields:
         ee_Vcm = ee/100
@@ -364,7 +407,7 @@ def momentum_kde2_paperplot(fields):
     # plt.grid()
     # plt.ylabel(r'$\delta f_{\mathbf{k}}/f_{\mathbf{k}}^0$')
     # plt.ylim([-1,1])
-    plt.legend(loc=(0.00, 0.70), frameon=False, fontsize=6.7)
+    plt.legend(frameon=False)
     plt.savefig(pp.figureLoc+'momentum_KDE2.png', dpi=600)
 
 
@@ -710,8 +753,8 @@ if __name__ == '__main__':
     # Define a custom range of fields for the paper plots
     mom_kde_fields = np.array([1e2,1e4,4e4])
     energy_kde_fields = np.array([1e4,4e4])
-    moment_fields = np.geomspace(1e2,4e4,20)
-    moment_fields = np.linspace(1e2,5e4,20)
+    moment_fields = np.geomspace(1e2,5e4,20)
+    # moment_fields = np.linspace(1e2,5e4,10)
     small_signal_fields = np.array([1e-3,1e4,5e4])
     cutoffVector = np.linspace(0.001,0.2,5000)
 
@@ -727,8 +770,8 @@ if __name__ == '__main__':
 
     # momentum_kde_paperplot(mom_kde_fields)
     # momentum_kde2_paperplot(small_signal_fields[1:])
-    # linear_mobility_paperplot(pp.moment_fields[5:], electron_df)
-    momentum_kde2_paperplot(fields)
+    # linear_mobility_paperplot(moment_fields[5:], electron_df)
+    # momentum_kde2_paperplot(fields)
     # linear_mobility_paperplot(moment_fields, electron_df)
     # energy_kde_paperplot(energy_kde_fields, electron_df)
     # small_signal_mobility_paperplot(pp.small_signal_fields,freqs,electron_df)
@@ -741,6 +784,6 @@ if __name__ == '__main__':
     # calculate_electron_temperature(electron_df, np.geomspace(300,600,100))
     # plotScatteringRate()
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields,freqs[0])
-    occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields)
-    # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields,freqs[-1])
+    occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields[2:])
+    occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields[1:],freqs[-1])
     plt.show()
