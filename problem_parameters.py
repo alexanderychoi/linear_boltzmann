@@ -43,12 +43,31 @@ figureLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_s
 
 
 # Alex Dropbox directories
+subproblemVer = '1_Subproblem/'
+
+# Grid used for plots in the paper as of 8/10/20:
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/12_Problem_Paper/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/12_Problem_Paper/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/12_Problem_Paper/2_Output/'+subproblemVer+'PaperFigures/'
+
+inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/13_Problem_Paper/0_Data/'
+outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/13_Problem_Paper/1_Pipeline/'+subproblemVer
+figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/13_Problem_Paper/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.35eV_window/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.35eV_window/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.35eV_window/2_Output/'+subproblemVer+'PaperFigures/'
 # subproblemVer = '4_Subproblem/'
 
 # Grid used for plots in the paper as of 7/27/20:
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/1_Pipeline/'+subproblemVer
 # figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/6_Problem/2_Output/'+subproblemVer+'PaperFigures/'
+
 
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/5_Problem_080kpts_0.4eV/1_Pipeline/'+subproblemVer
@@ -67,6 +86,15 @@ figureLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_s
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/1_Pipeline/'+subproblemVer
 # figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/160_kpts_0.3eV_window/2_Output/'+subproblemVer+'PaperFigures/'
 
+#
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/400K/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/400K/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/400K/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/200K/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/200K/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/11_Problem_Temperature/200K/2_Output/'+subproblemVer+'PaperFigures/'
+
 
 # Old grids:
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/7_Problem/0_Data/'
@@ -78,6 +106,12 @@ figureLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_s
 
 
 # BLOCK 2: PHYSICAL PROBLEM PARAMETERS: FIELDS AND FREQUENCIES
+# fieldVector = np.array([1e-3,1e4,4e4])							# GaAs fields for noise plots
+# fieldVector =np.geomspace(1e2,4e4,20)  								# GaAs fields for moment plots
+moment_fields = np.geomspace(1e2, 5e4, 20)
+# small_signal_fields = np.array([1e-3, 1e4, 4e4])
+small_signal_fields = np.array([1e-3,1e4,5e4])
+# fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))
 # fieldVector = np.array([1e-3, 1e4, 4e4])							# GaAs fields for noise plots
 # fieldVector =np.geomspace(1e2,4e4,20)  							# GaAs fields for moment plots
 fieldVector = np.array([1e4, 5e4])										# Highest field for paper, convergence tests
@@ -93,7 +127,8 @@ small_signal_fields = np.array([1e-3, 1e4, 5e4])
 # Field direction (for now only implemented for Si, not GaAs)
 fieldDirection = np.array([1, 1, 1])  								# Crystal direction of field orientation (x,y,z)
 
-freqVector = np.geomspace(0.1, 10000, 30)  							# GaAs freqs for small signal freq plot
+freqVector = np.geomspace(0.1,10000,30)  							# GaAs freqs for small signal freq plot
+# freqVector = np.geomspace(0.1,10000,15)
 # freqVector = np.array(freqVector[0:3])
 # freqVector = np.array([0.1])										# Low freq for testing
 # freqVector = np.array([1,5,10,50,100]) 							# Si frqs

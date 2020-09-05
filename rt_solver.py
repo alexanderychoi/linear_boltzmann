@@ -102,17 +102,18 @@ def plot_relaxation(df,fieldVector):
     enRTs_fs_e = np.array(enRTs_e)*1e15
 
     plt.figure()
-    plt.plot(Vcm,momRTs_fs,'.',label = 'Momentum')
-    plt.plot(Vcm,enRTs_fs_a,'.',label = 'Fischetti Energy above CBM')
-    plt.plot(Vcm,enRTs_fs_b,'.',label = 'Fischetti Energy above Thermal')
-    plt.plot(Vcm,enRTs_fs_c,'.',label = 'Fischetti Energy above Fermi')
-    plt.plot(Vcm,enRTs_fs_d,'.',label = 'Harnagel Energy above Thermal')
-    plt.plot(Vcm,enRTs_fs_e,'.',label = 'Hartnagel Energy above CBM')
+    plt.plot(Vcm,momRTs_fs,'-',label = 'Momentum')
+    # plt.plot(Vcm,enRTs_fs_a,'.',label = 'Fischetti Energy above CBM')
+    plt.plot(Vcm,enRTs_fs_b,'-',label = 'Fischetti Energy above Thermal')
+    # plt.plot(Vcm,enRTs_fs_c,'.',label = 'Fischetti Energy above Fermi')
+    plt.plot(Vcm,enRTs_fs_d,'-',label = 'Harnagel Energy above Thermal')
+    # plt.plot(Vcm,enRTs_fs_e,'.',label = 'Hartnagel Energy above CBM')
 
-    plt.ylabel(r'Relaxation time (fs)')
-    plt.xlabel(r'Electric field ($V \, cm^{-1})$')
+    plt.ylabel(r'Energy relaxation time (fs)')
+    plt.xlabel(r'Electric field ($\rm V \, cm^{-1})$')
     plt.yscale('log')
-    plt.legend()
+    plt.legend(loc = 'lower left')
+    plt.ylim(100,3000)
 
 
 def single_lorentzian_RT(f, A, tau):
@@ -145,7 +146,7 @@ def fit_double_lorentzian_rt(freq,quant,A2,tau2):
 
 if __name__ == '__main__':
     # Create electron and phonon dataframes
-    preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
+    # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     fields = np.geomspace(1e2,4e4,20)

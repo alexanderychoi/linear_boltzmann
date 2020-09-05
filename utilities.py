@@ -278,9 +278,10 @@ def mean_energy(chi, df):
     """
     f0 = df['k_FD'].values
     f = chi + f0
-    meanE = np.sum(f * df['energy [eV]']) / np.sum(f)
+    meanE = np.sum(f * df['energy [eV]']) / np.sum(f0)
     eq_en = np.sum(f0 * df['energy [eV]']) / np.sum(f0)
-    # print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
+    n = calculate_noneq_density(chi,df)
+    print('Carrier density (including chi) is {:.10E}'.format(n * 1E-6) + ' per cm^{-3}')
     print('Mean carrier energy is {:.10E} [eV]'.format(meanE))
     # print('Equilibrium carrier energy is {:.10E} [eV]'.format(eq_en))
 

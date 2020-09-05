@@ -11,9 +11,10 @@ import matplotlib.font_manager
 import paper_figures
 
 # Set the parameters for the paper figures
-SMALL_SIZE = 12
-MEDIUM_SIZE = 12
-BIGGER_SIZE = 14
+SMALL_SIZE = 5.8
+MEDIUM_SIZE = 10
+BIGGER_SIZE = 12
+
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
 plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
@@ -27,6 +28,14 @@ perturboColor = 'firebrick'
 frohlichColor = 'steelblue'
 adpColor = 'darkorange'
 
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+plt.rcParams["font.family"] = "serif"
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
+
+triFigSize = (4,4)
+dualFigSize = (3.375,3.375)
 
 def acoustic_davydovDistribution(df,ee,pA,eRT_Ratio):
     carrierEnergy = (df['energy [eV]'] - pp.mu)*c.e
@@ -206,7 +215,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
     enk_300 = dat_300[:, 3]  # eV
 
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=triFigSize)
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
     textstr = 'ADP Coefficient = %.1e ' % pA +r'$J^{1/2} \, s$'+ '\n' + r'$\tau_p/\tau_{\epsilon} = %.2f$' % ratio + \
               '\n' + r'Frohlich inverse RT = %.2f 1/ps' % inverseFrohlichTimeps + \
@@ -227,7 +236,7 @@ def plot_scattering(df,pA,eRT_Ratio,opticalPhononEnergy, inverseFrohlichTime):
     # plt.savefig(pp.figureLoc +'davydovRates.png', bbox_inches='tight',dpi=600)
 
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=triFigSize)
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
     textstr = 'ADP Coefficient = %.1e ' % pA +r'$J^{1/2} \, s$'+ '\n' + r'$\tau_p/\tau_{\epsilon} = %.2f$' % ratio + \
               '\n' + r'Frohlich inverse RT = %.2f 1/ps' % inverseFrohlichTimeps + \
@@ -313,7 +322,7 @@ def plot_davydov_density_v_field(fieldVector, freq, df, pA, opticalPhononEnergy,
 
     vcm = np.array(fieldVector) * 1e-2
     Nuc = pp.kgrid ** 3
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=triFigSize)
     ax.axhline(np.array(conductivity_xx_vector[0]) * 4 * c.kb_joule * pp.T / c.Vuc / Nuc, linestyle='--',
                label='Nyquist-Johnson',color='black')
     ax.plot(vcm, np.array(S_xx_acoustic_Davy),'--',color=adpColor, label='ADP',linewidth=lw)
@@ -325,23 +334,23 @@ def plot_davydov_density_v_field(fieldVector, freq, df, pA, opticalPhononEnergy,
     plt.ylabel('Current fluctuation PSD ' r'$\rm (A^2 \, m^4 \, Hz^{-1})$')
     # plt.savefig(pp.figureLoc +'density_vField.png', bbox_inches='tight',dpi=600)
 
-    # T_vector = np.geomspace(300,500,1000)
-    # energy_vector = paper_figures.calculate_electron_temperature(df,T_vector)
-    #
-    # aco_Temp = np.interp(davyAcoEnergy,energy_vector,T_vector)
-    # fro_Temp = np.interp(davyFroEnergy,energy_vector,T_vector)
-    # minEnergy = np.min(df['energy [eV]'])
-    # pertEnergy_red = np.array(pertEnergy)-minEnergy
-    # pert_Temp = np.interp(pertEnergy,energy_vector,T_vector)
-    #
-    # fig, ax = plt.subplots()
-    # ax.plot(vcm, aco_Temp,'--',color=adpColor, label='ADP',linewidth=lw)
-    # ax.plot(vcm, fro_Temp,'--',color=frohlichColor, label = r'$\rm Fr\"{o}hlich$',linewidth=lw)
-    # ax.plot(vcm, pert_Temp, color = perturboColor, label='PERTURBO',linewidth=lw)
-    # plt.legend()
-    # plt.xlabel('Field '+ r'$\rm (V \, cm^{-1})$')
-    # plt.ylabel('Electron temperature (K)')
-    # plt.savefig(pp.figureLoc +'meanEnergy.png', bbox_inches='tight',dpi=600)
+    T_vector = np.geomspace(300,500,1000)
+    energy_vector = paper_figures.calculate_electron_temperature(df,T_vector)
+
+    aco_Temp = np.interp(davyAcoEnergy,energy_vector,T_vector)
+    fro_Temp = np.interp(davyFroEnergy,energy_vector,T_vector)
+    minEnergy = np.min(df['energy [eV]'])
+    pertEnergy_red = np.array(pertEnergy)-minEnergy
+    pert_Temp = np.interp(pertEnergy,energy_vector,T_vector)
+
+    fig, ax = plt.subplots(figsize=triFigSize)
+    ax.plot(vcm, aco_Temp,'--',color=adpColor, label='ADP',linewidth=lw)
+    ax.plot(vcm, fro_Temp,'--',color=frohlichColor, label = r'$\rm Fr\"{o}hlich$',linewidth=lw)
+    ax.plot(vcm, pert_Temp, color = perturboColor, label='PERTURBO',linewidth=lw)
+    plt.legend()
+    plt.xlabel('Field '+ r'$\rm (V \, cm^{-1})$')
+    plt.ylabel('Electron temperature (K)')
+    plt.savefig(pp.figureLoc +'meanEnergy.png', bbox_inches='tight',dpi=600)
 
 
 def plot_density(ee, freqVector, full_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio):
@@ -372,7 +381,7 @@ def plot_density(ee, freqVector, full_df, pA, opticalPhononEnergy, inverseFrohli
             np.load(pp.outputLoc + 'Small_Signal/' + 'cond_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, 1e-3)))
 
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=triFigSize)
     ax.plot(freqVector, np.array(cond) * 4 * c.kb_joule * pp.T / c.Vuc / Nuc, linestyle='--',
             label=r'Nyquist-Johnson',
             color='black')
@@ -437,7 +446,7 @@ if __name__ == '__main__':
     pA = 4.4481e-23 # 13 Problem
 
     # Ratio of energy to moment relaxation times for Frohlich and ADP
-    eRT_Ratio = 65
+    eRT_Ratio = 5
 
     # Inverse Frohlich time as per Vatsal's paper Eqn. 1
     # inverseFrohlichTime = 5.6892967e12 # 12 Problem
@@ -452,5 +461,5 @@ if __name__ == '__main__':
     plot_scattering(g_df.reset_index(drop=True),pA,eRT_Ratio,opticalPhononEnergy,inverseFrohlichTime)
     # plot_davydov_density_v_field(pp.moment_fields, 0.1, g_df.reset_index(drop=True), pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
     plotdavydovDistributions(4e4, g_df.reset_index(drop=True), pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
-    # plot_density(5e4, freqs, electron_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
+    plot_density(5e4, freqs, electron_df, pA, opticalPhononEnergy, inverseFrohlichTime, eRT_Ratio)
     plt.show()

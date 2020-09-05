@@ -506,13 +506,13 @@ if __name__ == '__main__':
     fields = pp.moment_fields
     # fields = pp.small_signal_fields
     freqs = pp.freqVector
-
+    # fields = pp.moment_fields
     print(utilities.calculate_density(electron_df))
 
     # Toggle to run calculations for transient or steady BTE solutions.
-    writeTransient = False
+    writeTransient = True
     writeSteady = True
-    writeIcinds = False
+    writeIcinds = True
     if writeSteady:
         write_steady(fields, electron_df)
     if writeTransient:

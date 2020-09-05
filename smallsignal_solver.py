@@ -5,6 +5,7 @@ import problem_parameters as pp
 import preprocessing
 import occupation_solver
 import matplotlib.pyplot as plt
+import psd_solver
 
 # PURPOSE: THIS MODULE CONTAINS FUNCTIONS USED TO CALCULATE AND PLOT THE SMALL SIGNAL AC CONDUCTIVITY. RIGHT NOW THIS IS
 # HARDCODED FOR GAAS WITH THE FIELD IN THE [1 0 0], BUT CAN BE EASILY GENERALIZED.
@@ -59,8 +60,8 @@ def longitudinal_small_signal_conductivity(df, fieldVector, freqVector):
                 np.save(pp.outputLoc + 'Small_Signal/' + 'linear_cond_3_' + "f_{:.1e}_E_{:.1e}".format(freq, ee),
                         linear_conductivity)  # This is the portion which is proportional to the equilibrium derivative.
                                               # It makes sense to split these up because we know the derivative of the eq.
-                                              # term analytically.
-
+                                              # tern analytically.
+                np.save(pp.outputLoc + 'Small_Signal/'+'decomp_cond_3_'+ "f_{:.1e}_E_{:.1e}".format(freq, ee),df['vx [m/s]']*(chi_3t_i/ee - c.e/c.hbar_joule*bp))
             if ee == 0:  # This is a special case, see Overleaf. Chi = 0 obviously, so have to calculate differently.
                 print('Field is zero. Calculating accordingly.')
                 fdm2 = np.memmap(pp.inputLoc + '/finite_difference_matrix2.mmap', dtype='float64', mode='w+',
@@ -117,6 +118,20 @@ if __name__ == '__main__':
     fields = pp.small_signal_fields
     freqs = pp.freqVector
 
+    #occupation_solver.write_steady(pp.moment_fields, electron_df)
+    #occupation_solver.write_transient(fields, electron_df, freqs)
+
     longitudinal_small_signal_conductivity(electron_df, fields, freqs)
     plot_small_signal_conductivity(fields, freqs, electron_df)
+
+    #psd_solver.write_correlation(fields,electron_df,freqs)
+    #psd_solver.write_correlation(pp.moment_fields, electron_df, np.array([0.1]))
+    #psd_solver.plot_density(fields, freqs, electron_df)
+
+    # newFreqs = np.geomspace(1,100,100)
+    # psd_solver.write_energy_correlation(fields,electron_df,newFreqs)
+    # psd_solver.plot_energy_density(fields, np.unique(np.concatenate((freqs, newFreqs))), electron_df)
+    # psd_solver.plot_energy_density(fields, newFreqs, electron_df)
+
+    # psd_solver.plot_energy_density(fields, freqs, electron_df)
     plt.show()
