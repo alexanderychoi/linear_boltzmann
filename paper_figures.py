@@ -826,6 +826,6 @@ if __name__ == '__main__':
     # calculate_electron_temperature(electron_df, np.geomspace(300,600,100))
     # plotScatteringRate()
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields,freqs[0])
-    occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields[2:])
+    # occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields[2:])
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields[1:],freqs[-1])
     plt.show()
