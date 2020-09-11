@@ -6,9 +6,9 @@ from matplotlib.lines import Line2D
 from scipy.spatial import distance
 import numpy.linalg
 import constants as c
-import paper_figures
+# import paper_figures
 from matplotlib.lines import Line2D
-import davydov_utilities
+# import davydov_utilities
 import matplotlib
 
 # PURPOSE: THIS MODULE WILL GENERATE DIRECT VISUALIZATIONS OF THE STEADY DISTRIBUTION FUNCTION AS A FUNCTION OF ELECTRIC
@@ -22,34 +22,37 @@ import matplotlib
 import matplotlib as mpl
 # font = {'size': 11}
 # mpl.rc('font', **font)
-triFigSize = (2.25*1.25,2.25*1.25)
-squareFigSize = (2.53125, 2.53125)
+# triFigSize = (2.25*1.25,2.25*1.25)
+# # squareFigSize = (2.53125, 2.53125)
+# squareFigSize = (3, 3)
+#
+# singleCol_doubleSize = (3.375,3.375/1.4)
+# # SMALL_SIZE = 7.6
+# SMALL_SIZE = 8
+# # SMALL_SIZE = 6
+# # MEDIUM_SIZE = 8.5
+# MEDIUM_SIZE = 9
+# BIGGER_SIZE = 10
+# different_small_size = 5.7
+#
+#
+# plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+# plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
+# plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+# plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+# plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+# plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+#
+# from matplotlib import rcParams
+# rcParams.update({'figure.autolayout': True})
+# plt.rcParams["font.family"] = "sans-serif"
+#
+# matplotlib.rcParams['mathtext.fontset'] = 'custom'
+# matplotlib.rcParams['mathtext.rm'] = 'Bitstream Vera Sans'
+# matplotlib.rcParams['mathtext.it'] = 'Bitstream Vera Sans:italic'
+# matplotlib.rcParams['mathtext.bf'] = 'Bitstream Vera Sans:bold'
 
-singleCol_doubleSize = (3.375,3.375/1.4)
-# SMALL_SIZE = 7.6
-SMALL_SIZE = 6
-# MEDIUM_SIZE = 8.5
-MEDIUM_SIZE = 9.5
-BIGGER_SIZE = 10
-different_small_size = 5.7
-
-
-plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
-plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=different_small_size)    # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
-from matplotlib import rcParams
-rcParams.update({'figure.autolayout': True})
-plt.rcParams["font.family"] = "sans-serif"
-
-matplotlib.rcParams['mathtext.fontset'] = 'custom'
-matplotlib.rcParams['mathtext.rm'] = 'Bitstream Vera Sans'
-matplotlib.rcParams['mathtext.it'] = 'Bitstream Vera Sans:italic'
-matplotlib.rcParams['mathtext.bf'] = 'Bitstream Vera Sans:bold'
 
 def plot_steady_transient_difference(fieldVector, freq):
     """Plotting code to compare the steady-state and transient solutions at a given frequency. Generates plots of the
@@ -637,10 +640,6 @@ def plot_noise_kde(el_df, big_e,freq):
     # plt.ylim([0,2.25e-5])
     plt.savefig(pp.figureLoc + 'Longitudinal_noiseDecomp_0GHz.png', bbox_inches='tight', dpi=600)
 
-
-
-
-
     # plt.figure()
     # vxplot = plt.axes()
     # for i, ee in enumerate(big_e):
@@ -853,22 +852,410 @@ def field_dependence_noise(big_e, el_df):
 
 
 def mom_en_relaxation(el_df, fields):
-    enk = el_df['energy [eV]']
+    enk = el_df['energy [eV]'].values
     enk = enk - enk.min()
-    vmags = el_df['v_mag [m/s]']
+    kx = el_df['kx [1/A]'].values / (2 * np.pi / c.alat)
+    vmags = el_df['v_mag [m/s]'].values
     nkpts = len(np.unique(el_df['k_inds']))
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
 
+    xtext = 'Electron energy (eV)'
+    ytext = r'Average fractional momentum change'
+    valleycolors = ['#004369', '#01949A']
+    if len(fields) < 10:
+        cmap = plt.cm.get_cmap('YlOrRd', len(fields) + 2)
+    else:
+        cmap = plt.cm.get_cmap('inferno', len(fields) + 2)
+    font = {'size': 11}
+    mpl.rc('font', **font)
+    mpl.rcParams['savefig.dpi'] = 300
+    fieldcolors = []
+    for i in range(cmap.N):
+        rgb = cmap(i)[:3]  # will return rgba, we take only first 3 so we get rgb
+        fieldcolors.append(mpl.colors.rgb2hex(rgb))
+
+    npts = 400  # number of points in the KDE
+    en_axis = np.linspace(enk.min(), enk.max(), npts)
+    k_axis = np.linspace(kx.min(), kx.max(), npts)
+    dx = (en_axis.max() - en_axis.min()) / npts
+    dkx = (k_axis.max() - k_axis.min()) / npts
+    spread = 35 * dx
+    kspread = 35 * dkx
+
+    def gaussian(x, mu, stdev=kspread):
+        vals = (1 / (stdev * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / stdev) ** 2)
+        return vals
+
+    def smeared_gauss(x, mu, vmag, stdev=spread):
+        sigma = stdev - (vmag / 1E6) * 0.90 * stdev
+        vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
+        return vals
+
+    # allk = el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat)
+    kx_abs = np.abs(el_df['kx [1/A]'].values / (2 * np.pi / c.alat))
+    # allk = np.linalg.norm(el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat), axis=1)
+    decaymatrix1 = np.zeros((nkpts, nkpts))
+    decaymatrix2 = np.zeros((nkpts, nkpts))
+    for ik in range(nkpts):
+        # deltak = np.linalg.norm(allk - np.tile(allk[ik, :], (nkpts, 1)), axis=1)
+        # deltak = allk[ik] - allk  # |k| - |k'| so positive is momentum decay
+        # deltak = kx_abs[ik] - kx_abs
+        deltak = kx[ik] - kx
+        delta_en = enk[ik] - enk
+        if enk[ik] == 0:
+            continue
+        colk = scm[:, ik].copy()
+        rowk = scm[ik, :].copy()
+        # Should remove the diagonal contribution, but since the deltak for element k is zero, cancels out
+        # decaymatrix[ik, :] = (deltak * rowk * -1) / np.linalg.norm(allk[ik]) / (-1 * scm[ik, ik])
+        # decaymatrix[ik, ik] = np.dot(deltak, colk) / np.linalg.norm(allk[ik]) / (-1 * scm[ik, ik])
+        decaymatrix1[ik, :] = (deltak * rowk * -1)
+        decaymatrix1[ik, ik] = np.dot(deltak, colk)
+        # decaymatrix[ik, :] = (delta_en * rowk * -1) / (-1 * scm[ik, ik]) / enk[ik]
+        # decaymatrix[ik, ik] = np.dot(delta_en, colk) / (-1 * scm[ik, ik]) / enk[ik]
+        decaymatrix2[ik, :] = (delta_en * rowk * -1)
+        decaymatrix2[ik, ik] = np.dot(delta_en, colk)
+        if ik % 1000 == 0:
+            print('Did k = {}'.format(str(ik)))
+
+    # Plot of loss versus fields
+    plt.figure()
+    ax1 = plt.axes()
+    plt.tight_layout()
+    plt.figure()
+    ax2 = plt.axes()
+    plt.tight_layout()
+    plt.figure()
+    ax3 = plt.axes()
+    plt.tight_layout()
+    te = np.zeros(len(fields))
+    tm = np.zeros(len(fields))
+    excess_en = np.zeros(len(fields))
+    excess_kx = np.zeros(len(fields))
+    dfkbelow = np.zeros(len(fields))
+    dfkscale = np.zeros(len(fields))
+    avg_en_lost = np.zeros(len(fields))
+    avg_kx_lost = np.zeros(len(fields))
+    for i, field in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(field))
+        mvp = scm @ chi
+        excess_en[i] = np.sum(chi * enk)
+        excess_kx[i] = np.sum(chi * kx)
+        full_kx = (decaymatrix1 @ chi) / excess_kx[i]
+        full_en = (decaymatrix2 @ chi) / excess_en[i]
+        # full_kx = (decaymatrix1 @ chi)
+        # full_en = (decaymatrix2 @ chi)
+        # full_kx = (decaymatrix1 @ chi) / np.abs(mvp)
+        # full_en = (decaymatrix2 @ chi) / np.abs(mvp)
+        avg_kx_lost[i] = np.average(full_kx)
+        avg_en_lost[i] = np.average(full_en)
+        dfkbelow[i] = np.sum(chi[enk < 0.040])
+        full_kx_kde = np.zeros(npts)
+        full_en_kde = np.zeros(npts)
+        mvp_kde = np.zeros(npts)
+        for k in range(nkpts):
+            # if np.isin(k, l_inds):
+            #     continue
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            full_kx_kde[istart:iend] += full_kx[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            full_en_kde[istart:iend] += full_en[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            mvp_kde[istart:iend] += np.abs(mvp[k]) * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        ax1.plot(en_axis, full_kx_kde, label='{:.0f} V/cm'.format(field/100), color=fieldcolors[i+1])
+        ax2.plot(en_axis, full_en_kde, label='{:.0f} V/cm'.format(field/100), color=fieldcolors[i+1])
+        ax3.plot(en_axis, np.abs(mvp_kde), label='{:.0f} V/cm'.format(field/100), color=fieldcolors[i + 1])
+        tm[i] = np.trapz(full_kx_kde, en_axis)
+        te[i] = np.trapz(full_en_kde, en_axis)
+        momenratio = tm[i] / te[i]
+        print('At {:.0f} V/cm, the momentum:energy relaxation ratio is {:.1f}'.format(field/100, momenratio))
+    ax1.axhline(0, linestyle='--', color='Black', lw=0.5)
+    # ax1.set_ylabel('Momentum loss (norm by excess kx)')
+    ax1.set_ylabel('Mom. loss / total scattering')
+    ax1.set_xlabel(xtext)
+    # ax1.legend()
+    ax2.axhline(0, linestyle='--', color='Black', lw=0.5)
+    # ax2.set_ylabel('Energy loss (norm by excess en)')
+    ax2.set_ylabel('En. loss / total scattering')
+    ax2.set_xlabel(xtext)
+    # ax2.legend()
+    # ax3.axhline(0, linestyle='--', color='Black', lw=0.5)
+    ax3.set_ylabel(r'Total scattering at given energy (1/s)')
+    ax3.set_xlabel(xtext)
+
+    plt.figure()
+    plt.plot(fields/100, avg_en_lost, label='Energy')
+    plt.plot(fields/100, avg_kx_lost, label='Momentum')
+    plt.legend()
+    plt.ylabel('Avg quantity lost')
+    plt.xlabel('Fields')
+
+    plt.figure()
+    plt.plot(fields/100, tm * 1e-12, label='Momentum')
+    plt.plot(fields/100, te * 1e-12, label='Energy')
+    plt.plot(fields/100, (te[0]*1e-12) * (dfkbelow/dfkbelow[0]) / (excess_en/excess_en[0]),
+             linestyle='--', color='C1', label='Extrapolation')
+    plt.plot(fields / 100, (tm[0] * 1e-12) * (fields/fields[0]) / (excess_kx/excess_kx[0]),
+             linestyle='--', color='C0', label='Extrapolation')
+    plt.ylabel('Relaxation rate (1/ps)')
+    plt.xlabel('Fields (V/cm)')
+    plt.legend(frameon=False)
+
+    # plt.figure()
+    # plt.plot(fields / 100, (odchange-1)*100, label='Momentum')
+    # plt.ylabel('Pct. increase full vs diag')
+    # plt.xlabel('Fields (V/cm)')
+    # plt.ylim([100, 120])
+
+    # # Plot of diagonal versus off diagonal momentum loss for chi of field specified below
+    # thisfield = fields[3]
+    # print('Doing diagonal/off diagonal comparison for {:.1f} V/cm'.format(thisfield/100))
+    # chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(thisfield))
+    # excess_en = np.sum(chi * enk)
+    # excess_kx = np.sum(chi * kx)
+    # full_kx = (decaymatrix1 @ chi) / excess_kx
+    # diag_kx = np.diag(decaymatrix1) * chi / excess_kx
+    # full_en = (decaymatrix2 @ chi) / excess_en
+    # diag_en = np.diag(decaymatrix2) * chi / excess_en
+    # full_kx_kde = np.zeros(npts)
+    # diag_kx_kde = np.zeros(npts)
+    # full_en_kde = np.zeros(npts)
+    # diag_en_kde = np.zeros(npts)
+    # # k_diagdecay = np.zeros(npts)
+    # # k_full_enax = np.zeros(npts)
+    # for k in range(nkpts):
+    #     istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+    #     iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+    #     full_kx_kde[istart:iend] += full_kx[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     diag_kx_kde[istart:iend] += diag_kx[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     full_en_kde[istart:iend] += full_en[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     diag_en_kde[istart:iend] += diag_en[k] * smeared_gauss(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+    #     # istart = int(np.maximum(np.floor((kx[k] - k_axis[0]) / dkx) - (4 * kspread / dkx), 0))
+    #     # iend = int(np.minimum(np.floor((kx[k] - k_axis[0]) / dkx) + (4 * kspread / dkx), npts - 1))
+    #     # k_diagdecay[istart:iend] += diagdecay_fs[k] * gaussian(en_axis[istart:iend], kx[k], stdev=kspread)
+    #     # k_full_enax[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], kx[k], stdev=kspread)
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.plot(en_axis, diag_kx_kde, label='Diagonal only', color=fieldcolors[i+1], linestyle='--')
+    # plt.plot(en_axis, full_kx_kde, label='Including off-diagonal', color=fieldcolors[i+1])
+    # plt.title('Field is {:.0f} V/cm'.format(thisfield/100))
+    # plt.ylabel('Momentum loss (norm by excess kx)')
+    # plt.xlabel(xtext)
+    # plt.legend()
+    # plt.tight_layout()
+    # pctdiff = np.trapz(full_kx_kde, en_axis) / np.trapz(diag_kx_kde, en_axis)
+    # print('The full solution for momentum is {:.1f}% of the diagonal solution'.format((pctdiff)*100))
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.plot(en_axis, diag_en_kde, label='Diagonal only', color=fieldcolors[i + 1], linestyle='--')
+    # plt.plot(en_axis, full_en_kde, label='Including off-diagonal', color=fieldcolors[i + 1])
+    # plt.title('Field is {:.0f} V/cm'.format(thisfield / 100))
+    # plt.ylabel('Energy loss (norm by excess en)')
+    # plt.xlabel(xtext)
+    # plt.legend()
+    # plt.tight_layout()
+    # pctdiff = np.trapz(full_en_kde, en_axis) / np.trapz(diag_en_kde, en_axis)
+    # print('The full solution for energy is {:.1f}% of the diagonal solution'.format((pctdiff) * 100))
+
+    # Plot of momentum loss rates parametrically against energy
+    # diagdecayrate = np.diag(decaymatrix1)
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    # plt.plot(enk[g_inds], diagdecayrate[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    # # plt.plot(enk[l_inds], diagdecayrate[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    # plt.ylabel('Momentum loss')
+    # plt.xlabel(xtext)
+    # legend_elements = [Line2D([0], [0], marker='o', lw=0, color=valleycolors[0], label='Gamma', markersize=5),
+    #                    Line2D([0], [0], marker='o', lw=0, color=valleycolors[1], label='L', markersize=5)]
+    # plt.legend(handles=legend_elements)
+    # plt.tight_layout()
+
+    # Plot of momentum loss rates parametrically against energy
+    diagdecayrate = np.diag(decaymatrix2)
+    plt.figure()
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    plt.axvline(0.040, linestyle='--', color='Black', linewidth=0.5)
+    # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    plt.plot(enk[g_inds], diagdecayrate[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    # plt.plot(enk[l_inds], diagdecayrate[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    plt.ylabel(r'Energy loss $\Gamma$ only (eV/s/eV)')
+    plt.xlabel(xtext)
+    legend_elements = [Line2D([0], [0], marker='o', lw=0, color=valleycolors[0], label='Gamma', markersize=5),
+                       Line2D([0], [0], marker='o', lw=0, color=valleycolors[1], label='L', markersize=5)]
+    # plt.legend(handles=legend_elements)
+    plt.tight_layout()
+    # # plt.savefig(pp.figureLoc + 'avg_energy_loss.png', bbox_inches='tight', dpi=400)
+
+    # Plot of loss rates in momentum space
+    diagdecayrate = np.diag(decaymatrix1)
+    plt.figure()
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    plt.plot(kx[g_inds], diagdecayrate[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    # plt.plot(kx[l_inds], diagdecayrate[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    plt.ylabel(r'kx momentum loss $\Gamma$ only (1/s)')
+    plt.xlabel('kx')
+    legend_elements = [Line2D([0], [0], marker='o', lw=0, color=valleycolors[0], label='Gamma', markersize=5),
+                       Line2D([0], [0], marker='o', lw=0, color=valleycolors[1], label='L', markersize=5)]
+    plt.legend(handles=legend_elements)
+    plt.tight_layout()
+
+    # # Plot of momentum loss rates diagonal vs off diagonal
+    # diagdecayrate = np.diag(decaymatrix2)
+    # incl_off_loss = np.sum(decaymatrix2, axis=1)
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    # plt.plot(enk, diagdecayrate, '.', markersize=3.5, color='gray')
+    # plt.plot(enk, incl_off_loss, '.', markersize=3.5, color='black')
+    # plt.ylabel('Energy loss')
+    # plt.xlabel(xtext)
+    # legend_elements = [Line2D([0], [0], marker='o', lw=0, color='gray', label='diagonal', markersize=6),
+    #                    Line2D([0], [0], marker='o', lw=0, color='black', label='offdiagonal', markersize=6)]
+    # plt.legend(handles=legend_elements)
+    # plt.tight_layout()
+
+    # # Plot of momentum loss rates diagonal vs off diagonal
+    # diagdecayrate = np.diag(decaymatrix1)
+    # incl_off_loss = np.sum(decaymatrix1, axis=1)
+    # plt.figure()
+    # plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    # plt.plot(enk, diagdecayrate, '.', markersize=3.5, color='gray')
+    # plt.plot(enk, incl_off_loss, '.', markersize=3.5, color='black')
+    # plt.ylabel('Momentum loss')
+    # plt.xlabel(xtext)
+    # legend_elements = [Line2D([0], [0], marker='o', lw=0, color='gray', label='diagonal', markersize=6),
+    #                    Line2D([0], [0], marker='o', lw=0, color='black', label='offdiagonal', markersize=6)]
+    # plt.legend(handles=legend_elements)
+    # plt.tight_layout()
+
+
+def anisotropy_of_scattering(el_df):
+    enk = el_df['energy [eV]'].values
+    enk = enk - enk.min()
+    kx = el_df['kx [1/A]']
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
+
+    ytext = r'Total energy loss (eV/s)'
+    xtext = 'kx (1/A) for state k'
+    valleycolors = ['#01949A', '#004369']
+
+    allk = el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat)
+    kmag = np.linalg.norm(allk, axis=1)
+    # scatteredk = np.zeros(nkpts)
+    scatteredk = np.zeros((nkpts, 3))
+    avgangle = np.zeros(nkpts)
+    for ik in range(nkpts):
+        if ik == 0:
+            continue
+        colk = scm[:, ik].copy()
+        colk[ik] = 0
+        kpi = np.nonzero(colk)
+        # avgkprime = np.sum(allk * np.tile(colk[:, np.newaxis], (1, 3)), axis=0)  # sum of all k' weighted by theta
+        # scatteredk[ik, :] = avgkprime / scm[ik, ik] * -1  # avg k' magnitude, dividing out theta_tot
+        # scatteredk[ik] = np.linalg.norm(avgkprime) / scm[ik, ik] * -1  # avg k' magnitude, dividing out theta_tot
+        # kprimes = allk[kpi] * np.tile(colk[kpi[0], np.newaxis], (1, 3)) / scm[ik, ik] * -1
+        dotprods = np.sum(allk[kpi] * np.tile(allk[ik, :], (len(kpi), 1)), axis=1)
+        kprimemag = np.linalg.norm(allk[kpi], axis=1)
+        angles = np.degrees(np.arccos(dotprods / kprimemag / np.linalg.norm(allk[ik, :])))
+        avgangle[ik] = np.average(angles[~np.isnan(angles)] * colk[kpi][~np.isnan(angles)] / scm[ik, ik] * -1)
+        if ik % 1000 == 0:
+            print('Did k = {}'.format(str(ik)))
+    # kprimemag = np.linalg.norm(scatteredk, axis=1)
+    # cosangle = np.degrees(np.arccos(np.sum(allk * scatteredk, axis=1) / kprimemag / kmag))  # cosine angle of the dot product
+
+    plt.figure()
+    # plt.plot(kx[g_inds], cosangle[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    # plt.plot(kx[l_inds], cosangle[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    plt.plot(kx[g_inds], avgangle[g_inds], '.', label='Gamma', markersize=3.5, color=valleycolors[0])
+    plt.plot(kx[l_inds], avgangle[l_inds], '.', label='L', markersize=3.5, color=valleycolors[1])
+    plt.ylabel('Angle between k\'_avg and k', fontsize=12)
+    plt.xlabel(xtext, fontsize=11)
+    legend_elements = [Line2D([0], [0], marker='o', lw=0, color=valleycolors[0], label='Gamma', markersize=5),
+                       Line2D([0], [0], marker='o', lw=0, color=valleycolors[1], label='L', markersize=5)]
+    plt.legend(handles=legend_elements)
+
+
+def mom_en_rel_histograms(el_df):
+    enk = el_df['energy [eV]'].values
+    enk = enk - enk.min()
+    kx = el_df['kx [1/A]'].values / (2 * np.pi / c.alat)
+    vmags = el_df['v_mag [m/s]'].values
+    nkpts = len(np.unique(el_df['k_inds']))
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
+
+    font = {'size': 11}
+    mpl.rc('font', **font)
+    mpl.rcParams['savefig.dpi'] = 300
+
+    allk = el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat)
+    diagloss_k = np.zeros(nkpts)  # Momentum
+    diagloss_en = np.zeros(nkpts)  # Energy
+    for ik in range(nkpts):
+        deltak = np.linalg.norm(allk - np.tile(allk[ik, :], (nkpts, 1)), axis=1)
+        delta_en = enk[ik] - enk
+        if enk[ik] == 0:
+            continue
+        colk = scm[:, ik].copy()
+        # Should remove the diagonal contribution, but since the deltak for element k is zero, cancels out
+        diagloss_k[ik] = np.dot(deltak, colk) / (-1 * scm[ik, ik])
+        diagloss_en[ik] = np.dot(delta_en, colk) / (-1 * scm[ik, ik])
+        if ik % 1000 == 0:
+            print('Did k = {}'.format(str(ik)))
+    diagloss_en = diagloss_en * 1000  # so it's in meV instead of eV
+
+    # Parametrically plotting just to see
+    plt.figure()
+    plt.plot(enk[g_inds], diagloss_en[g_inds] * 1000, '.', markersize=3.5, label='Gamma')
+    plt.plot(enk[l_inds], diagloss_en[l_inds] * 1000, '.', markersize=3.5, label='L')
+    plt.xlabel('Electron energy (eV)')
+    plt.ylabel('Avg. en. lost per scattering (meV)')
+    plt.legend()
+    plt.figure()
+    plt.plot(enk[g_inds], diagloss_k[g_inds], '.', markersize=3.5, label='Gamma')
+    plt.plot(enk[l_inds], diagloss_k[l_inds], '.', markersize=3.5, label='L')
+    plt.xlabel('Electron energy (eV)')
+    plt.ylabel('Avg. mom. lost per scattering (norm 2pi/a)')
+    plt.legend()
+
+    # Histograms
+    nbins = 50
+    en_width = (diagloss_en.max() - diagloss_en.min()) / (nbins+10)  # adding 10 to divisor to give a little gap in bars
+    k_width = (diagloss_k.max() - diagloss_k.min()) / (nbins+10)
+    en_bins = np.linspace(diagloss_en.min(), diagloss_en.max() + en_width, nbins)
+    k_bins = np.linspace(diagloss_k.min(), diagloss_k.max() + k_width, nbins)
+    en_bin_inds = np.searchsorted(en_bins, diagloss_en, side='right')
+    k_bin_inds = np.searchsorted(k_bins, diagloss_k, side='right')
+    en_hist = np.zeros(nbins)
+    k_hist = np.zeros(nbins)
+    for i in range(len(en_bin_inds)):
+        en_hist[en_bin_inds[i]] += 1
+        k_hist[k_bin_inds[i]] += 1
+
+    plt.figure()
+    plt.bar(en_bins, en_hist, width=en_width)
+    plt.ylabel('Number of states that lose given avg. energy')
+    plt.xlabel('Average energy lost per scattering event')
+    plt.tight_layout()
+    plt.figure()
+    plt.bar(k_bins, k_hist, width=k_width)
+    plt.ylabel('Number of states that lose given avg. momentum')
+    plt.xlabel('Average momentum lost per scattering event')
+    plt.tight_layout()
 
 
 def energy_KDEs(el_df, fields):
-    lw = 2
+    lw = 1.5
     nkpts = len(np.unique(el_df['k_inds']))
     scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
     ytext = r'Momentum loss (1/s)'
     xtext = 'Electron energy (eV)'
-    valleycolors = ['#2E8BC0', '#0C2D48']
+    valleycolors = ['#004369', '#01949A']
     cmap = plt.cm.get_cmap('YlOrRd', 6)
     fieldcolors = []
     # for i in range(cmap.N):
@@ -891,6 +1278,7 @@ def energy_KDEs(el_df, fields):
         sigma = stdev - (vmag / 1E6) * 0.90 * stdev
         vals = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp((-1 / 2) * ((x - mu) / sigma) ** 2)
         return vals
+
     T_vector = np.geomspace(300,500,1000)
     energy_vector = paper_figures.calculate_electron_temperature(el_df,T_vector)
     carrierEnergy = (el_df['energy [eV]'] - np.min(el_df['energy [eV]']))
@@ -930,7 +1318,7 @@ def energy_KDEs(el_df, fields):
     plt.xlabel('Electron energy (meV)')
     plt.title(r'Negative $k_x$')
     plt.legend(frameon=False)
-    plt.savefig(pp.figureLoc+'energy_KDE_neg.png',dpi=600)
+    plt.savefig(pp.figureLoc+'energy_KDE_neg.png', dpi=600)
 
     pos_k_inds = el_df['kx [1/A]'] > 0
     pos_enk = el_df.loc[pos_k_inds,'energy [eV]'].values
@@ -976,7 +1364,7 @@ def energy_KDEs(el_df, fields):
     plt.xlabel('Electron energy (meV)')
     plt.title(r'Positive $k_x$')
     plt.legend(frameon=False)
-    plt.savefig(pp.figureLoc+'energy_KDE_pos.png',dpi=600)
+    plt.savefig(pp.figureLoc+'energy_KDE_pos.png', dpi=600)
 
     enk = el_df['energy [eV]']
     enk = enk - enk.min()
@@ -986,6 +1374,7 @@ def energy_KDEs(el_df, fields):
     spread = 55 * dx
 
     plt.figure(figsize=squareFigSize)
+    ax = plt.axes([0.24, 0.21, 0.71, 0.71])
     for i, ee in enumerate(fields):
         chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
         chi2 = np.load(pp.outputLoc + '/Steady/chi_2_E_{:.1e}.npy'.format(ee))
@@ -1005,7 +1394,7 @@ def energy_KDEs(el_df, fields):
         hot_boltzdist = hot_boltzdist*np.sum(el_df['k_FD'])/np.sum(hot_boltzdist)
         print(pert_Temp)
         fulldecay = chi
-        fulldecay2 = hot_boltzdist-el_df['k_FD']
+        fulldecay2 = hot_boltzdist - el_df['k_FD']
         fulldecay3 = chi2
         fulldecay4 = chi3
         print(np.sum(fulldecay))
@@ -1046,7 +1435,7 @@ def energy_KDEs(el_df, fields):
     # plt.title(r'All $k_x$')
     plt.xlim([0,np.max(en_axis)*1000])
     plt.legend(frameon=False)
-    plt.savefig(pp.figureLoc+'energy_KDE_all.png',dpi=600)
+    plt.savefig(pp.figureLoc+'energy_KDE_all.png', dpi=600)
 
 
     plt.figure(figsize=squareFigSize)
@@ -1464,8 +1853,6 @@ def energy_KDEs(el_df, fields):
     #
     # for i, field in enumerate(fields):
     #     chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(field))
-    #     # fs = chi + el_df['k_FD']
-    #     fs = chi
     #     fulldecay = decaymatrix @ fs
     #     full_enax = np.zeros(npts)
     #     for k in range(len(fulldecay)):
@@ -1547,11 +1934,15 @@ if __name__ == '__main__':
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
     # plot_mom_KDEs(fields, electron_df,saveData=True)
-    fields = pp.fieldVector
+    # fields = pp.fieldVector
     freq = pp.freqGHz
 
-    # mom_en_relaxation(electron_df, [1e2, 1e4, 3e4, 5e4])
+    # anisotropy_of_scattering(electron_df)
+    # mom_en_relaxation(electron_df, np.array([1e2, 1e4, 5e4]))
+    # mom_en_relaxation(electron_df, pp.moment_fields)
+    mom_en_rel_histograms(electron_df)
     # field_dependence_noise(fields, electron_df)
+    # energy_KDEs(electron_df, [1e4, 3e4, 5e4])
     # plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
@@ -1563,4 +1954,7 @@ if __name__ == '__main__':
 
     # plot_noise_kde(electron_df, [1e-3,5e4],freqs[0])
     # energy_KDEs(electron_df, pp.small_signal_fields)
+    # plot_steady_transient_difference(5e4, freq)
+    # plot_noise_kde(electron_df, [1e-3,5e4],freqs[0])
+    # energy_KDEs(electron_df, pp.small_signal_fields[2:])
     plt.show()

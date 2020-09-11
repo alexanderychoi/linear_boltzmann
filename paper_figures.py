@@ -11,10 +11,13 @@ from scipy import integrate
 import rt_solver
 import matplotlib.ticker as tck
 import matplotlib
+from matplotlib.lines import Line2D
 
 # Set the parameters for the paper figures
-SMALL_SIZE = 7.6
-MEDIUM_SIZE = 8.5
+# SMALL_SIZE = 10
+# MEDIUM_SIZE = 11
+SMALL_SIZE = 8
+MEDIUM_SIZE = 9
 BIGGER_SIZE = 12
 different_small_size = 6.4
 
@@ -374,7 +377,7 @@ def momentum_kde2_paperplot(fields):
     k_ax = np.load(pp.outputLoc + 'Momentum_KDE/' + 'k_ax_' + '2_' + "E_{:.1e}.npy".format(fields[0]))
     # ax.plot(k_ax, np.zeros(len(k_ax)), '-', linewidth=lw, color=eq_color, label='Equilibrium')
     # ax.plot(k_ax, np.zeros(len(k_ax)), '-', linewidth=lw, color=eq_color)
-    ax.axhline(0,linestyle='--', color='black', linewidth=0.5)
+    ax.axhline(0, color='black', linestyle='--', linewidth=0.5)
     # ax.axvline(0, color='gray', linewidth=0.8, alpha=0.5)
     for ee in fields:
         ee_Vcm = ee/100
@@ -404,7 +407,7 @@ def momentum_kde2_paperplot(fields):
 
     plt.xlabel(r'$\rm k_x \, \, (\AA^{-1})$')
     plt.ylabel(r'Deviational occupation $\rm \Delta f_{\mathbf{k}}$')
-    # plt.grid()
+    # plt.grid(lw=0.8, linestyle='dotted')
     # plt.ylabel(r'$\delta f_{\mathbf{k}}/f_{\mathbf{k}}^0$')
     # plt.ylim([-1,1])
     plt.legend(frameon=False,prop={'size':different_small_size})
@@ -746,6 +749,45 @@ def calculate_energytransferrate(df,fieldVector):
     plt.savefig(pp.figureLoc + 'EnergyTransfer.png', bbox_inches='tight', dpi=600)
 
 
+def fractional_loss_rates(el_df):
+    enk = el_df['energy [eV]'].values
+    enk = enk - enk.min()
+    kx = el_df['kx [1/A]'].values / (2 * np.pi / c.alat)
+    kmags = np.linalg.norm(el_df[['kx [1/A]', 'ky [1/A]', 'kz [1/A]']].values / (2 * np.pi / c.alat))
+    nkpts = len(np.unique(el_df['k_inds']))
+    g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
+
+    ytext = r'Average fractional change'
+    xtext = 'Energy (meV)'
+    colors = ['#004369', '#01949A']
+
+    momloss = np.load(pp.outputLoc + 'diag_frac_mom_decay.npy')
+    enloss = np.load(pp.outputLoc + 'diag_frac_en_decay.npy')
+    # ens = np.linspace(0, 100, 50)
+    # endiv = (-1 / ens ) + 0
+
+    plt.figure(figsize=(3, 3))
+    # ax = plt.axes([0.16, 0.16, 0.78, 0.78])
+    ax = plt.axes([0.24, 0.21, 0.71, 0.71])
+    plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+    # plt.axhline(0.8, linestyle='--', color=colors[0], linewidth=0.5)
+    # plt.axhline(0.2, linestyle='--', color=colors[1], linewidth=0.5)
+    # plt.axhline(4e12, linestyle='--', color='Black', linewidth=1, alpha=0.6)
+    plt.plot(enk[g_inds] * 1000, momloss[g_inds], '.', label='Momentum', markersize=3.5, color=colors[0])
+    plt.plot(enk[g_inds] * 1000, enloss[g_inds], '.', label='Energy', markersize=3.5, color=colors[1])
+    # plt.plot(ens, endiv)
+    plt.ylabel(ytext)
+    plt.xlabel(xtext)
+    legend_elements = [Line2D([0], [0], marker='o', lw=0, color=colors[0], label='Momentum', markersize=4),
+                       Line2D([0], [0], marker='o', lw=0, color=colors[1], label='Energy', markersize=4)]
+    plt.legend(handles=legend_elements, frameon=False)
+    plt.xlim([0, 300])
+    plt.ylim([-2, 4])
+    # plt.yticks([y for y in np.arange(-2, 3, 1)])
+    plt.tight_layout()
+    plt.savefig(pp.figureLoc + 'avg_frac_loss.png', bbox_inches='tight', dpi=600)
+
+
 if __name__ == '__main__':
     fields = pp.fieldVector
     freqs = pp.freqVector
@@ -768,10 +810,13 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     # pop_below_cutoff(small_signal_fields, electron_df, cutoffVector)
 
+    fractional_loss_rates(electron_df)
     # momentum_kde_paperplot(mom_kde_fields)
     momentum_kde2_paperplot(small_signal_fields[1:])
     linear_mobility_paperplot(moment_fields[5:], electron_df)
+    # momentum_kde2_paperplot(small_signal_fields[1:])
     # momentum_kde2_paperplot(fields)
+    # linear_mobility_paperplot(moment_fields[5:], electron_df)
     # linear_mobility_paperplot(moment_fields, electron_df)
     # energy_kde_paperplot(energy_kde_fields, electron_df)
     small_signal_mobility_paperplot(pp.small_signal_fields,freqs,electron_df)
@@ -784,6 +829,6 @@ if __name__ == '__main__':
     # calculate_electron_temperature(electron_df, np.geomspace(300,600,100))
     # plotScatteringRate()
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields,freqs[0])
-    occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields[2:])
-    occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields[1:],freqs[-1])
+    # occupation_plotter.energy_KDEs(electron_df, pp.small_signal_fields[2:])
+    # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields[1:],freqs[-1])
     plt.show()
