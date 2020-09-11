@@ -16,8 +16,8 @@ from matplotlib.lines import Line2D
 # Set the parameters for the paper figures
 # SMALL_SIZE = 10
 # MEDIUM_SIZE = 11
-SMALL_SIZE = 7.6
-MEDIUM_SIZE = 8.5
+SMALL_SIZE = 8
+MEDIUM_SIZE = 9
 BIGGER_SIZE = 12
 different_small_size = 6.4
 
@@ -758,7 +758,7 @@ def fractional_loss_rates(el_df):
     g_inds, l_inds, x_inds = utilities.gaas_split_valleys(el_df, plot_Valleys=False)
 
     ytext = r'Average fractional change'
-    xtext = 'Electron energy (meV)'
+    xtext = 'Energy (meV)'
     colors = ['#004369', '#01949A']
 
     momloss = np.load(pp.outputLoc + 'diag_frac_mom_decay.npy')
@@ -766,8 +766,9 @@ def fractional_loss_rates(el_df):
     # ens = np.linspace(0, 100, 50)
     # endiv = (-1 / ens ) + 0
 
-    plt.figure(figsize=(3.375, 3.375))
-    ax = plt.axes([0.16, 0.16, 0.78, 0.78])
+    plt.figure(figsize=(3, 3))
+    # ax = plt.axes([0.16, 0.16, 0.78, 0.78])
+    ax = plt.axes([0.24, 0.21, 0.71, 0.71])
     plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
     # plt.axhline(0.8, linestyle='--', color=colors[0], linewidth=0.5)
     # plt.axhline(0.2, linestyle='--', color=colors[1], linewidth=0.5)
@@ -779,12 +780,12 @@ def fractional_loss_rates(el_df):
     plt.xlabel(xtext)
     legend_elements = [Line2D([0], [0], marker='o', lw=0, color=colors[0], label='Momentum', markersize=4),
                        Line2D([0], [0], marker='o', lw=0, color=colors[1], label='Energy', markersize=4)]
-    plt.legend(handles=legend_elements)
+    plt.legend(handles=legend_elements, frameon=False)
     plt.xlim([0, 300])
     plt.ylim([-2, 4])
     # plt.yticks([y for y in np.arange(-2, 3, 1)])
     plt.tight_layout()
-    plt.savefig(pp.figureLoc + 'avg_frac_loss.png', bbox_inches='tight', dpi=500)
+    plt.savefig(pp.figureLoc + 'avg_frac_loss.png', bbox_inches='tight', dpi=600)
 
 
 if __name__ == '__main__':
@@ -809,7 +810,7 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
     # pop_below_cutoff(small_signal_fields, electron_df, cutoffVector)
 
-    # fractional_loss_rates(electron_df)
+    fractional_loss_rates(electron_df)
     # momentum_kde_paperplot(mom_kde_fields)
     # momentum_kde2_paperplot(small_signal_fields[1:])
     # momentum_kde2_paperplot(fields)
@@ -826,6 +827,6 @@ if __name__ == '__main__':
     # calculate_electron_temperature(electron_df, np.geomspace(300,600,100))
     # plotScatteringRate()
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields,freqs[0])
-    # occupation_plotter.energy_KDEs(electron_df,pp.small_signal_fields[2:])
+    # occupation_plotter.energy_KDEs(electron_df, pp.small_signal_fields[2:])
     # occupation_plotter.plot_noise_kde(electron_df,pp.small_signal_fields[1:],freqs[-1])
     plt.show()

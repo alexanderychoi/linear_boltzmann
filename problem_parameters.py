@@ -37,9 +37,12 @@ parentdir = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/'
 # outputLoc = parentdir+'GaAs/11_Problem_Temperature/400K/1_Pipeline/'+subproblemVer
 inputLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_smear/0_Data/'
 outputLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_smear/1_Pipeline/'+subproblemVer
-# inputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/0_Data/'
-# outputLoc = '/home/peishi/calculations/BoltzmannGreenFunctionNoise/Si/2_Problem_0.2eV/1_Pipeline/Output/'
 figureLoc = parentdir+'GaAs/10_Problem_Validation/200_kpts_0.3eV_window/10_mev_smear/2_Output/'+subproblemVer+'PaperFigures/'
+
+# inputLoc = parentdir+'GaAs/13_Problem_Paper/0_Data/'
+# outputLoc = parentdir+'GaAs/13_Problem_Paper/1_Pipeline/'+subproblemVer
+# figureLoc = parentdir+'GaAs/13_Problem_Paper/2_Output/'+subproblemVer+'PaperFigures/'
+
 
 
 # Alex Dropbox directories
@@ -116,7 +119,7 @@ small_signal_fields = np.array([1e-3,1e4,5e4])
 # fieldVector =np.geomspace(1e2,4e4,20)  							# GaAs fields for moment plots
 fieldVector = np.array([1e4, 5e4])										# Highest field for paper, convergence tests
 # fieldVector =np.geomspace(1e2,4e4,20)  								# GaAs fields for moment plots
-moment_fields = np.linspace(1e2, 5e4, 20)
+moment_fields = np.linspace(1e2, 5e4, 10)
 # moment_fields = np.geomspace(1e2,4e4,20)
 small_signal_fields = np.array([1e-3, 1e4, 5e4])
 # fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))
