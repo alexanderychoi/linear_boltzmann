@@ -7,9 +7,12 @@ import occupation_solver
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
-SMALL_SIZE = 10
-MEDIUM_SIZE = 12
-BIGGER_SIZE = 14
+# Set the parameters for the paper figures
+SMALL_SIZE = 7.6
+MEDIUM_SIZE = 8.5
+BIGGER_SIZE = 12
+
+squareFigSize = (3.375, 3.375)
 
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
@@ -46,22 +49,34 @@ def relaxation_solver(df, ee):
     del fdm
     pre = ee*c.e/c.hbar_joule
     f = chi_3_i + f0
-    momRT_1 = -(np.sum((b+pre*df['df/dkx'])*df['kx [1/A]'])/np.sum(f*df['kx [1/A]']))**(-1)
+    # momRT_1 = -(np.sum((b+pre*df['df/dkx'])*df['kx [1/A]'])/np.sum(f*df['kx [1/A]']))**(-1)
+    kmag = np.sqrt(df['kx [1/A]'].values ** 2 + df['ky [1/A]'].values ** 2 + df['kz [1/A]'].values ** 2)
+    momRT_1 = -(np.sum((b+pre*df['df/dkx'])*df['kx [1/A]'])/np.sum(chi_3_i*df['kx [1/A]']))**(-1)
+
     momRT_2 = -(np.sum(np.dot(scm,chi_3_i)*df['kx [1/A]'])/np.sum(f*df['kx [1/A]']))**(-1)
 
     # enRT_1 = -(np.sum((b+pre*df['df/dkx'])*(df['energy [eV]']-thermal_energy))/np.sum(f*(df['energy [eV]']-thermal_energy)))**(-1)
+    # enRT_1a = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-np.min(df['energy [eV]']))) / np.sum(
+    #     f * (df['energy [eV]']-np.min(df['energy [eV]'])))) ** (-1)
+    # enRT_1b = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-thermal_energy)) / np.sum(
+    #     f * (df['energy [eV]']-thermal_energy))) ** (-1)
+    # enRT_1c = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-pp.mu)) / np.sum(
+    #     f * (df['energy [eV]']-pp.mu))) ** (-1)
+
     enRT_1a = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-np.min(df['energy [eV]']))) / np.sum(
-        f * (df['energy [eV]']-np.min(df['energy [eV]'])))) ** (-1)
+        chi_3_i * (df['energy [eV]']-np.min(df['energy [eV]'])))) ** (-1)
     enRT_1b = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-thermal_energy)) / np.sum(
-        f * (df['energy [eV]']-thermal_energy))) ** (-1)
+        chi_3_i * (df['energy [eV]']-thermal_energy))) ** (-1)
     enRT_1c = -(np.sum((b + pre * df['df/dkx']) * (df['energy [eV]']-pp.mu)) / np.sum(
-        f * (df['energy [eV]']-pp.mu))) ** (-1)
+        chi_3_i * (df['energy [eV]']-pp.mu))) ** (-1)
+
+
     enRT_2 = -(np.sum(np.dot(scm,chi_3_i)*(df['energy [eV]']-thermal_energy))/np.sum(f*(df['energy [eV]']-thermal_energy)))**(-1)
     vd_3 = utilities.mean_velocity(chi_3_i, df)
 
     denom = ee*np.array(vd_3)
     excess_energy_d = utilities.mean_energy(chi_3_i,df) - thermal_energy
-    excess_energy_e = utilities.mean_energy(chi_3_i,df) - np.min(df['energy [eV]'])
+    excess_energy_e = (utilities.mean_energy(chi_3_i,df) - np.min(df['energy [eV]']))
 
     enRT_1d = excess_energy_d/denom
     enRT_1e = excess_energy_e/denom
@@ -77,6 +92,7 @@ def relaxation_solver(df, ee):
 
 
 def plot_relaxation(df,fieldVector):
+    lw = 2
     momRTs = []
     enRTs_a = []
     enRTs_b = []
@@ -101,19 +117,21 @@ def plot_relaxation(df,fieldVector):
     enRTs_fs_d = np.array(enRTs_d)*1e15
     enRTs_fs_e = np.array(enRTs_e)*1e15
 
-    plt.figure()
-    plt.plot(Vcm,momRTs_fs,'-',label = 'Momentum')
+    plt.figure(figsize=squareFigSize)
+    plt.plot(Vcm,momRTs_fs,'-',label = 'Momentum',linewidth=lw)
     # plt.plot(Vcm,enRTs_fs_a,'.',label = 'Fischetti Energy above CBM')
-    plt.plot(Vcm,enRTs_fs_b,'-',label = 'Fischetti Energy above Thermal')
+    # plt.plot(Vcm,enRTs_fs_b,'-',label = 'Fischetti Energy above Thermal')
     # plt.plot(Vcm,enRTs_fs_c,'.',label = 'Fischetti Energy above Fermi')
-    plt.plot(Vcm,enRTs_fs_d,'-',label = 'Harnagel Energy above Thermal')
+    plt.plot(Vcm,enRTs_fs_d,'-',label = 'Energy',linewidth=lw) # Hartnagel energy above Thermal
     # plt.plot(Vcm,enRTs_fs_e,'.',label = 'Hartnagel Energy above CBM')
 
-    plt.ylabel(r'Energy relaxation time (fs)')
+    plt.ylabel(r'Relaxation time (fs)')
     plt.xlabel(r'Electric field ($\rm V \, cm^{-1})$')
     plt.yscale('log')
-    plt.legend(loc = 'lower left')
+    plt.legend(loc = 'lower left',frameon=False)
     plt.ylim(100,3000)
+    plt.xlim(0,500)
+    plt.savefig(pp.figureLoc +'mom_energy_RTs.png',dpi=600)
 
 
 def single_lorentzian_RT(f, A, tau):
@@ -149,7 +167,8 @@ if __name__ == '__main__':
     # preprocessing.create_el_ph_dataframes(pp.inputLoc, overwrite=True)
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
-    fields = np.geomspace(1e2,4e4,20)
+    fields = np.geomspace(1e2,5e4,20)
+    # fields = pp.small_signal_fields
     freqs = pp.freqVector
 
     plot_relaxation(electron_df, fields)

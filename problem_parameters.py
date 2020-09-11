@@ -54,6 +54,10 @@ inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunct
 outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/13_Problem_Paper/1_Pipeline/'+subproblemVer
 figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/13_Problem_Paper/2_Output/'+subproblemVer+'PaperFigures/'
 
+# inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/250_kpts_0.3eV_window/8_mev_smear/0_Data/'
+# outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/250_kpts_0.3eV_window/8_mev_smear/1_Pipeline/'+subproblemVer
+# figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/250_kpts_0.3eV_window/8_mev_smear/2_Output/'+subproblemVer+'PaperFigures/'
+
 # inputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/0_Data/'
 # outputLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/1_Pipeline/'+subproblemVer
 # figureLoc = 'E:/Dropbox (Minnich Lab)/Alex_Peishi_Noise_Calcs/BoltzmannGreenFunctionNoise/GaAs/10_Problem_Validation/200_kpts_0.35eV_window/2_Output/'+subproblemVer+'PaperFigures/'
@@ -116,7 +120,7 @@ small_signal_fields = np.array([1e-3,1e4,5e4])
 # fieldVector =np.geomspace(1e2,4e4,20)  							# GaAs fields for moment plots
 fieldVector = np.array([1e4, 5e4])										# Highest field for paper, convergence tests
 # fieldVector =np.geomspace(1e2,4e4,20)  								# GaAs fields for moment plots
-moment_fields = np.linspace(1e2, 5e4, 20)
+moment_fields = np.geomspace(1e2, 5e4, 20)
 # moment_fields = np.geomspace(1e2,4e4,20)
 small_signal_fields = np.array([1e-3, 1e4, 5e4])
 # fieldVector = np.unique(np.concatenate((moment_fields,small_signal_fields)))

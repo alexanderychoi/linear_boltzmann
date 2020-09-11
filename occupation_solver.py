@@ -78,6 +78,8 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
                                         callback=counter, atol=pp.absConvergence)
         # x_next, criteria = linalg.gmres(freq_matrix+matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
         #                                 callback=counter,atol=pp.absConvergence)
+        x_rta, criteria = linalg.gmres(invrel, b, x0=x_0, tol=pp.relConvergence,
+                                       callback=counter, atol=pp.absConvergence)
     if freq == 0:
         print('Starting GMRES solver.')
         invrel = matrix_sc * scmfac
@@ -87,6 +89,11 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
         # x_next, criteria = linalg.gmres(matrix_sc*scmfac-matrix_fd, b,x0=x_0,tol=pp.relConvergence,
         #                                 callback=counter,atol=pp.absConvergence)
         # freq_matrix = np.diag(np.zeros(len(kptdf)))
+        print('Starting RTA GMRES solver.')
+        invrel = np.diag(np.diag(matrix_sc)*scmfac)
+        invrel -= matrix_fd
+        x_rta, criteria = linalg.gmres(invrel, b, x0=x_0, tol=pp.relConvergence,
+                                        callback=counter, atol=pp.absConvergence)
     print('GMRES convergence criteria: {:3E}'.format(criteria))
     # The following step is the calculation of the relative residual, which involves another MVP. This adds expense. If
     # we're confident in the convergence, we can omit this check to increase speed.
@@ -107,7 +114,7 @@ def gaas_inverse_relaxation_operator(b, matrix_sc, matrix_fd, kptdf, field, freq
         x_next = x_next * chi2psi
         x_0 = x_0 * chi2psi
         x_smrta = x_smrta * chi2psi
-    return x_next, x_smrta, error, counter.niter
+    return x_next, x_rta, error, counter.niter
 
 
 def gaas_gamma_fdm(matrix, fullkpts_df, E):
@@ -399,14 +406,14 @@ def write_steady(fieldVector, df):
         fdm = np.memmap(pp.inputLoc + '/finite_difference_matrix.mmap', dtype='float64', mode='w+', shape=(nkpts, nkpts))
         b = (-1) * c.e * ee / c.kb_joule / pp.T * np.squeeze(df['vx [m/s]'] * df['k_FD']) * (1 - df['k_FD'])
         # Frequency set as zero for steady solutions in the inverse operator
-        x_next, x_smrta, temp_error, iterations = gaas_inverse_relaxation_operator(b, scm, fdm, df, ee, 0)
+        x_next, x_rta, temp_error, iterations = gaas_inverse_relaxation_operator(b, scm, fdm, df, ee, 0)
         error.append(temp_error)
         iteration_count.append(iterations)
         del fdm
         np.save(pp.outputLoc + 'Steady/chi_3_E_{:.1e}'.format(ee), x_next)
         np.save(pp.outputLoc + 'Steady/chi_2_E_{:.1e}'.format(ee), utilities.f2chi(f_next,df,ee))
         np.save(pp.outputLoc + 'Steady/chi_1_E_{:.1e}'.format(ee), utilities.f2chi(f_0,df, ee))
-        np.save(pp.outputLoc + 'Steady/chi_0_E_{:.1e}'.format(ee), x_smrta)
+        np.save(pp.outputLoc + 'Steady/chi_4_E_{:.1e}'.format(ee), x_rta)
         print('Steady occupation solutions written to file for ' + "{:.1e} V/m ".format(ee))
 
         print('\n \n')
@@ -503,16 +510,16 @@ if __name__ == '__main__':
     electron_df, phonon_df = utilities.load_el_ph_data(pp.inputLoc)
     electron_df = utilities.fermi_distribution(electron_df)
     # fields = pp.fieldVector
-    fields = pp.moment_fields
-    # fields = pp.small_signal_fields
+    # fields = pp.moment_fields
+    fields = pp.small_signal_fields
     freqs = pp.freqVector
     # fields = pp.moment_fields
     print(utilities.calculate_density(electron_df))
 
     # Toggle to run calculations for transient or steady BTE solutions.
-    writeTransient = True
+    writeTransient = False
     writeSteady = True
-    writeIcinds = True
+    writeIcinds = False
     if writeSteady:
         write_steady(fields, electron_df)
     if writeTransient:

@@ -75,9 +75,9 @@ high_color = '#FF3F00'
 # high_color = '#CE0000'
 
 
-rta_color = '#01949A'
+rta_color = '#D7A449'
 cold_color = '#004369'
-warm_color = '#D62B09'
+warm_color = 'firebrick'
 
 columnwidth = 3.375
 triFigSize = (2.25, 2.5)
@@ -95,7 +95,7 @@ dualFigSize = (3.375,3.5)
 def linear_mobility_paperplot(fieldVector,df):
     """Make a paper plot for the Ohmic (or linear) mobility of the RTA, low-field, and full-drift solutions."""
     vcm = np.array(fieldVector) * 1e-2
-    lw = 1.2
+    lw = 1.5
     mu_1 = []
     mu_2 = []
     mu_3 = []
@@ -148,7 +148,7 @@ def small_signal_mobility_paperplot(fieldVector, freqVector, df):
     """Make and save a paper plot for the small signal AC conductivity and save to file."""
     vcm = np.array(fieldVector)*1e-2
     n = utilities.calculate_density(df)
-    lw = 1.2
+    lw = 1.5
     fig, ax = plt.subplots()
     for freq in freqVector:
         cond = []
@@ -367,7 +367,7 @@ def momentum_kde2_paperplot(fields):
     plt.figure(figsize=(2.65, 2.5))
     ax = plt.axes([0.18, 0.17, 0.8, 0.8])
     colorList = [med_color, high_color]
-    lw = 1
+    lw = 1.5
     i = 0
     meankx_2 = []
     meankx_3 = []
@@ -407,7 +407,7 @@ def momentum_kde2_paperplot(fields):
     # plt.grid()
     # plt.ylabel(r'$\delta f_{\mathbf{k}}/f_{\mathbf{k}}^0$')
     # plt.ylim([-1,1])
-    plt.legend(frameon=False)
+    plt.legend(frameon=False,prop={'size':different_small_size})
     plt.savefig(pp.figureLoc+'momentum_KDE2.png', dpi=600)
 
 
@@ -769,12 +769,12 @@ if __name__ == '__main__':
     # pop_below_cutoff(small_signal_fields, electron_df, cutoffVector)
 
     # momentum_kde_paperplot(mom_kde_fields)
-    # momentum_kde2_paperplot(small_signal_fields[1:])
-    # linear_mobility_paperplot(moment_fields[5:], electron_df)
+    momentum_kde2_paperplot(small_signal_fields[1:])
+    linear_mobility_paperplot(moment_fields[5:], electron_df)
     # momentum_kde2_paperplot(fields)
     # linear_mobility_paperplot(moment_fields, electron_df)
     # energy_kde_paperplot(energy_kde_fields, electron_df)
-    # small_signal_mobility_paperplot(pp.small_signal_fields,freqs,electron_df)
+    small_signal_mobility_paperplot(pp.small_signal_fields,freqs,electron_df)
     # plot_density(small_signal_fields, freqs, electron_df,0.5)
     # plotkykxplane(electron_df,4e4)
     # plot_density_v_field(small_signal_fields, freqs[0], electron_df)

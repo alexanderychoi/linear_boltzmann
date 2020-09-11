@@ -7,20 +7,37 @@ import matplotlib.pyplot as plt
 import numpy.linalg
 from scipy.sparse import linalg
 import occupation_solver
+import matplotlib
+from scipy import interpolate
 
-# Set the parameters for the paper figures
-SMALL_SIZE = 9
-MEDIUM_SIZE = 12
-BIGGER_SIZE = 14
+singleCol_doubleSize = (3.375/2,3.375/1.6)
+# SMALL_SIZE = 7.6
+SMALL_SIZE = 6
+# MEDIUM_SIZE = 8.5
+MEDIUM_SIZE = 9.5
+BIGGER_SIZE = 10
+different_small_size = 5.7
 
 plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
-plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=different_small_size)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+plt.rcParams["font.family"] = "sans-serif"
 
+matplotlib.rcParams['mathtext.fontset'] = 'custom'
+matplotlib.rcParams['mathtext.rm'] = 'Bitstream Vera Sans'
+matplotlib.rcParams['mathtext.it'] = 'Bitstream Vera Sans:italic'
+matplotlib.rcParams['mathtext.bf'] = 'Bitstream Vera Sans:bold'
+dualFigSize = (2.53125,2.53125)
+
+eq_color = '#0C1446'
+med_color = '#2740DA'
+high_color = '#FF3F00'
 
 # PURPOSE: THIS MODULE CONTAINS FUNCTIONS USED TO CALCULATE AND PLOT THE POWER SPECTRAL DENSITY OF CURRENT FLUCTUATIONS.
 # THE CALCULATION INVOLVES LOADING A STEADY BOLTZMANN TRANSPORT SOLUTION, CALCULATING THE EFFECTIVE DISTRIBUTION FCN
@@ -265,7 +282,9 @@ def energy_density(chi, EField,df,freq, partialSum = False, cutoff = 0):
 
     corr_xx = np.load(pp.outputLoc + 'E_Density/' +'xx_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, EField))
 
+    # prefactor = (1 / Nuc / c.kb_joule) ** 2
     prefactor = (1 / Nuc / c.kb_joule) ** 2
+
     S_xx = 8*np.real(prefactor*np.sum(corr_xx*(df['energy [eV]']-np.min(df['energy [eV]']))*c.e))
     if partialSum:
         print('Calculating spectral density using a cutoff.')
@@ -377,11 +396,18 @@ def plot_density(fieldVector,freqVector,df):
     plt.xscale('log')
 
 
+def moving_average(a, n=3) :
+    ret = np.cumsum(a, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return np.concatenate((np.zeros(n-1), ret[n - 1:] / n))
+
+
 def plot_energy_density(fieldVector,freqVector,df):
     """Makes plots of the spectral density as a function of frequency and field. Right now hard coded to return the plots
     of only the type #3 solutions using Perturbo SCM + FDM."""
-    fig, ax = plt.subplots()
-    colorList = ['black', 'dodgerblue', 'tomato']
+    fig, ax = plt.subplots(figsize = singleCol_doubleSize)
+    colorList = [eq_color,med_color, high_color]
+    lw = 2
     i = 0
     for ee in fieldVector:
         S_xx_vector = []
@@ -389,15 +415,42 @@ def plot_energy_density(fieldVector,freqVector,df):
             chi = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
             S_xx = energy_density(chi, ee, df, freq)
             S_xx_vector.append(S_xx)
+            if i == 0:
+                initial = S_xx_vector[0]
         S_xx_vector = np.array(S_xx_vector)
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-        ax.plot(freqVector, S_xx_vector, label=r'{:.1f} '.format(ee/100) + r'$\rm V \, cm^{-1}$',color=colorList[i])
+        if i ==0:
+            # ax.plot(freqVector, S_xx_vector / initial, label=r'{:.0f} '.format(ee / 100) + r'$\rm V \, cm^{-1}$',
+            #         color=eq_color, linewidth=lw)
+            ax.plot(freqVector, S_xx_vector / initial,
+                    color=eq_color, linewidth=lw)
+        if i > 0:
+            # ax.plot(freqVector, S_xx_vector/initial*1.3, label=r'{:.0f} '.format(ee/100) + r'$\rm V \, cm^{-1}$',color=high_color,linewidth=lw)
+            ax.plot(freqVector, S_xx_vector/initial*1.3,color=high_color,linewidth=lw)
+
         i = i + 1
 
-    plt.legend()
+    f = interpolate.interp1d(S_xx_vector,freqVector)
+    f_1p = 10
+    f_3dB = f(S_xx_vector[0]/2)
+    f_20dB = f(S_xx_vector[0]/100)
+    ax.axvline(f_1p,color='black',alpha=0.8,linestyle='--',lw=0.5,label='99 %')
+    ax.axvline(f_3dB,color='black',alpha=0.6,linestyle='--',lw=0.5,label='50%')
+    ax.axvline(f_20dB,color='black',alpha=0.4,linestyle='--',lw=0.5,label='1%')
+    var = S_xx_vector/initial
+
+    plt.legend(frameon=False,loc='upper left',handletextpad=0.4,handlelength=1.2,borderaxespad=0.2,borderpad=0.2)
     plt.xlabel('Frequency (GHz)')
-    plt.ylabel('Temperature fluctuation PSD ' + r'$ \rm (K^2 \, Hz^{-1})$')
+    plt.ylabel('Energy PSD ' + r'(norm.)')
     plt.xscale('log')
+    plt.xlim([freqVector[0],freqVector[-1]])
+    locmaj = matplotlib.ticker.LogLocator(base=10, numticks=6)
+    ax.xaxis.set_major_locator(locmaj)
+    locmin = matplotlib.ticker.LogLocator(base=10.0, subs=np.arange(2, 10) * .1,
+                                          numticks=100)
+    ax.xaxis.set_minor_locator(locmin)
+    # plt.ylim([0,2e-20])
+    plt.ylim([0,5])
     plt.savefig(pp.figureLoc +'temperature_PSD.png', bbox_inches='tight',dpi=600)
 
 
@@ -410,16 +463,41 @@ if __name__ == '__main__':
     electron_df = utilities.fermi_distribution(electron_df)
 
     # fields = pp.moment_fields
-    fields = pp.fieldVector
+    fields = pp.small_signal_fields
     freqs = pp.freqVector
 
     # write_correlation(fields,electron_df,freqs)
     # write_correlation(pp.moment_fields, electron_df, np.array([0.1]))
     # plot_density(fields, freqs, electron_df)
-
+    freq2 = np.geomspace(1,100,100)
+    freq3 = np.linspace(4,15,50)
+    # write_energy_correlation(fields,electron_df,freq3)
     # write_energy_correlation(fields,electron_df,freqs)
-    # plot_energy_density(fields, freqs, electron_df)
-    write_correlation(fields, electron_df, freqs)
-    plot_density(fields, freqs, electron_df)
+    # write_energy_correlation(fields,electron_df,freq3)
+
+    # freq_concat = np.sort(np.concatenate([freqs,freq2,freq3]))
+    # freq_concat_a = np.delete(freq_concat,np.arange(1,65,1))
+    # freq_concat = np.delete(freq_concat,np.arange(1,96,1))
+
+    c_freqs_1 = np.sort(np.concatenate([freqs,freq3]))
+    c_freqs_1 = np.delete(c_freqs_1,np.arange(9,20,1))
+    freqs = np.delete(freqs,9)
+    plot_energy_density([1e-3,5e4], freqs, electron_df)
+
+    # c_freqs_2 = np.sort(np.concatenate([freqs, freq3]))
+    # c_freqs_2 = np.delete(c_freqs_2,np.arange(6,50,1))
+
+    # plot_energy_density([1e4], c_freqs_2, electron_df)
+    # plot_energy_density([1e-3], c_freqs, electron_df)
+
+    # plot_energy_density([1e-3,1e4,5e4], c_freqs, electron_df)
+
+    # plot_energy_density([1e-3,1e4,5e4], freqs, electron_df)
+
+    # write_correlation(fields, electron_df, freqs)
+    # plot_density(fields, freqs, electron_df)
 
     plt.show()
+
+
+    print('hello')

@@ -108,7 +108,7 @@ def momentum_distribution_kde(chi, df, ee, title=[], saveData=False, lowfield=Fa
     # en_axis = np.linspace(enk.min(), enk.min() + 0.4, npts)
     k_ax = np.linspace(mom.min(), mom.max(), npts)
     dx = (k_ax.max() - k_ax.min()) / npts
-    f0 = np.squeeze(df['k_FD'].values)
+    f0 = np.zeros(len(df))
     if pp.kgrid == 200:
         spread = 22 * dx # For 200^3
     if pp.kgrid == 160:
@@ -244,6 +244,34 @@ def plot_mom_KDEs(fieldVector, df, saveData = False):
         chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
         chi_3_g = chi_3[g_inds]
         momentum_distribution_kde(chi_3_g, df.loc[g_inds].reset_index(), ee,'',saveData,False)
+    plt.figure()
+    freq = pp.freqVector[0]
+
+    for ee in fieldVector:
+        chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+        momentum_distribution_kde(chi_3[g_inds], df.loc[g_inds].reset_index(), ee,'',saveData,False)
+
+    plt.figure()
+    vx = df['vx [m/s]'].values
+    for ee in fieldVector:
+        chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+        momentum_distribution_kde(chi_3[g_inds]*(vx[g_inds]-utilities.mean_velocity(chi_3,df)), df.loc[g_inds].reset_index(), ee,'',saveData,False)
+
+    plt.figure()
+    for ee in fieldVector:
+        chi_3 = np.load(pp.outputLoc + 'Steady/' + 'chi_' + '3_' + "E_{:.1e}.npy".format(ee))
+        momentum_distribution_kde((vx[g_inds]-utilities.mean_velocity(chi_3,df)), df.loc[g_inds].reset_index(), ee,'',saveData,False)
+
+    plt.figure()
+    for ee in fieldVector:
+        g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        momentum_distribution_kde(g_k[g_inds], df.loc[g_inds].reset_index(), ee,'',saveData,False)
+
+    plt.figure()
+    for ee in fieldVector:
+        g_k = np.real(np.load(pp.outputLoc + '/SB_Density/xx_3_f_{:.1e}_E_{:.1e}.npy'.format(freq, ee)))
+        momentum_distribution_kde(g_k[g_inds]*vx[g_inds], df.loc[g_inds].reset_index(), ee,'',saveData,False)
+
 
 
 def occupation_v_energy_sep(chi, enk, kptsdf):
@@ -847,7 +875,7 @@ def energy_KDEs(el_df, fields):
     #     rgb = cmap(i)[:3]  # will return rgba, we take only first 3 so we get rgb
     #     fieldcolors.append(mpl.colors.rgb2hex(rgb))
 
-    fieldcolors = ['#0C1446', '#FF3F00']
+    fieldcolors = ['#0C1446', '#2740DA', '#FF3F00']
 
     npts = 400  # number of points in the KDE
 
@@ -1019,6 +1047,92 @@ def energy_KDEs(el_df, fields):
     plt.xlim([0,np.max(en_axis)*1000])
     plt.legend(frameon=False)
     plt.savefig(pp.figureLoc+'energy_KDE_all.png',dpi=600)
+
+
+    plt.figure(figsize=squareFigSize)
+    for i, ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        pertEnergy = np.sum(carrierEnergy * (chi + el_df['k_FD'])) / np.sum(el_df['k_FD'])
+        pert_Temp = np.interp(pertEnergy, energy_vector, T_vector)
+        hot_boltzdist = (np.exp((el_df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pert_Temp))) ** (-1)
+        hot_boltzdist = hot_boltzdist*np.sum(el_df['k_FD'])/np.sum(hot_boltzdist)
+        print(pert_Temp)
+        fulldecay = 2 * c.e / c.Vuc / ee * el_df['vx [m/s]'] * chi
+        fulldecay2 = chi+el_df['k_FD']
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        decay2 = np.zeros(npts)
+        plotcolors = ['#4C5355','#98A4B0','#FF3F00']
+        plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            decay2[istart:iend] += fulldecay2[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis * 1000, decay/decay2, color=plotcolors[i],
+                 label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.ylabel(r'Conductivity contribution (Pop removed)')
+    plt.xlabel('Energy (meV)')
+    # plt.title(r'All $k_x$')
+    plt.xlim([0,np.max(en_axis)*1000])
+    plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'conductivity_energy_kde.png',dpi=600)
+
+    scm = np.memmap(pp.inputLoc + pp.scmName, dtype='float64', mode='r', shape=(nkpts, nkpts))
+
+    plt.figure(figsize=squareFigSize)
+    for i, ee in enumerate(fields):
+        chi = np.load(pp.outputLoc + '/Steady/chi_3_E_{:.1e}.npy'.format(ee))
+        pertEnergy = np.sum(carrierEnergy * (chi + el_df['k_FD'])) / np.sum(el_df['k_FD'])
+        pert_Temp = np.interp(pertEnergy, energy_vector, T_vector)
+        hot_boltzdist = (np.exp((el_df['energy [eV]'].values * c.e - pp.mu * c.e) / (c.kb_joule * pert_Temp))) ** (-1)
+        hot_boltzdist = hot_boltzdist*np.sum(el_df['k_FD'])/np.sum(hot_boltzdist)
+        print(pert_Temp)
+        fulldecay = chi/ee/(el_df['k_FD']*(1-el_df['k_FD']))/el_df['v_mag [m/s]']*el_df['vx [m/s]']
+        fulldecay2 = np.ones(len(el_df))
+        fulldecay3 = el_df['k_FD']+chi
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        decay2 = np.zeros(npts)
+        decay3 = np.zeros(npts)
+        plotcolors = ['#4C5355','#98A4B0','#FF3F00']
+        plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            decay2[istart:iend] += fulldecay2[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+            decay3[istart:iend] += fulldecay3[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis * 1000, decay/decay2*10**9, color=plotcolors[i],
+                 label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.ylabel(r'MFPs (nm)')
+    plt.xlabel('Energy (meV)')
+    # plt.title(r'All $k_x$')
+    plt.xlim([0,np.max(en_axis)*1000])
+    # plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'MFP_kde.png',dpi=600)
+
+    freq = pp.freqVector[0]
+    plt.figure(figsize=squareFigSize)
+    for i, ee in enumerate(fields):
+        corr_xx = np.load(pp.outputLoc + 'SB_Density/' +'xx_' + '3_' + "f_{:.1e}_E_{:.1e}.npy".format(freq, ee))
+        fulldecay = np.real(corr_xx)
+        # Plot of the momentum loss KDE vs energy for the chi of field designated above
+        decay = np.zeros(npts)
+        plotcolors = ['#4C5355','#98A4B0','#FF3F00']
+        plt.axhline(0, linestyle='--', color='Black', linewidth=0.5)
+        for k in range(len(fulldecay)):
+            istart = int(np.maximum(np.floor((enk[k] - en_axis[0]) / dx) - (4 * spread / dx), 0))
+            iend = int(np.minimum(np.floor((enk[k] - en_axis[0]) / dx) + (4 * spread / dx), npts - 1))
+            decay[istart:iend] += fulldecay[k] * gaussian(en_axis[istart:iend], enk[k], vmags[k], stdev=spread)
+        plt.plot(en_axis * 1000, decay, color=plotcolors[i],
+                 label='{:.1f} '.format(ee / 100)+r'$\rm V \, cm^{-1}$')
+    plt.ylabel(r'G_eff')
+    plt.xlabel('Energy (meV)')
+    # plt.title(r'All $k_x$')
+    plt.xlim([0,np.max(en_axis)*1000])
+    # plt.legend(frameon=False)
+    plt.savefig(pp.figureLoc+'g_kde.png',dpi=600)
 
     # plt.figure(figsize=triFigSize)
     # for i,ee in enumerate(fields):
@@ -1441,12 +1555,12 @@ if __name__ == '__main__':
     # plot_noise_kde(electron_df, fields)
     # material_plotter.bz_3dscatter(electron_df,True,False)
     # plot_steady_transient_difference(fields,freq)
-    # plot_mom_KDEs(fields, electron_df, saveData=True)
+    plot_mom_KDEs(fields, electron_df, saveData=True)
     # plot_vel_KDEs(fields[-1],electron_df)
     # plot_energy_sep(electron_df, fields)
     # plot_energy_sep_lf(electron_df, fields)
     # plot_2d_dist(electron_df, fields[-1])
 
-    plot_noise_kde(electron_df, [1e-3,5e4],freqs[0])
-    # energy_KDEs(electron_df, pp.small_signal_fields[2:])
+    # plot_noise_kde(electron_df, [1e-3,5e4],freqs[0])
+    # energy_KDEs(electron_df, pp.small_signal_fields)
     plt.show()
